@@ -1,0 +1,17 @@
+S.No,Endpoint,Method,Auth Required,Query Param / Field,Field Type,Required,Description
+1,/services,GET,No,-,-,-,Get all available tailoring services
+2,/services,GET,No,popular (query),boolean,NO,Pass popular=true to get only featured services
+3,/services,GET,No,category (query),string,NO,Filter by: men / women / kids / alteration / wedding
+
+RESPONSE FIELDS (Service Object)
+S.No,Field Name,Type,Allowed Values,Description
+1,id,string,-,Unique service ID (e.g. srv_001)
+2,title,string,-,Service name (e.g. Premium Suit Stitching)
+3,description,string,-,Short description of the service
+4,price_starting,number,-,Starting price in INR (e.g. 5000)
+5,duration,string,-,Estimated time (e.g. 7-10 days)
+6,category,string,men / women / kids / alteration / wedding,Service category
+7,popular,boolean,true / false,Whether to show on home screen featured section
+8,icon,string,-,Icon name for mobile app display
+9,color,string (hex),-,Icon color for mobile app
+10,bgColor,string (hex),-,Icon background color for mobile app

@@ -1,0 +1,54 @@
+DarziApp - Complete API Summary for Backend Developer
+Project: DarziApp (Tailor Booking App)
+Frontend: React Native + Expo Router
+Auth: JWT (access_token + refresh_token)
+Base URL: https://your-api.example.com/api
+
+S.No,Sheet / Module,Endpoint,Method,Auth Required,Purpose
+1,Authentication,/auth/register,POST,No,Register new user
+2,Authentication,/auth/login,POST,No,Login with email + password
+3,Authentication,/auth/logout,POST,Yes,Logout and invalidate token
+4,Authentication,/auth/refresh-token,POST,No,Get new access token using refresh token
+5,Authentication,/auth/otp/request,POST,No,Send OTP to phone number
+6,Authentication,/auth/otp/verify,POST,No,Verify OTP and get tokens
+7,User Profile,/users/:userId,GET,Yes,Get user profile
+8,User Profile,/users/:userId,PATCH,Yes,Update profile fields
+9,User Profile,/users/:userId/measurements,PUT,Yes,Save body measurements
+10,User Profile,/users/:userId/avatar,POST,Yes,Upload profile photo
+11,Services,/services,GET,No,Get all tailoring services
+12,Services,/services?popular=true,GET,No,Get popular/featured services
+13,Tailors,/tailors,GET,No,Get all tailors
+14,Tailors,/tailors?featured=true,GET,No,Get featured tailors
+15,Tailors,/tailors/:tailorId,GET,No,Get single tailor profile
+16,Orders,/users/:userId/orders,GET,Yes,Get all orders for user
+17,Orders,/orders/:orderId,GET,Yes,Get single order details
+18,Orders,/orders,POST,Yes,Place a new order
+19,Orders,/orders/:orderId/cancel,PATCH,Yes,Cancel an order
+20,Bookings,/users/:userId/bookings,GET,Yes,Get all bookings for user
+21,Bookings,/bookings,POST,Yes,Create a new booking
+22,Bookings,/bookings/:bookingId/cancel,PATCH,Yes,Cancel a booking
+23,Bookings,/bookings/:bookingId/reschedule,PATCH,Yes,Reschedule a booking
+24,Search,/search,GET,No,Search services and tailors
+25,Chat,/conversations,GET,Yes,Get all conversations
+26,Chat,/conversations/:id/messages,GET,Yes,Get messages in a conversation
+27,Chat,/conversations/:id/messages,POST,Yes,Send a message
+28,Chat,/conversations/:id/read,PATCH,Yes,Mark conversation as read
+29,Notifications,/users/:userId/notifications,GET,Yes,Get all notifications
+30,Notifications,/notifications/:id/read,PATCH,Yes,Mark notification as read
+
+TOTAL APIs: 30
+Protected APIs (need Bearer token): 20
+Public APIs (no auth needed): 10
+
+FILES IN THIS FOLDER:
+00_API_Summary.csv - This file (overview of all APIs)
+01_Authentication.csv - Register / Login / OTP / Refresh Token
+02_User_Profile.csv - Profile update / Measurements / Avatar
+03_Services.csv - Tailoring services list
+04_Tailors.csv - Tailor profiles
+05_Orders.csv - Order management
+06_Bookings.csv - Appointment booking
+07_Search.csv - Search functionality
+08_Chat.csv - Messaging system
+09_Notifications.csv - Push notifications
+10_Response_Format_and_Status_Codes.csv - Standard formats and HTTP codes

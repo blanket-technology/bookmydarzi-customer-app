@@ -1,0 +1,27 @@
+S.No,Endpoint,Method,Auth Required,Field Name,Field Type,Required,Description
+1,/auth/register,POST,No,name,string,YES,Full name (combined first + middle + last)
+2,/auth/register,POST,No,first_name,string,YES,First name of the user
+3,/auth/register,POST,No,middle_name,string,NO,Middle name (optional)
+4,/auth/register,POST,No,last_name,string,YES,Last name of the user
+5,/auth/register,POST,No,email,string (email format),YES,Valid email address
+6,/auth/register,POST,No,password,string (min 6 chars),YES,Plain text - must be hashed on server
+7,/auth/register,POST,No,phone_number,string (10 digits),YES,Mobile number
+8,/auth/login,POST,No,email,string (email format),YES,Registered email address
+9,/auth/login,POST,No,password,string,YES,User password
+10,/auth/logout,POST,Yes (Bearer Token),-,-,-,Invalidates the refresh token on server
+11,/auth/refresh-token,POST,No,refresh_token,string (JWT),YES,Valid refresh token to get new access token
+12,/auth/otp/request,POST,No,phone,string (10 digits),YES,Sends OTP to this phone number
+13,/auth/otp/verify,POST,No,phone,string (10 digits),YES,Phone number used to request OTP
+14,/auth/otp/verify,POST,No,code,string (6 digits),YES,OTP code received on phone
+
+RESPONSE FIELDS (register / login / otp/verify)
+S.No,Field Name,Type,Description
+1,user.id,string,Unique user ID
+2,user.name,string,Full name
+3,user.first_name,string,First name
+4,user.middle_name,string or null,Middle name
+5,user.last_name,string,Last name
+6,user.email,string,Email address
+7,user.phone_number,string,Mobile number
+8,access_token,string (JWT),Short-lived access token (use in Authorization header)
+9,refresh_token,string (JWT),Long-lived token to get new access token

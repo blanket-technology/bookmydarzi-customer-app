@@ -1,0 +1,20 @@
+S.No,Endpoint,Method,Auth Required,Query Param / Field,Field Type,Required,Description
+1,/tailors,GET,No,-,-,-,Get all tailors
+2,/tailors,GET,No,featured (query),boolean,NO,Pass featured=true to get only featured/badged tailors
+3,/tailors,GET,No,limit (query),number,NO,Limit number of results returned
+4,/tailors,GET,No,online_only (query),boolean,NO,Pass online_only=true to get only currently available tailors
+5,/tailors/:tailorId,GET,No,tailorId (path param),string,YES,Get full profile of a specific tailor
+
+RESPONSE FIELDS (Tailor Object)
+S.No,Field Name,Type,Description
+1,id,string,Unique tailor ID (e.g. tlr_001)
+2,name,string,Full name of the tailor
+3,specialty,string,Area of expertise (e.g. Men's Suits & Formals)
+4,rating,number (1.0 - 5.0),Average customer rating
+5,reviews,number,Total number of reviews received
+6,experience,string,Years of experience (e.g. 12 yrs)
+7,badge,string or null,Special badge: Top Rated / Expert / null
+8,online,boolean,Whether tailor is currently available
+9,price_per_hour,number,Hourly rate in INR
+10,completed_orders,number,Total orders completed by this tailor
+11,avatar,string,Initials or profile image URL

@@ -1,0 +1,36 @@
+S.No,Endpoint,Method,Auth Required,Field Name,Field Type,Required,Description
+1,/users/:userId,GET,Yes,userId (path param),string,YES,Get full profile of the user
+2,/users/:userId,PATCH,Yes,first_name,string,NO,Update first name
+3,/users/:userId,PATCH,Yes,last_name,string,NO,Update last name
+4,/users/:userId,PATCH,Yes,phone_number,string (10 digits),NO,Update phone number
+5,/users/:userId,PATCH,Yes,address,string,NO,Update home/delivery address
+6,/users/:userId,PATCH,Yes,avatar,string (URL),NO,Profile picture URL
+7,/users/:userId/measurements,PUT,Yes,chest,number (cm),NO,Chest measurement in centimeters
+8,/users/:userId/measurements,PUT,Yes,waist,number (cm),NO,Waist measurement in centimeters
+9,/users/:userId/measurements,PUT,Yes,hip,number (cm),NO,Hip measurement in centimeters
+10,/users/:userId/measurements,PUT,Yes,shoulder,number (cm),NO,Shoulder width in centimeters
+11,/users/:userId/measurements,PUT,Yes,sleeve,number (cm),NO,Sleeve length in centimeters
+12,/users/:userId/measurements,PUT,Yes,length,number (cm),NO,Body length in centimeters
+13,/users/:userId/measurements,PUT,Yes,inseam,number (cm),NO,Inseam length in centimeters
+14,/users/:userId/measurements,PUT,Yes,neck,number (cm),NO,Neck size in centimeters
+15,/users/:userId/avatar,POST,Yes,image,file (multipart/form-data),YES,Upload profile photo image file
+
+RESPONSE FIELDS (GET /users/:userId)
+S.No,Field Name,Type,Description
+1,id,string,Unique user ID
+2,name,string,Full name
+3,first_name,string,First name
+4,middle_name,string or null,Middle name
+5,last_name,string,Last name
+6,email,string,Email address
+7,phone_number,string,Mobile number
+8,avatar,string or null,Profile picture URL
+9,address,string or null,Home address
+10,measurements.chest,number or null,Chest in cm
+11,measurements.waist,number or null,Waist in cm
+12,measurements.hip,number or null,Hip in cm
+13,measurements.shoulder,number or null,Shoulder in cm
+14,measurements.sleeve,number or null,Sleeve in cm
+15,measurements.length,number or null,Length in cm
+16,measurements.inseam,number or null,Inseam in cm
+17,measurements.neck,number or null,Neck in cm

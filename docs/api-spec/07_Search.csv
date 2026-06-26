@@ -1,0 +1,13 @@
+S.No,Endpoint,Method,Auth Required,Query Param,Field Type,Required,Description
+1,/search,GET,No,q,string,YES,Search query text (e.g. suit / blouse / Arjun)
+2,/search,GET,No,category,string,NO,Filter services by: men / women / kids / alteration / wedding / all
+3,/search,GET,No,price_min,number,NO,Minimum price filter in INR
+4,/search,GET,No,price_max,number,NO,Maximum price filter in INR
+5,/search,GET,No,rating,number (1.0 - 5.0),NO,Minimum tailor rating filter
+6,/search,GET,No,online_only,boolean,NO,Pass true to show only currently available tailors
+
+RESPONSE FIELDS
+S.No,Field Name,Type,Description
+1,services,array,Array of matching Service objects
+2,tailors,array,Array of matching Tailor objects
+3,query,string,Echo of the search query sent

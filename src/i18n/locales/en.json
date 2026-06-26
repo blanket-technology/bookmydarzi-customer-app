@@ -1,0 +1,40 @@
+{
+  "common": {
+    "login": "Login",
+    "retry": "Retry",
+    "browseServices": "Browse Services",
+    "somethingWrong": "Something went wrong",
+    "na": "N/A",
+    "bookingId": "Booking ID",
+    "amountPaid": "Amount paid",
+    "notifications": "Notifications"
+  },
+  "tabs": {
+    "home": "Home",
+    "cart": "Cart",
+    "orders": "Orders",
+    "profile": "Profile"
+  },
+  "cart": {
+    "title": "Your Cart",
+    "loading": "Loading your cart...",
+    "emptyTitle": "Your cart is empty",
+    "emptySub": "Browse services and add items with your measurements to get started.",
+    "subtotal": "Subtotal",
+    "gst": "GST",
+    "grandTotal": "Total Amount",
+    "checkout": "Proceed to Checkout",
+    "payNow": "Pay Now"
+  },
+  "orders": {
+    "myBookings": "My Bookings",
+    "active": "Active",
+    "completed": "Completed",
+    "loginTitle": "Login to view your bookings",
+    "loginSub": "Your order history will appear here after you sign in.",
+    "emptyActiveTitle": "No active orders found",
+    "emptyActiveSub": "When you book a service, your active orders will appear here.",
+    "emptyCompletedTitle": "No completed orders yet",
+    "emptyCompletedSub": "Completed bookings will show up here once your orders are finished."
+  }
+}

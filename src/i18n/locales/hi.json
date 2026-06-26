@@ -1,0 +1,40 @@
+{
+  "common": {
+    "login": "लॉगिन",
+    "retry": "पुनः प्रयास करें",
+    "browseServices": "सेवाएँ देखें",
+    "somethingWrong": "कुछ गलत हो गया",
+    "na": "N/A",
+    "bookingId": "बुकिंग आईडी",
+    "amountPaid": "भुगतान राशि",
+    "notifications": "सूचनाएँ"
+  },
+  "tabs": {
+    "home": "होम",
+    "cart": "कार्ट",
+    "orders": "ऑर्डर",
+    "profile": "प्रोफ़ाइल"
+  },
+  "cart": {
+    "title": "आपकी कार्ट",
+    "loading": "कार्ट लोड हो रही है...",
+    "emptyTitle": "आपकी कार्ट खाली है",
+    "emptySub": "सेवाएँ देखें और माप के साथ आइटम जोड़ें।",
+    "subtotal": "उप-योग",
+    "gst": "जीएसटी",
+    "grandTotal": "कुल राशि",
+    "checkout": "चेकआउट पर जाएँ",
+    "payNow": "अभी भुगतान करें"
+  },
+  "orders": {
+    "myBookings": "मेरी बुकिंग",
+    "active": "सक्रिय",
+    "completed": "पूर्ण",
+    "loginTitle": "बुकिंग देखने के लिए लॉगिन करें",
+    "loginSub": "लॉगिन के बाद आपका ऑर्डर इतिहास यहाँ दिखेगा।",
+    "emptyActiveTitle": "कोई सक्रिय ऑर्डर नहीं",
+    "emptyActiveSub": "जब आप सेवा बुक करेंगे, सक्रिय ऑर्डर यहाँ दिखेंगे।",
+    "emptyCompletedTitle": "कोई पूर्ण ऑर्डर नहीं",
+    "emptyCompletedSub": "पूर्ण बुकिंग यहाँ दिखाई देंगी।"
+  }
+}

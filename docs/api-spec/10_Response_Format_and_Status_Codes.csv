@@ -1,0 +1,37 @@
+STANDARD API RESPONSE FORMAT (All endpoints must follow this)
+S.No,Field Name,Type,Description
+1,success,boolean,true on success / false on error
+2,data,object or array,The actual response payload
+3,message,string or null,Human-readable success or info message
+4,error,string or null,Error description - only present on failure
+
+PAGINATED RESPONSE FORMAT (for list endpoints)
+S.No,Field Name,Type,Description
+1,success,boolean,true on success
+2,data,array,Array of result objects
+3,page,number,Current page number (starts from 1)
+4,total_pages,number,Total number of pages available
+5,total_items,number,Total count of all records
+6,message,string or null,Optional message
+7,error,string or null,Error if any
+
+HTTP STATUS CODES
+S.No,Status Code,Status Name,When to Use
+1,200,OK,Successful GET or PATCH request
+2,201,Created,Successful POST - new resource created
+3,400,Bad Request,Validation errors or missing required fields
+4,401,Unauthorized,Missing token or token expired
+5,403,Forbidden,Valid token but user has no permission
+6,404,Not Found,Resource does not exist
+7,409,Conflict,Duplicate email or phone on registration
+8,422,Unprocessable Entity,Business logic error (e.g. cancel a delivered order)
+9,500,Internal Server Error,Unexpected server-side failure
+
+AUTHENTICATION HEADER FORMAT
+S.No,Header Name,Format,Example
+1,Authorization,Bearer <access_token>,Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+TOKEN DETAILS
+S.No,Token Type,Storage,Expiry (Recommended),Notes
+1,access_token,App memory (Zustand),15 minutes,Used in Authorization header for all protected APIs
+2,refresh_token,SecureStore (device),30 days,Used only to get new access_token via /auth/refresh-token

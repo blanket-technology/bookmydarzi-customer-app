@@ -1,0 +1,7 @@
+# Faster EAS uploads - exclude local artifacts (EAS runs npm install + postinstall)
+node_modules/
+.expo/
+dist/
+web-build/
+android/
+ios/

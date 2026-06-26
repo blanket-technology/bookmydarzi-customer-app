@@ -1,0 +1,22 @@
+S.No,Endpoint,Method,Auth Required,Field Name,Field Type,Required,Description
+1,/users/:userId/bookings,GET,Yes,userId (path param),string,YES,Get all bookings for a specific user
+2,/bookings,POST,Yes,tailor_id,string,YES,ID of the tailor to book
+3,/bookings,POST,Yes,service_id,string,YES,ID of the service to book
+4,/bookings,POST,Yes,date,string (YYYY-MM-DD),YES,Appointment date
+5,/bookings,POST,Yes,time,string (HH:MM),YES,Appointment time (24-hour format)
+6,/bookings,POST,Yes,notes,string,NO,Special requests or instructions
+7,/bookings/:bookingId/cancel,PATCH,Yes,bookingId (path param),string,YES,Cancel a booking (not allowed if status = completed)
+8,/bookings/:bookingId/reschedule,PATCH,Yes,bookingId (path param),string,YES,Booking ID to reschedule
+9,/bookings/:bookingId/reschedule,PATCH,Yes,date,string (YYYY-MM-DD),YES,New appointment date
+10,/bookings/:bookingId/reschedule,PATCH,Yes,time,string (HH:MM),YES,New appointment time
+
+RESPONSE FIELDS (Booking Object)
+S.No,Field Name,Type,Allowed Values,Description
+1,id,string,-,Unique booking ID (e.g. bkg_001)
+2,tailor,object,-,Nested tailor object (see Tailors sheet)
+3,service,object,-,Nested service object (see Services sheet)
+4,date,string,-,Appointment date
+5,time,string,-,Appointment time
+6,status,string,confirmed / pending / cancelled / completed,Current booking status
+7,notes,string or null,-,Special instructions
+8,created_at,string (ISO 8601),-,Booking creation timestamp

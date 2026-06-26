@@ -1,0 +1,35 @@
+S.No,Endpoint,Method,Auth Required,Field Name,Field Type,Required,Description
+1,/users/:userId/orders,GET,Yes,userId (path param),string,YES,Get all orders for a specific user
+2,/orders/:orderId,GET,Yes,orderId (path param),string,YES,Get details of a single order
+3,/orders,POST,Yes,tailor_id,string,YES,ID of the tailor to assign the order
+4,/orders,POST,Yes,service_id,string,YES,ID of the service being ordered
+5,/orders,POST,Yes,cloth_type,string,YES,Type of fabric (e.g. Wool Blend / Pure Silk)
+6,/orders,POST,Yes,notes,string,NO,Special instructions from customer
+7,/orders,POST,Yes,measurements.chest,number (cm),NO,Chest measurement
+8,/orders,POST,Yes,measurements.waist,number (cm),NO,Waist measurement
+9,/orders,POST,Yes,measurements.hip,number (cm),NO,Hip measurement
+10,/orders,POST,Yes,measurements.shoulder,number (cm),NO,Shoulder measurement
+11,/orders,POST,Yes,measurements.sleeve,number (cm),NO,Sleeve measurement
+12,/orders,POST,Yes,measurements.length,number (cm),NO,Body length measurement
+13,/orders,POST,Yes,measurements.inseam,number (cm),NO,Inseam measurement
+14,/orders,POST,Yes,measurements.neck,number (cm),NO,Neck measurement
+15,/orders/:orderId/cancel,PATCH,Yes,orderId (path param),string,YES,Cancel an existing order (not allowed if status = delivered)
+
+RESPONSE FIELDS (Order Object)
+S.No,Field Name,Type,Allowed Values,Description
+1,id,string,-,Unique order ID (e.g. ord_001)
+2,item,string,-,Name of the item ordered
+3,status,string,pending / in_progress / ready / delivered / cancelled,Current order status
+4,delivery_date,string (date),-,Expected delivery date
+5,cloth_type,string,-,Type of fabric used
+6,tailor,object,-,Nested tailor object (see Tailors sheet)
+7,price,number,-,Final price in INR (0 if not yet quoted)
+8,payment_status,string,paid / pending / failed,Payment state
+9,created_at,string (ISO 8601),-,Order creation timestamp
+10,tracking,array,-,Array of tracking step objects (see below)
+
+TRACKING STEP OBJECT
+S.No,Field Name,Type,Description
+1,status,string,Step name (e.g. Cutting Started)
+2,timestamp,string,When this step occurred
+3,description,string,Human-readable detail of the step

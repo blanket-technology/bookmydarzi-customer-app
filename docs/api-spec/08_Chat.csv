@@ -1,0 +1,24 @@
+S.No,Endpoint,Method,Auth Required,Field Name,Field Type,Required,Description
+1,/conversations,GET,Yes,-,-,-,Get all chat conversations for the logged-in user
+2,/conversations/:conversationId/messages,GET,Yes,conversationId (path param),string,YES,Get all messages in a conversation
+3,/conversations/:conversationId/messages,POST,Yes,message,string,YES,Text content of the message
+4,/conversations/:conversationId/messages,POST,Yes,sender_id,string,YES,User ID of the sender
+5,/conversations/:conversationId/read,PATCH,Yes,conversationId (path param),string,YES,Mark all messages in conversation as read
+
+RESPONSE FIELDS (Conversation Object)
+S.No,Field Name,Type,Description
+1,id,string,Unique conversation ID (e.g. cnv_001)
+2,tailor,object,Nested tailor object (see Tailors sheet)
+3,last_message,object,Last message object (see below)
+4,unread_count,number,Number of unread messages
+5,online,boolean,Whether the tailor is currently online
+
+RESPONSE FIELDS (Message Object)
+S.No,Field Name,Type,Description
+1,id,string,Unique message ID (e.g. msg_001)
+2,sender_id,string,User ID or tailor ID of the sender
+3,sender_name,string,Display name of the sender
+4,sender_avatar,string or null,Initials or image URL of sender
+5,message,string,Text content of the message
+6,timestamp,string (ISO 8601),When the message was sent
+7,read,boolean,Whether the message has been read

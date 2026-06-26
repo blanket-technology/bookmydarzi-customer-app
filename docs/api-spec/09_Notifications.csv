@@ -1,0 +1,13 @@
+S.No,Endpoint,Method,Auth Required,Field Name,Field Type,Required,Description
+1,/users/:userId/notifications,GET,Yes,userId (path param),string,YES,Get all notifications for a user
+2,/notifications/:notificationId/read,PATCH,Yes,notificationId (path param),string,YES,Mark a single notification as read
+
+RESPONSE FIELDS (Notification Object)
+S.No,Field Name,Type,Allowed Values,Description
+1,id,string,-,Unique notification ID
+2,title,string,-,Notification title
+3,message,string,-,Notification body text
+4,type,string,order / booking / payment / promo / system,Category of notification
+5,read,boolean,true / false,Whether user has read this notification
+6,timestamp,string (ISO 8601),-,When the notification was sent
+7,action_url,string or null,-,Deep link URL to open in app (optional)

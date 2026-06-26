@@ -1,0 +1,108 @@
+/**
+ * Single source of truth for Expo configuration (SDK 54).
+ * Replaces app.json — do not add a static app.json alongside this file.
+ */
+/** @type {import("expo/config").ExpoConfig} */
+module.exports = {
+  name: "DarziApp",
+  slug: "DarziApp",
+  version: "1.0.0",
+  orientation: "portrait",
+  icon: "./assets/images/icon.png",
+  scheme: "darziapp",
+  userInterfaceStyle: "automatic",
+  newArchEnabled: true,
+  ios: {
+    supportsTablet: true,
+    bundleIdentifier: "com.darziapp.mobile",
+    infoPlist: {
+      NSPhotoLibraryUsageDescription:
+        "Allow BookMyDarzi to access your photos to update your profile picture.",
+    },
+  },
+  android: {
+    package: "com.darziapp.mobile",
+    adaptiveIcon: {
+      backgroundColor: "#E6F4FE",
+      foregroundImage: "./assets/images/android-icon-foreground.png",
+      backgroundImage: "./assets/images/android-icon-background.png",
+      monochromeImage: "./assets/images/android-icon-monochrome.png",
+    },
+    edgeToEdgeEnabled: true,
+    predictiveBackGestureEnabled: false,
+    permissions: [
+      "android.permission.ACCESS_FINE_LOCATION",
+      "android.permission.ACCESS_COARSE_LOCATION",
+    ],
+  },
+  web: {
+    output: "static",
+    favicon: "./assets/images/favicon.png",
+  },
+  plugins: [
+    [
+      "expo-dev-client",
+      {
+        launchMode: "most-recent",
+      },
+    ],
+    [
+      "expo-build-properties",
+      {
+        android: {
+          minSdkVersion: 24,
+          compileSdkVersion: 35,
+          targetSdkVersion: 35,
+        },
+        ios: {
+          deploymentTarget: "15.1",
+        },
+      },
+    ],
+    "expo-router",
+    [
+      "expo-splash-screen",
+      {
+        image: "./assets/images/splash-icon.png",
+        imageWidth: 200,
+        resizeMode: "contain",
+        backgroundColor: "#ffffff",
+        dark: {
+          backgroundColor: "#000000",
+        },
+      },
+    ],
+    "expo-secure-store",
+    [
+      "expo-notifications",
+      {
+        icon: "./assets/images/icon.png",
+        color: "#1a73e8",
+        sounds: [],
+        androidMode: "default",
+        androidCollapsedTitle: "BookMyDarzi",
+      },
+    ],
+    [
+      "expo-image-picker",
+      {
+        photosPermission:
+          "Allow BookMyDarzi to access your photos to update your profile picture.",
+        cameraPermission: false,
+        microphonePermission: false,
+      },
+    ],
+    "./plugins/withCleartextTraffic.js",
+    "./plugins/withRazorpayGradle.js",
+  ],
+  experiments: {
+    typedRoutes: true,
+    reactCompiler: true,
+  },
+  extra: {
+    apiUrl: process.env.EXPO_PUBLIC_API_URL ?? "http://192.168.1.43:8000",
+    eas: {
+      projectId: "55f606c1-bb85-411c-ad29-dc68cee99844",
+    },
+  },
+};
