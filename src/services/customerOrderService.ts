@@ -407,7 +407,9 @@ function mapSummaryBillingBlock(raw: Record<string, unknown>): OrderSummaryBilli
   return {
     item_total: nullableMoney(billing.item_total ?? billing.itemTotal ?? billing.subtotal),
     gst_amount: nullableMoney(billing.gst_amount ?? billing.gstAmount ?? billing.gst),
-    service_fee: nullableMoney(billing.service_fee ?? billing.serviceFee),
+    cgst_amount: nullableMoney(billing.cgst_amount ?? billing.cgstAmount),
+    sgst_amount: nullableMoney(billing.sgst_amount ?? billing.sgstAmount),
+    service_fee: nullableMoney(billing.service_fee ?? billing.serviceFee ?? billing.platform_fee),
     discount: nullableMoney(billing.discount ?? billing.discount_amount),
     total_amount: nullableMoney(
       billing.total_amount ??
@@ -481,6 +483,9 @@ function mapDetailsPricingBlock(raw: Record<string, unknown>): OrderDetailsPrici
     base_amount: nullableMoney(pricing.base_amount ?? pricing.baseAmount ?? pricing.item_total),
     discount_amount: nullableMoney(pricing.discount_amount ?? pricing.discountAmount),
     gst_amount: nullableMoney(pricing.gst_amount ?? pricing.gstAmount ?? pricing.gst),
+    cgst_amount: nullableMoney(pricing.cgst_amount ?? pricing.cgstAmount),
+    sgst_amount: nullableMoney(pricing.sgst_amount ?? pricing.sgstAmount),
+    service_fee: nullableMoney(pricing.service_fee ?? pricing.serviceFee ?? pricing.platform_fee),
     final_amount: nullableMoney(
       pricing.final_amount ?? pricing.finalAmount ?? pricing.total_amount,
     ),

@@ -1,21 +1,14 @@
 /**
  * Invoice download — GET /api/v1/orders/{order_id}/invoice
  *
- * The endpoint streams a PDF (application/pdf) and requires the Bearer token, so
- * the JSON `request()` helper cannot be used. We download to the app cache with
- * the auth header, then hand the file to the OS share/preview sheet.
- *
- * Requires `expo-file-system` and `expo-sharing` (run:
- *   npx expo install expo-file-system expo-sharing
- * then rebuild the dev client).
+ * Downloads the PDF with the auth header, then saves it to a user-selected
+ * folder via Android's Storage Access Framework (SAF). Falls back to the
+ * system share sheet on iOS or when SAF is unavailable.
  */
 
 import { getAccessToken } from "../../services/api";
 import { buildApiV1Url } from "../config/api";
 
-// expo-file-system and expo-sharing are loaded lazily (only when the user taps
-// "Download invoice") so the rest of the app keeps working on a dev client that
-// hasn't been rebuilt with these native modules yet.
 async function loadNativeModules() {
   try {
     const FileSystem = await import("expo-file-system/legacy");
@@ -28,12 +21,10 @@ async function loadNativeModules() {
   }
 }
 
-/** Build the absolute, authenticated invoice URL for an order. */
 export function getInvoiceUrl(orderId: number): string {
   return buildApiV1Url(`/orders/${orderId}/invoice`);
 }
 
-/** Read a FastAPI error body that was downloaded to a file and extract `detail`. */
 async function readErrorDetail(
   FileSystem: { readAsStringAsync: (uri: string) => Promise<string> },
   fileUri: string,
@@ -46,14 +37,15 @@ async function readErrorDetail(
     if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
     if (typeof parsed?.message === "string") return parsed.message;
   } catch {
-    // body was not JSON (e.g. an actual PDF or empty) — fall back to generic message
+    // body was not JSON — fall back to generic message
   }
   return "";
 }
 
 /**
- * Download the order invoice PDF and open the share/preview sheet.
- * Returns the local file URI on success.
+ * Download the invoice PDF and save it to a user-chosen folder via SAF
+ * (Android). Falls back to the system share sheet if SAF is unavailable.
+ * Returns the final saved URI on success.
  */
 export async function downloadAndShareInvoice(
   orderId: number,
@@ -68,15 +60,14 @@ export async function downloadAndShareInvoice(
 
   const url = getInvoiceUrl(orderId);
   const safeName = (orderNumber ?? `order-${orderId}`).replace(/[^a-zA-Z0-9._-]/g, "_");
-  const fileUri = `${FileSystem.cacheDirectory ?? ""}invoice-${safeName}.pdf`;
+  const cacheUri = `${FileSystem.cacheDirectory ?? ""}invoice-${safeName}.pdf`;
 
-  const result = await FileSystem.downloadAsync(url, fileUri, {
+  // Step 1: download to cache with auth header
+  const result = await FileSystem.downloadAsync(url, cacheUri, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/pdf" },
   });
 
   if (result.status !== 200) {
-    // On error the body is a JSON error payload (written to the file) — surface
-    // the backend's actual reason rather than a generic status message.
     const detail = await readErrorDetail(FileSystem, result.uri);
     if (result.status === 404) {
       throw new Error(detail || "Invoice is not available for this order yet.");
@@ -90,11 +81,37 @@ export async function downloadAndShareInvoice(
     throw new Error(detail || `Could not download invoice (status ${result.status}).`);
   }
 
+  // Step 2: try SAF (Android) — lets user pick their Downloads folder directly
+  try {
+    const saf = (FileSystem as any).StorageAccessFramework;
+    if (saf && typeof saf.requestDirectoryPermissionsAsync === "function") {
+      const permissions = await saf.requestDirectoryPermissionsAsync();
+      if (permissions.granted) {
+        const destUri: string = await saf.createFileAsync(
+          permissions.directoryUri,
+          `invoice-${safeName}.pdf`,
+          "application/pdf",
+        );
+        const base64Content: string = await FileSystem.readAsStringAsync(result.uri, {
+          encoding: "base64" as any,
+        });
+        await FileSystem.writeAsStringAsync(destUri, base64Content, {
+          encoding: "base64" as any,
+        });
+        return destUri;
+      }
+      // User cancelled the folder picker — fall through to sharing
+    }
+  } catch {
+    // SAF not available on this device/OS version — fall through to sharing
+  }
+
+  // Step 3: fallback — open share / preview sheet (iOS or SAF unavailable)
   const canShare = await Sharing.isAvailableAsync();
   if (canShare) {
     await Sharing.shareAsync(result.uri, {
       mimeType: "application/pdf",
-      dialogTitle: "Invoice",
+      dialogTitle: "Save Invoice",
       UTI: "com.adobe.pdf",
     });
   }

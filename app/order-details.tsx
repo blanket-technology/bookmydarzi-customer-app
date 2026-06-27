@@ -291,11 +291,25 @@ export default function OrderDetailsScreen() {
       paymentStatus === "paymentfailed" ||
       paymentStatus === "failed");
 
-  // Backend issues invoices only once the order is placed — not while it is
-  // pending payment, payment-failed, or cancelled.
+  const isPaymentComplete =
+    !isBalanceDue &&
+    !isAdvancePending &&
+    paymentStatus !== "" &&
+    !paymentStatus.includes("pending") &&
+    !paymentStatus.includes("failed") &&
+    !paymentStatus.includes("refund");
+
   const orderStatusKey = (payload?.order.status ?? "")
     .toLowerCase()
     .replace(/[^a-z]/g, "");
+
+  // Derived billing amounts for the pricing breakdown
+  const serviceFeeNum = Number(payload?.pricing.service_fee ?? 0);
+  const finalAmountNum = Number(payload?.pricing.final_amount ?? 0);
+  const remainingBalance = Math.max(finalAmountNum - serviceFeeNum, 0);
+
+  // Backend issues invoices only once the order is placed — not while it is
+  // pending payment, payment-failed, or cancelled.
   const invoiceAvailable =
     !!payload &&
     !["pendingpayment", "paymentfailed", "cancelled"].includes(orderStatusKey);
@@ -452,16 +466,29 @@ export default function OrderDetailsScreen() {
               discount
             />
             <RowDivider />
+            <BillRow label="CGST" value={detailsMoney(payload.pricing.cgst_amount)} />
+            <RowDivider />
+            <BillRow label="SGST" value={detailsMoney(payload.pricing.sgst_amount)} />
+            <RowDivider />
             <BillRow
-              label="GST"
-              value={detailsMoney(payload.pricing.gst_amount)}
+              label="Convenience fee (advance)"
+              value={detailsMoney(payload.pricing.service_fee)}
             />
             <RowDivider />
             <BillRow
-              label="Final amount"
+              label="Total amount"
               value={detailsMoney(payload.pricing.final_amount)}
               bold
             />
+            {serviceFeeNum > 0 && remainingBalance > 0 ? (
+              <>
+                <RowDivider />
+                <BillRow
+                  label="Remaining on delivery"
+                  value={detailsMoney(remainingBalance)}
+                />
+              </>
+            ) : null}
           </OrderScreenSection>
 
           <OrderScreenSection title="Payment">
@@ -563,7 +590,7 @@ export default function OrderDetailsScreen() {
               </TouchableOpacity>
             ) : null}
 
-            {isBalanceDue ? (
+            {isBalanceDue && orderStatusKey !== "delivered" ? (
               <TouchableOpacity
                 style={[styles.actionPrimary, busy !== null && styles.actionDisabled]}
                 onPress={handlePayBalance}
@@ -578,6 +605,13 @@ export default function OrderDetailsScreen() {
                 )}
                 <Text style={styles.actionPrimaryText}>Pay remaining balance</Text>
               </TouchableOpacity>
+            ) : null}
+
+            {isPaymentComplete ? (
+              <View style={styles.paymentDoneBanner}>
+                <Ionicons name="checkmark-circle" size={20} color="#16A34A" />
+                <Text style={styles.paymentDoneText}>Payment fully received</Text>
+              </View>
             ) : null}
 
             <TouchableOpacity
@@ -857,6 +891,23 @@ const styles = StyleSheet.create({
   },
   actionSecondaryText: { fontSize: 14, fontWeight: "700", color: COLORS.primaryDark },
   actionDisabled: { opacity: 0.6 },
+  paymentDoneBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F0FDF4",
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: SPACING.sm,
+  },
+  paymentDoneText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#16A34A",
+  },
   center: {
     flex: 1,
     alignItems: "center",
