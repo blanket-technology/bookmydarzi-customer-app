@@ -88,6 +88,8 @@ export interface OrderSummaryServiceBlock {
 export interface OrderSummaryBillingBlock {
   item_total: number | string | null;
   gst_amount: number | string | null;
+  cgst_amount: number | string | null;
+  sgst_amount: number | string | null;
   service_fee: number | string | null;
   discount: number | string | null;
   total_amount: number | string | null;
@@ -133,6 +135,9 @@ export interface OrderDetailsPricingBlock {
   base_amount: number | string | null;
   discount_amount: number | string | null;
   gst_amount: number | string | null;
+  cgst_amount: number | string | null;
+  sgst_amount: number | string | null;
+  service_fee: number | string | null;
   final_amount: number | string | null;
 }
 

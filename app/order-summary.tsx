@@ -251,15 +251,13 @@ export default function OrderSummaryScreen() {
           <OrderScreenSection title="Billing">
             <BillRow label="Item total" value={summaryMoney(payload.billing.item_total)} />
             <View style={styles.billDivider} />
-            <BillRow label="GST" value={summaryMoney(payload.billing.gst_amount)} />
+            <BillRow label="Discount" value={summaryMoney(payload.billing.discount)} discount />
             <View style={styles.billDivider} />
-            <BillRow label="Service fee" value={summaryMoney(payload.billing.service_fee)} />
+            <BillRow label="CGST" value={summaryMoney(payload.billing.cgst_amount)} />
             <View style={styles.billDivider} />
-            <BillRow
-              label="Discount"
-              value={summaryMoney(payload.billing.discount)}
-              discount
-            />
+            <BillRow label="SGST" value={summaryMoney(payload.billing.sgst_amount)} />
+            <View style={styles.billDivider} />
+            <BillRow label="Convenience fee" value={summaryMoney(payload.billing.service_fee)} />
             <View style={styles.billDivider} />
             <BillRow
               label="Total amount"
