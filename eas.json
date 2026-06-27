@@ -32,6 +32,9 @@
     "production": {
       "env": {
         "EXPO_PUBLIC_API_URL": "https://web-production-efff7.up.railway.app"
+      },
+      "android": {
+        "buildType": "apk"
       }
     }
   },

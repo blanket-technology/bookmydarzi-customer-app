@@ -2,8 +2,10 @@ import { useEffect, useRef } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import * as Notifications from "expo-notifications";
 import AppToast from "../src/components/common/AppToast";
 import { useAuthStore } from "../store/useAuthStore";
+import { useToastStore } from "../src/store/useToastStore";
 import {
   registerForPushNotifications,
   unregisterFromPushNotifications,
@@ -23,6 +25,19 @@ function PushNotificationSetup() {
       tokenRef.current = null;
     }
   }, [isAuthenticated]);
+
+  // Show foreground notifications as in-app toast banners
+  useEffect(() => {
+    const sub = Notifications.addNotificationReceivedListener((notification) => {
+      const title = notification.request.content.title ?? "";
+      const body = notification.request.content.body ?? "";
+      const text = [title, body].filter(Boolean).join("\n");
+      if (text) {
+        useToastStore.getState().show(text, "info");
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   return null;
 }

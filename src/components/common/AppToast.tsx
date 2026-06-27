@@ -6,18 +6,47 @@ import { Ionicons } from "@expo/vector-icons";
 import { COLORS, RADIUS, SHADOW } from "../../../constants/theme";
 import { useToastStore } from "../../store/useToastStore";
 
-/** Global success/error toast banner */
+const DURATIONS: Record<string, number> = {
+  success: 2800,
+  error: 4000,
+  info: 3200,
+};
+
+const CONFIG = {
+  success: {
+    icon: "checkmark-circle" as const,
+    color: COLORS.success ?? "#065F46",
+    bg: "#F0FDF4",
+    border: "rgba(6,95,70,0.15)",
+  },
+  error: {
+    icon: "alert-circle" as const,
+    color: "#DC2626",
+    bg: "#FEF2F2",
+    border: "rgba(220,38,38,0.15)",
+  },
+  info: {
+    icon: "information-circle" as const,
+    color: "#0C6C75",
+    bg: "#F0F9FA",
+    border: "rgba(12,108,117,0.18)",
+  },
+};
+
 export default function AppToast() {
   const insets = useSafeAreaInsets();
-  const { message, visible, hide } = useToastStore();
+  const { message, type, visible, hide } = useToastStore();
 
   useEffect(() => {
     if (!visible) return;
-    const t = setTimeout(hide, 2800);
+    const duration = DURATIONS[type] ?? 2800;
+    const t = setTimeout(hide, duration);
     return () => clearTimeout(t);
-  }, [visible, hide]);
+  }, [visible, type, hide]);
 
   if (!visible || !message) return null;
+
+  const cfg = CONFIG[type] ?? CONFIG.success;
 
   return (
     <Animated.View
@@ -26,9 +55,9 @@ export default function AppToast() {
       style={[styles.wrap, { top: insets.top + 8 }]}
       pointerEvents="none"
     >
-      <View style={styles.toast}>
-        <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-        <Text style={styles.text} numberOfLines={2}>
+      <View style={[styles.toast, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
+        <Ionicons name={cfg.icon} size={20} color={cfg.color} />
+        <Text style={[styles.text, { color: type === "error" ? "#991B1B" : COLORS.black }]} numberOfLines={3}>
           {message}
         </Text>
       </View>
@@ -48,20 +77,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    maxWidth: 400,
+    maxWidth: 420,
     width: "100%",
     ...SHADOW.strong,
     borderWidth: 1,
-    borderColor: "rgba(12,108,117,0.12)",
   },
   text: {
     flex: 1,
     fontSize: 14,
     fontWeight: "600",
-    color: COLORS.black,
+    lineHeight: 20,
   },
 });

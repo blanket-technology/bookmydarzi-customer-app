@@ -6,6 +6,7 @@ import {
   resolveApiOrigin,
   getApiV1BaseUrl,
 } from "../src/config/api";
+import { useToastStore } from "../src/store/useToastStore";
 
 // Re-export config — single source of truth for API origin
 export {
@@ -29,7 +30,10 @@ export const API_HOST = resolveApiOrigin();
 console.log("API resolved origin:", API_HOST);
 
 /** Request timeout in milliseconds */
-const TIMEOUT_MS = 30_000;
+const TIMEOUT_MS = 40_000;
+
+/** Max automatic retries on transient network/timeout errors */
+const MAX_RETRIES = 2;
 
 /** Runtime connectivity snapshot — for audits and dev logs */
 export function getApiConnectivityConfig() {
@@ -453,6 +457,7 @@ async function _fetch<T = unknown>(
   baseUrl: string,
   endpoint: string,
   options: RequestOptions = {},
+  _retryCount = 0,
 ): Promise<T> {
   const {
     method = "GET",
@@ -502,25 +507,35 @@ async function _fetch<T = unknown>(
         ? networkError.message
         : String(networkError);
 
-    let msg = "Network error. Please check your connection.";
-    if (raw.includes("Network request failed")) {
-      msg =
-        `Cannot reach the server.\n` +
-        `• Check your internet connection\n` +
-        `• Backend: ${API_V1_BASE_URL}\n` +
-        `• Try again in a moment`;
-    } else if (raw.includes("timed out")) {
-      msg =
-        `The server took too long to respond (${TIMEOUT_MS / 1000}s timeout).\n` +
-        `• The server may be starting up — please try again\n` +
-        `• Check your internet connection`;
-    }
+    const isTimeout = raw.includes("timed out");
+    const isNetworkFail =
+      raw.includes("Network request failed") ||
+      raw.includes("Network Error") ||
+      raw.includes("Cannot reach");
+    const isRetryable = isTimeout || isNetworkFail;
+
     console.error(
-      `[API:req:error] ${method} ${apiPath} after ${elapsedMs}ms\n` +
+      `[API:req:error] ${method} ${apiPath} after ${elapsedMs}ms ` +
+        `(attempt ${_retryCount + 1}/${MAX_RETRIES + 1})\n` +
         `  url: ${url}\n` +
-        `  type: ${raw.includes("timed out") ? "timeout" : "network"}\n` +
+        `  type: ${isTimeout ? "timeout" : "network"}\n` +
         `  message: ${raw}`,
     );
+
+    if (isRetryable && _retryCount < MAX_RETRIES) {
+      if (_retryCount === 0) {
+        useToastStore
+          .getState()
+          .show("Connecting to server… please wait", "info");
+      }
+      const delay = _retryCount === 0 ? 2500 : 5000;
+      await new Promise((r) => setTimeout(r, delay));
+      return _fetch<T>(baseUrl, endpoint, options, _retryCount + 1);
+    }
+
+    const msg = isTimeout
+      ? "Server took too long to respond. Please try again."
+      : "Unable to connect. Please check your internet connection.";
     throw new Error(msg);
   }
 

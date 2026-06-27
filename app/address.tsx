@@ -54,7 +54,6 @@ import {
   getCurrentGpsCoords,
   reverseGeocodeCoords,
 } from "../src/services/locationService";
-import { MapPinPicker, type PickedLocation } from "../src/components/common/MapPinPicker";
 
 const ADDRESS_TYPES: { key: AddressType; label: string; icon: string }[] = [
   { key: "home", label: "Home", icon: "home-outline" },
@@ -199,7 +198,6 @@ export default function AddressScreen() {
   // Geo-tagging state
   const [gpsCoords, setGpsCoords] = useState<GpsCoords | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [mapPickerVisible, setMapPickerVisible] = useState(false);
   const [serviceability, setServiceability] =
     useState<ServiceabilityResult | null>(null);
 
@@ -270,7 +268,11 @@ export default function AddressScreen() {
     resetForm();
     setMode("form");
     setScrollToForm(true);
-  }, [resetForm]);
+    // Auto-detect location when opening a new address form
+    setTimeout(() => {
+      void handleUseMyLocation();
+    }, 300);
+  }, [resetForm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!scrollToForm || mode !== "form") return;
@@ -447,34 +449,6 @@ export default function AddressScreen() {
       );
     } finally {
       setGpsLoading(false);
-    }
-  };
-
-  const handleMapPickerConfirm = async (picked: PickedLocation) => {
-    setMapPickerVisible(false);
-    const { latitude, longitude, address } = picked;
-    setGpsCoords({ latitude, longitude, accuracy: null });
-    setServiceability(null);
-
-    if (address) {
-      if (address.line1 && !line1.trim()) setLine1(address.line1);
-      if (address.line2 && !line2.trim()) setLine2(address.line2);
-      if (address.city) {
-        setCity(address.city);
-        const matchedState = findStateForCity(address.city) || address.state;
-        if (matchedState) setState(matchedState);
-      } else if (address.state) {
-        setState(address.state);
-      }
-      if (address.pincode) setPincode(address.pincode);
-    }
-
-    // Serviceability check (non-blocking)
-    try {
-      const svc = await checkServiceability(latitude, longitude);
-      setServiceability(svc);
-    } catch {
-      // non-fatal
     }
   };
 
@@ -748,37 +722,26 @@ export default function AddressScreen() {
                     : "Add Address"}
               </Text>
 
-              {/* ── Location buttons row ──────────────────── */}
-              <View style={styles.locationBtnRow}>
-                <TouchableOpacity
-                  style={[styles.gpsBtn, styles.locationBtnFlex, gpsLoading && styles.gpsBtnDisabled]}
-                  onPress={() => void handleUseMyLocation()}
-                  disabled={gpsLoading}
-                  activeOpacity={0.8}
-                >
-                  {gpsLoading ? (
-                    <ActivityIndicator size="small" color={COLORS.primaryDark} />
-                  ) : (
-                    <Ionicons
-                      name="locate-outline"
-                      size={18}
-                      color={COLORS.primaryDark}
-                    />
-                  )}
-                  <Text style={styles.gpsBtnText}>
-                    {gpsLoading ? "Getting…" : "Use location"}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.gpsBtn, styles.locationBtnFlex, styles.mapBtn]}
-                  onPress={() => setMapPickerVisible(true)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="map-outline" size={18} color={COLORS.primaryDark} />
-                  <Text style={styles.gpsBtnText}>Pin on Map</Text>
-                </TouchableOpacity>
-              </View>
+              {/* ── Location button ──────────────────── */}
+              <TouchableOpacity
+                style={[styles.gpsBtn, gpsLoading && styles.gpsBtnDisabled]}
+                onPress={() => void handleUseMyLocation()}
+                disabled={gpsLoading}
+                activeOpacity={0.8}
+              >
+                {gpsLoading ? (
+                  <ActivityIndicator size="small" color={COLORS.primaryDark} />
+                ) : (
+                  <Ionicons
+                    name="locate-outline"
+                    size={18}
+                    color={COLORS.primaryDark}
+                  />
+                )}
+                <Text style={styles.gpsBtnText}>
+                  {gpsLoading ? "Detecting location…" : "Use my current location"}
+                </Text>
+              </TouchableOpacity>
 
               {/* Serviceability badge */}
               {serviceability !== null ? (
@@ -1171,12 +1134,6 @@ export default function AddressScreen() {
         ) : null}
       </View>
 
-      <MapPinPicker
-        visible={mapPickerVisible}
-        initialCoords={gpsCoords}
-        onConfirm={(picked) => void handleMapPickerConfirm(picked)}
-        onClose={() => setMapPickerVisible(false)}
-      />
     </KeyboardAvoidingView>
   );
 }
@@ -1590,18 +1547,6 @@ const styles = StyleSheet.create({
   },
 
   // ── Geo-tagging ──────────────────────────────────────────────────────────
-  locationBtnRow: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  locationBtnFlex: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  mapBtn: {
-    backgroundColor: COLORS.primaryLight,
-  },
   gpsBtn: {
     flexDirection: "row",
     alignItems: "center",
