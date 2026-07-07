@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -32,26 +34,19 @@ import {
   PROFILE_PHOTO_PICKER_REBUILD_MSG,
   ProfilePhotoPickerUnavailableError,
 } from "../../src/utils/profilePhotoPicker";
-import {
-  getUserMobile,
-  mergeUserMobile,
-  normalizeTenDigitMobile,
-} from "../../src/utils/userPhone";
+import { getUserMobile } from "../../src/utils/userPhone";
+import { request, API_V1_BASE_URL } from "../../services/api";
 import { useAuthStore } from "../../store/useAuthStore";
 
 const MENU_ITEMS = [
-  // { icon: "resize-outline",        label: "My Measurements",    key: "measurements" },
-  { icon: "location-outline", label: "Saved Addresses", key: "addresses" },
-  { icon: "heart-outline", label: "Wishlist", key: "wishlist" },
-  {
-    icon: "notifications-outline",
-    label: "Notifications",
-    key: "notifications",
-  },
-  { icon: "shield-outline", label: "Privacy Settings", key: "privacy" },
-  { icon: "help-circle-outline", label: "Help & Support", key: "help" },
-  { icon: "document-text-outline", label: "FAQs", key: "faq" },
-  { icon: "star-outline", label: "Rate the App", key: "rate" },
+  { icon: "location-outline",      label: "Saved Addresses",  key: "addresses" },
+  { icon: "heart-outline",         label: "Wishlist",         key: "wishlist" },
+  { icon: "notifications-outline", label: "Notifications",    key: "notifications" },
+  { icon: "lock-closed-outline",   label: "Change Password",  key: "changePassword" },
+  { icon: "shield-outline",        label: "Privacy Settings", key: "privacy" },
+  { icon: "help-circle-outline",   label: "Help & Support",   key: "help" },
+  { icon: "document-text-outline", label: "FAQs",             key: "faq" },
+  { icon: "star-outline",          label: "Rate the App",     key: "rate" },
 ] as const;
 
 export default function ProfileScreen() {
@@ -77,12 +72,16 @@ export default function ProfileScreen() {
   const [firstName, setFirstName] = useState(user?.first_name ?? "");
   const [lastName, setLastName] = useState(user?.last_name ?? "");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState(() =>
-    getUserMobile(user, savedPhoneOverride),
-  );
+  const [gender, setGender] = useState<string>(user?.gender ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [avatarPreviewUri, setAvatarPreviewUri] = useState<string | null>(null);
+
+  // Change-password modal state
+  const [showPwdModal, setShowPwdModal] = useState(false);
+  const [oldPwd, setOldPwd] = useState("");
+  const [newPwd, setNewPwd] = useState("");
+  const [pwdSaving, setPwdSaving] = useState(false);
 
   const displayEmail = getProfileDisplayEmail(user?.email);
   const displayImageUri = avatarPreviewUri ?? user?.profile_image ?? null;
@@ -108,9 +107,9 @@ export default function ProfileScreen() {
       setFirstName(user?.first_name ?? "");
       setLastName(user?.last_name ?? "");
       setEmail(prefillEmail());
-      setPhone(getUserMobile(user, savedPhoneOverride));
+      setGender((user as any)?.gender ?? "");
     }
-  }, [user, isEditing, displayEmail, savedPhoneOverride]);
+  }, [user, isEditing, displayEmail]);
 
   const finishProfileSave = async (
     message = "Profile updated successfully!",
@@ -186,10 +185,6 @@ export default function ProfileScreen() {
     if (emailTrimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
       errs.email = "Enter a valid email address";
     }
-    const phoneDigits = normalizeTenDigitMobile(phone);
-    if (phone.trim() && phoneDigits.length !== 10) {
-      errs.phone = "Enter a valid 10-digit number";
-    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -198,43 +193,28 @@ export default function ProfileScreen() {
     if (!validateForm()) return;
     setSaving(true);
     try {
-      const submittedPhone = normalizeTenDigitMobile(phone);
-      const previousPhone = displayPhone;
-
       await updateProfile(user?.id ?? "", {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         email: email.trim() || undefined,
-        ...(submittedPhone.length === 10 ? { mobile: submittedPhone } : {}),
+        gender: gender || undefined,
       });
 
       const current = useAuthStore.getState().user;
       if (current) {
-        let nextUser = {
-          ...current,
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          name: `${firstName.trim()} ${lastName.trim()}`.trim(),
-          email: email.trim() || current.email,
-        };
-        if (submittedPhone.length === 10) {
-          nextUser = mergeUserMobile(nextUser, submittedPhone);
-        }
         useAuthStore.setState({
-          user: nextUser,
-          savedPhoneOverride:
-            submittedPhone.length === 10 && submittedPhone !== previousPhone
-              ? submittedPhone
-              : useAuthStore.getState().savedPhoneOverride,
+          user: {
+            ...current,
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+            email: email.trim() || current.email,
+            gender,
+          },
         });
       }
 
       await fetchProfile();
-
-      if (submittedPhone.length === 10) {
-        setPhone(submittedPhone);
-      }
-
       setIsEditing(false);
       Alert.alert("Saved", "Profile updated successfully!");
     } catch (err: any) {
@@ -251,7 +231,7 @@ export default function ProfileScreen() {
     setFirstName(user?.first_name ?? "");
     setLastName(user?.last_name ?? "");
     setEmail(prefillEmail());
-    setPhone(getUserMobile(user, savedPhoneOverride));
+    setGender((user as any)?.gender ?? "");
     setErrors({});
     setIsEditing(false);
   };
@@ -286,76 +266,75 @@ export default function ProfileScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
-        style={[styles.root, { paddingTop: insets.top }]}
+        style={styles.root}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Profile</Text>
-          {!isEditing ? (
-            <TouchableOpacity
-              style={styles.editBtn}
-              onPress={() => {
-                setEmail(prefillEmail());
-                setIsEditing(true);
-              }}
-            >
-              <Ionicons
-                name="pencil-outline"
-                size={16}
-                color={COLORS.primaryDark}
-              />
-              <Text style={styles.editBtnText}>Edit</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        {/* Avatar section */}
-        <Animated.View
-          entering={FadeInDown.duration(400)}
-          style={styles.avatarSection}
+        {/* Gradient hero — header + avatar in one band */}
+        <LinearGradient
+          colors={["#149694", "#0c6c75"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.heroGradient, { paddingTop: insets.top + 8 }]}
         >
-          <View style={styles.avatarWrap}>
-            <UserAvatar size={88} imageUri={displayImageUri} />
-            <TouchableOpacity
-              style={styles.avatarEditBtn}
-              onPress={handlePickProfilePhoto}
-              disabled={uploadingPhoto}
-            >
-              {uploadingPhoto ? (
-                <ActivityIndicator size="small" color={COLORS.white} />
-              ) : (
-                <Ionicons
-                  name="camera-outline"
-                  size={14}
-                  color={COLORS.white}
-                />
+          {/* Title row */}
+          <View style={styles.heroTitleRow}>
+            <Text style={styles.heroTitle}>My Profile</Text>
+            {!isEditing ? (
+              <TouchableOpacity
+                style={styles.editBtn}
+                onPress={() => {
+                  setEmail(prefillEmail());
+                  setIsEditing(true);
+                }}
+              >
+                <Ionicons name="pencil-outline" size={15} color="#FFFFFF" />
+                <Text style={styles.editBtnText}>Edit</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {/* Avatar */}
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.avatarCenter}>
+            <View style={styles.avatarWrap}>
+              <UserAvatar size={96} imageUri={displayImageUri} />
+              <TouchableOpacity
+                style={styles.avatarEditBtn}
+                onPress={handlePickProfilePhoto}
+                disabled={uploadingPhoto}
+              >
+                {uploadingPhoto ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <Ionicons name="camera-outline" size={14} color={COLORS.white} />
+                )}
+              </TouchableOpacity>
+            </View>
+            <View style={styles.userNameRow}>
+              <Text style={styles.userName}>
+                {(user?.name ??
+                  `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim()) ||
+                  "User"}
+              </Text>
+              {profileLoading && (
+                <ActivityIndicator size="small" color="rgba(255,255,255,0.7)" style={{ marginLeft: 8 }} />
               )}
-            </TouchableOpacity>
-          </View>
-          <View style={styles.userNameRow}>
-            <Text style={styles.userName}>
-              {(user?.name ??
-                `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim()) ||
-                "User"}
-            </Text>
-            {profileLoading && (
-              <ActivityIndicator
-                size="small"
-                color={COLORS.primary}
-                style={{ marginLeft: 8 }}
-              />
-            )}
-          </View>
-          <Text style={styles.userEmail}>{displayEmail || "Not Set"}</Text>
-        </Animated.View>
+            </View>
+            <Text style={styles.userEmail}>{displayEmail || "No email set"}</Text>
+            {displayPhone ? (
+              <View style={styles.heroPhoneChip}>
+                <Ionicons name="call-outline" size={11} color="rgba(255,255,255,0.85)" />
+                <Text style={styles.heroPhoneText}>{displayPhone}</Text>
+              </View>
+            ) : null}
+          </Animated.View>
+        </LinearGradient>
 
         {/* Edit form */}
         {isEditing ? (
           <Animated.View
             entering={FadeInDown.duration(300)}
-            style={styles.card}
+            style={[styles.card, styles.cardFirst]}
           >
             <Text style={styles.cardTitle}>Edit Profile</Text>
 
@@ -425,18 +404,26 @@ export default function ProfileScreen() {
             ) : null}
 
             <Text style={styles.fieldLabel}>Phone Number</Text>
-            <TextInput
-              style={[styles.input, errors.phone ? styles.inputError : null]}
-              value={phone}
-              onChangeText={(v) => setPhone(v.replace(/\D/g, "").slice(0, 10))}
-              placeholder="10-digit mobile number"
-              placeholderTextColor={COLORS.gray}
-              keyboardType="number-pad"
-              maxLength={10}
-            />
-            {errors.phone ? (
-              <Text style={styles.errorText}>{errors.phone}</Text>
-            ) : null}
+            <View style={styles.readonlyField}>
+              <Ionicons name="call-outline" size={15} color={COLORS.gray} />
+              <Text style={styles.readonlyFieldText}>{displayPhone || "Not set"}</Text>
+            </View>
+            <Text style={styles.fieldHint}>Phone changes require verification via OTP</Text>
+
+            <Text style={styles.fieldLabel}>Gender</Text>
+            <View style={styles.genderRow}>
+              {(["Male", "Female", "Other", "Prefer not to say"] as const).map((g) => (
+                <TouchableOpacity
+                  key={g}
+                  style={[styles.genderChip, gender === g && styles.genderChipActive]}
+                  onPress={() => setGender(g)}
+                >
+                  <Text style={[styles.genderChipText, gender === g && styles.genderChipTextActive]}>
+                    {g}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
             <View style={styles.editActions}>
               <TouchableOpacity
@@ -460,7 +447,7 @@ export default function ProfileScreen() {
           /* Profile info display */
           <Animated.View
             entering={FadeInDown.delay(100).duration(400)}
-            style={styles.card}
+            style={[styles.card, styles.cardFirst]}
           >
             <Text style={styles.cardTitle}>Personal Info</Text>
             {[
@@ -481,6 +468,11 @@ export default function ProfileScreen() {
                 label: "Phone",
                 value: displayPhone || "Not set",
                 icon: "call-outline",
+              },
+              {
+                label: "Gender",
+                value: (user as any)?.gender || "Not set",
+                icon: "person-outline",
               },
             ].map((item) => (
               <View key={item.label} style={styles.infoRow}>
@@ -612,6 +604,11 @@ export default function ProfileScreen() {
                   router.push("/notifications" as any);
                 if (item.key === "help") router.push("/support" as any);
                 if (item.key === "faq") router.push("/faq" as any);
+                if (item.key === "changePassword") {
+                  setOldPwd("");
+                  setNewPwd("");
+                  setShowPwdModal(true);
+                }
               }}
             >
               <View style={styles.menuIconBox}>
@@ -645,6 +642,81 @@ export default function ProfileScreen() {
 
         <View style={{ height: SPACING.xxl }} />
       </ScrollView>
+
+      {/* Change Password Modal */}
+      <Modal
+        visible={showPwdModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPwdModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Change Password</Text>
+
+            <Text style={styles.fieldLabel}>Current Password</Text>
+            <TextInput
+              style={styles.input}
+              value={oldPwd}
+              onChangeText={setOldPwd}
+              placeholder="Enter current password"
+              placeholderTextColor={COLORS.gray}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+
+            <Text style={styles.fieldLabel}>New Password</Text>
+            <TextInput
+              style={styles.input}
+              value={newPwd}
+              onChangeText={setNewPwd}
+              placeholder="Min 8 chars, 1 uppercase, 1 number"
+              placeholderTextColor={COLORS.gray}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+
+            <View style={styles.editActions}>
+              <TouchableOpacity
+                style={styles.cancelEditBtn}
+                onPress={() => setShowPwdModal(false)}
+                disabled={pwdSaving}
+              >
+                <Text style={styles.cancelEditText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveBtn, pwdSaving && styles.saveBtnDisabled]}
+                disabled={pwdSaving}
+                onPress={async () => {
+                  if (!oldPwd.trim() || !newPwd.trim()) {
+                    Alert.alert("Error", "Both fields are required.");
+                    return;
+                  }
+                  if (newPwd.length < 8 || !/[A-Z]/.test(newPwd) || !/[0-9]/.test(newPwd)) {
+                    Alert.alert("Weak password", "New password must be at least 8 characters with 1 uppercase letter and 1 number.");
+                    return;
+                  }
+                  setPwdSaving(true);
+                  try {
+                    await request(`${API_V1_BASE_URL}/users/change-password`, {
+                      method: "PATCH",
+                      body: JSON.stringify({ old_password: oldPwd, new_password: newPwd }),
+                    });
+                    setShowPwdModal(false);
+                    Alert.alert("Success", "Password changed successfully.");
+                  } catch (err: any) {
+                    Alert.alert("Error", err?.message ?? "Failed to change password.");
+                  } finally {
+                    setPwdSaving(false);
+                  }
+                }}
+              >
+                <Text style={styles.saveBtnText}>{pwdSaving ? "Saving..." : "Update"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -652,55 +724,68 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   root: { flex: 1, backgroundColor: COLORS.offWhite },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+
+  heroGradient: {
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.grayBorder,
+    paddingBottom: 44,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
-  headerTitle: { fontSize: 22, fontWeight: "800", color: COLORS.black },
+  heroTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACING.lg,
+  },
+  heroTitle: { fontSize: 22, fontWeight: "800", color: "#FFFFFF" },
   editBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: COLORS.primaryLight,
+    gap: 5,
+    backgroundColor: "rgba(255,255,255,0.18)",
     borderRadius: RADIUS.full,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
   },
-  editBtnText: { fontSize: 13, fontWeight: "600", color: COLORS.primaryDark },
-  avatarSection: {
-    alignItems: "center",
-    paddingVertical: SPACING.xl,
-    backgroundColor: COLORS.white,
-    marginBottom: SPACING.md,
-  },
+  editBtnText: { fontSize: 13, fontWeight: "600", color: "#FFFFFF" },
+  avatarCenter: { alignItems: "center" },
   avatarWrap: { position: "relative", marginBottom: SPACING.sm },
   avatarEditBtn: {
     position: "absolute",
     bottom: 0,
     right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.primaryDark,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(0,0,0,0.55)",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
     borderColor: COLORS.white,
   },
   userName: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: COLORS.black,
-    marginBottom: 4,
+    fontSize: 21,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    marginBottom: 2,
+    letterSpacing: -0.3,
   },
   userNameRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-  userEmail: { fontSize: 13, color: COLORS.gray },
+  userEmail: { fontSize: 13, color: "rgba(255,255,255,0.82)", marginBottom: 8 },
+  heroPhoneChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+  },
+  heroPhoneText: { fontSize: 12, fontWeight: "600", color: "rgba(255,255,255,0.9)" },
   card: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,
@@ -708,6 +793,9 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     padding: SPACING.md,
     ...SHADOW.card,
+  },
+  cardFirst: {
+    marginTop: -24,
   },
   cardTitle: {
     fontSize: 15,
@@ -863,4 +951,47 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
   },
   loginBtnText: { fontSize: 15, fontWeight: "700", color: COLORS.white },
+  readonlyField: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    backgroundColor: COLORS.grayLight,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    height: 48,
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+  },
+  readonlyFieldText: { fontSize: 14, color: COLORS.gray },
+  fieldHint: { fontSize: 11, color: COLORS.gray, marginTop: 4, marginBottom: 4, fontStyle: "italic" },
+  genderRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 4 },
+  genderChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    backgroundColor: COLORS.grayLight,
+  },
+  genderChipActive: {
+    borderColor: COLORS.primaryDark,
+    backgroundColor: COLORS.primaryLight,
+  },
+  genderChipText: { fontSize: 13, color: COLORS.gray },
+  genderChipTextActive: { color: COLORS.primaryDark, fontWeight: "600" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SPACING.lg,
+  },
+  modalCard: {
+    width: "100%",
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    ...SHADOW.card,
+  },
+  modalTitle: { fontSize: 17, fontWeight: "700", color: COLORS.black, marginBottom: SPACING.md },
 });

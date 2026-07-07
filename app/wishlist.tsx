@@ -1,5 +1,5 @@
 /**
- * Wishlist / Favourites — GET/DELETE /api/v1/wishlist
+ * Wishlist / Favourites - GET/DELETE /api/v1/wishlist
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";

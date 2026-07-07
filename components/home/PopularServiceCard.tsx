@@ -30,7 +30,7 @@ const HERO_HEIGHT = 120;
 const CARD_HEIGHT = 390;
 const ICON_SIZE = 64;
 
-/** ~46% screen width — two cards visible side by side */
+/** ~46% screen width - two cards visible side by side */
 export function getPopularCardWidth(screenWidth: number): number {
   return Math.floor(screenWidth * 0.46);
 }

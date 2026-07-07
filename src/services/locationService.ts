@@ -1,9 +1,9 @@
 /**
- * Location helpers — GPS capture, reverse-geocode, serviceability check.
+ * Location helpers - GPS capture, reverse-geocode, serviceability check.
  *
  * Geocode cascade (most reliable first for India):
  *  1. expo-location native geocoder (Google on Android / Apple Maps on iOS)
- *  2. Nominatim (OSM) — richer street detail, used to fill gaps from native
+ *  2. Nominatim (OSM) - richer street detail, used to fill gaps from native
  */
 import * as Location from "expo-location";
 import { buildApiV1Url } from "../config/api";
@@ -46,7 +46,7 @@ export async function requestLocationPermission(): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
-// GPS — with timeout + accuracy fallback
+// GPS - with timeout + accuracy fallback
 // ---------------------------------------------------------------------------
 
 const GPS_HIGH_TIMEOUT_MS = 10_000;
@@ -92,10 +92,10 @@ export async function getCurrentGpsCoords(): Promise<GpsCoords> {
     const msg = err instanceof Error ? err.message : "";
     const isTimeout = msg.includes("timed out");
     if (!isTimeout) throw formatGpsError(err);
-    if (__DEV__) console.warn("[GPS] High accuracy timed out — retrying with Balanced");
+    if (__DEV__) console.warn("[GPS] High accuracy timed out - retrying with Balanced");
   }
 
-  // Attempt 2: Balanced accuracy (uses network/wifi — faster, less precise)
+  // Attempt 2: Balanced accuracy (uses network/wifi - faster, less precise)
   try {
     const loc = await withTimeout(
       Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
@@ -129,11 +129,11 @@ function formatGpsError(err: unknown): Error {
 }
 
 // ---------------------------------------------------------------------------
-// Reverse-geocode — native first, Nominatim for detail gaps
+// Reverse-geocode - native first, Nominatim for detail gaps
 // ---------------------------------------------------------------------------
 
 // ─── expo-location native geocoder ─────────────────────────────────────────
-// Most reliable in India — backed by Google Maps on Android, Apple Maps on iOS.
+// Most reliable in India - backed by Google Maps on Android, Apple Maps on iOS.
 
 async function reverseGeocodeNative(
   latitude: number,
@@ -172,6 +172,9 @@ async function reverseGeocodeNative(
 interface NominatimAddress {
   house_number?: string;
   building?: string;
+  amenity?: string;
+  shop?: string;
+  office?: string;
   road?: string;
   pedestrian?: string;
   footway?: string;
@@ -191,7 +194,7 @@ interface NominatimAddress {
 }
 
 function resolveCityIndia(a: NominatimAddress): string {
-  // Delhi special case — `city` is often empty, district is more useful
+  // Delhi special case - `city` is often empty, district is more useful
   if (a.state?.toLowerCase() === "delhi") {
     const sub = a.city_district || a.county || a.district || a.state_district;
     if (sub && sub.toLowerCase() !== "delhi") return sub;
@@ -219,7 +222,7 @@ async function reverseGeocodeNominatim(
   try {
     const url =
       `https://nominatim.openstreetmap.org/reverse` +
-      `?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1&zoom=18`;
+      `?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1&zoom=19`;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8_000);
@@ -239,8 +242,15 @@ async function reverseGeocodeNominatim(
 
     const a: NominatimAddress = data.address;
     const road = a.road || a.pedestrian || a.footway || "";
-    const houseNo = a.house_number || a.building || "";
-    const line1 = [houseNo, road].filter(Boolean).join(", ");
+    // POI/building name comes from the top-level `name` field (e.g. "DLF Cyber City", "Apollo Hospital")
+    const poiName: string = (data as any).name || "";
+    const buildingName = a.building || a.amenity || a.shop || a.office || poiName || "";
+    const houseNo = a.house_number || "";
+    // Build line1: building name first, then house no + road
+    const streetPart = [houseNo, road].filter(Boolean).join(" ");
+    const line1 = buildingName
+      ? streetPart ? `${buildingName}, ${streetPart}` : buildingName
+      : streetPart;
     const locality = resolveLocalityIndia(a);
     const line2 = locality && locality.toLowerCase() !== road.toLowerCase() ? locality : "";
     const city = resolveCityIndia(a);
@@ -257,7 +267,7 @@ async function reverseGeocodeNominatim(
 // ─── Merge: native fills city/state/pincode, Nominatim fills street detail ──
 
 /**
- * Merge two geocode results — prefer Nominatim for line1/line2 (street detail),
+ * Merge two geocode results - prefer Nominatim for line1/line2 (street detail),
  * prefer native for city/state/pincode (more reliable for Indian cities).
  */
 function mergeResults(
@@ -311,14 +321,14 @@ export async function checkServiceability(
   latitude: number,
   longitude: number,
 ): Promise<ServiceabilityResult> {
-  const url = buildApiV1Url("/location/check-serviceability");
+  const params = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+  });
+  const url = `${buildApiV1Url("/location/check-serviceability")}?${params}`;
 
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ latitude, longitude }),
-    });
+    const res = await fetch(url, { method: "GET" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json() as Promise<ServiceabilityResult>;
   } catch {

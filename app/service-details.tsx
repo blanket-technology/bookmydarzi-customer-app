@@ -1,5 +1,5 @@
 /**
- * Service Details — configure stitching type, options, and quantity before add-to-cart.
+ * Service Details - configure stitching type, options, and quantity before add-to-cart.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -327,8 +327,13 @@ export default function ServiceDetailsScreen() {
   }, [paramImageUrl, serviceLine]);
 
   const displayDescription = useMemo(() => {
-    return paramDescription.trim();
-  }, [paramDescription]);
+    return (
+      paramDescription.trim() ||
+      (serviceLine?.description ?? "").trim() ||
+      (directService?.description ?? "").trim() ||
+      ""
+    );
+  }, [paramDescription, serviceLine, directService]);
 
   const unitPrice = selectedStitching?.base_price ?? paramBasePrice;
 

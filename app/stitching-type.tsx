@@ -1,6 +1,6 @@
 /**
- * Stitching Type Screen — Normal vs Designer for a catalog service line.
- * Uses stitching_types[].service_id (bookable) — never service_lines[].id.
+ * Stitching Type Screen - Normal vs Designer for a catalog service line.
+ * Uses stitching_types[].service_id (bookable) - never service_lines[].id.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {

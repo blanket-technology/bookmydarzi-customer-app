@@ -37,7 +37,7 @@ export interface AuthState {
   user: User | null;
   accessToken: string | null;
   refreshToken: string | null;
-  /** API origin these tokens were issued for — cleared on host mismatch. */
+  /** API origin these tokens were issued for - cleared on host mismatch. */
   apiHost: string | null;
   isAuthenticated: boolean;
   /** Keeps UI phone in sync when PATCH succeeds but GET still returns old Mobile. */
@@ -70,7 +70,7 @@ function resolvePersistedRefreshToken(
   if (refresh) return refresh;
   if (__DEV__) {
     console.warn(
-      "[AuthStore] login response missing refresh_token — using access_token fallback",
+      "[AuthStore] login response missing refresh_token - using access_token fallback",
     );
   }
   return response.access_token;
@@ -226,7 +226,7 @@ export const useAuthStore = create<AuthState>()(
           try {
             await logoutRequest();
           } catch {
-            // ignore — local logout always proceeds
+            // ignore - local logout always proceeds
           }
           await clearTokens();
           set({
@@ -240,7 +240,7 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
           if (__DEV__) {
-            console.log("[AuthStore] logout complete — tokens cleared");
+            console.log("[AuthStore] logout complete - tokens cleared");
           }
         } finally {
           setLoggingOut(false);
@@ -290,7 +290,7 @@ export const useAuthStore = create<AuthState>()(
         apiHost: state.apiHost,
         savedPhoneOverride: state.savedPhoneOverride,
         isAuthenticated: state.isAuthenticated,
-        // Tokens are NOT persisted here — SecureStore is the single source of truth.
+        // Tokens are NOT persisted here - SecureStore is the single source of truth.
       }),
       onRehydrateStorage: () => {
         return async (state, error) => {
@@ -299,14 +299,14 @@ export const useAuthStore = create<AuthState>()(
           }
 
           if (state?.isAuthenticated) {
-            // Tokens live only in SecureStore — read them directly, not from AsyncStorage
+            // Tokens live only in SecureStore - read them directly, not from AsyncStorage
             const secureAccess = await getAccessToken();
             const secureRefresh = await getRefreshToken();
 
             if (!secureAccess) {
-              // AsyncStorage says logged in but SecureStore has no token — stale state
+              // AsyncStorage says logged in but SecureStore has no token - stale state
               if (__DEV__) {
-                console.warn("[AuthStore] No token in SecureStore on restart — clearing session");
+                console.warn("[AuthStore] No token in SecureStore on restart - clearing session");
               }
               useAuthStore.setState({
                 user: null,
@@ -317,9 +317,9 @@ export const useAuthStore = create<AuthState>()(
                 isAuthenticated: false,
               });
             } else if (state.apiHost && state.apiHost !== API_HOST) {
-              // API host changed between sessions — clear stale session
+              // API host changed between sessions - clear stale session
               console.warn(
-                `[AuthStore] API host changed (${state.apiHost} → ${API_HOST}) — clearing stale session`,
+                `[AuthStore] API host changed (${state.apiHost} → ${API_HOST}) - clearing stale session`,
               );
               await clearTokens();
               useAuthStore.setState({
@@ -331,7 +331,7 @@ export const useAuthStore = create<AuthState>()(
                 isAuthenticated: false,
               });
             } else {
-              // Valid session — load tokens from SecureStore into memory
+              // Valid session - load tokens from SecureStore into memory
               useAuthStore.setState({
                 accessToken: secureAccess,
                 refreshToken: secureRefresh,
@@ -397,7 +397,7 @@ registerLogoutCallback(async () => {
       error: null,
     });
     if (__DEV__) {
-      console.log("[AuthStore] forced logout — session cleared");
+      console.log("[AuthStore] forced logout - session cleared");
     }
   } finally {
     setLoggingOut(false);

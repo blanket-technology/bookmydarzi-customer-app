@@ -70,16 +70,16 @@ export interface ApiAddress extends AddressPayload {
 export type PaymentMethodType = "cod" | "online" | "upi" | "card";
 
 export interface CreateOrderApiPayload {
-  tailor_id?: number;        // Optional — backend assigns tailor if not provided
+  tailor_id?: number;        // Optional - backend assigns tailor if not provided
   service_id: number;
   measurement_id?: number;
   address_id: number;
-  /** cod | online — sent when placing order */
+  /** cod | online - sent when placing order */
   payment_method?: PaymentMethodType;
   urgency_level: "standard" | "express" | "urgent";
-  /** ISO date string "YYYY-MM-DD" — apiOrderService slices toISOString() to date only */
+  /** ISO date string "YYYY-MM-DD" - apiOrderService slices toISOString() to date only */
   expected_delivery_date: string;
-  /** Required by backend — base price of the selected service */
+  /** Required by backend - base price of the selected service */
   subtotal: number;
   /** Optional discount amount (default 0) */
   discount?: number;
@@ -92,16 +92,16 @@ export interface CreateOrderApiPayload {
 }
 
 /** Neutral placeholder when a display field is null/empty */
-export const ORDER_DISPLAY_FALLBACK = "—";
+export const ORDER_DISPLAY_FALLBACK = "-";
 
-/** Tracking step labels from backend list/detail payload — render as-is */
+/** Tracking step labels from backend list/detail payload - render as-is */
 export interface ApiOrderTrackingDisplay {
   statusLabel?: string | null;
   note?: string | null;
   timeLabel?: string | null;
 }
 
-/** Display-ready fields from GET /orders/my-orders — render as-is, do not format on client */
+/** Display-ready fields from GET /orders/my-orders - render as-is, do not format on client */
 export interface ApiOrderDisplayFields {
   orderNumber?: string | null;
   statusLabel?: string | null;
@@ -111,7 +111,7 @@ export interface ApiOrderDisplayFields {
   paymentStatusLabel?: string | null;
   amountDisplay?: string | null;
   canCancel?: boolean;
-  /** Backend flag — show Pay Now when true */
+  /** Backend flag - show Pay Now when true */
   canPayNow?: boolean;
   /** When provided on the list item, used for inline tracking (no extra fetch) */
   trackingSteps?: ApiOrderTrackingDisplay[] | null;
@@ -135,7 +135,7 @@ export function isOrderPayable(order: ApiOrder): boolean {
   return order.payment_status === "pending";
 }
 
-/** Render backend text or a neutral dash — never synthesize business labels */
+/** Render backend text or a neutral dash - never synthesize business labels */
 export function orderDisplayValue(value: string | null | undefined): string {
   if (value == null) return ORDER_DISPLAY_FALLBACK;
   const trimmed = String(value).trim();
@@ -301,7 +301,7 @@ export interface ResolvedPaymentSession {
   source: PaymentSessionSource;
 }
 
-/** Pick payment display strings from API payload — no frontend status labels */
+/** Pick payment display strings from API payload - no frontend status labels */
 export function mapPaymentForDisplay(raw: Record<string, unknown> | null | undefined): Pick<
   ApiPayment,
   "statusLabel" | "amountDisplay" | "status" | "transaction_id" | "payment_method"

@@ -1,5 +1,5 @@
 /**
- * Razorpay Key ID — used when backend does not return razorpay_key in /payments/create.
+ * Razorpay Key ID - used when backend does not return razorpay_key in /payments/create.
  * Set EXPO_PUBLIC_RAZORPAY_KEY in .env (public key only; never put Razorpay Secret in the app).
  */
 export const RAZORPAY_KEY_ID =

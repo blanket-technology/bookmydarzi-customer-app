@@ -1,5 +1,5 @@
 /**
- * Cart store — API cart + booking flow state.
+ * Cart store - API cart + booking flow state.
  *
  * Booking flow (pre-cart):
  *   Service line → stitching type → measurement → add to cart → cart tab
@@ -72,9 +72,17 @@ interface CartState {
   pendingRouteParams: Record<string, string> | null;
   selectedAddressId: number | null;
   checkoutFlow: boolean;
+  pickupType: "instant" | "scheduled";
   /** Service Details → Measurement → Address booking path */
   bookingFlowActive: boolean;
   pendingBookingMeasurement: PendingBookingMeasurement | null;
+
+  /** Applied offer (selected by user on cart screen) */
+  appliedOfferId: number | null;
+  appliedOfferPercent: number;
+  appliedOfferTitle: string;
+  setAppliedOffer: (id: number, percent: number, title: string) => void;
+  clearAppliedOffer: () => void;
 
   applyCart: (cart: ApiCart) => void;
   clearCartState: () => void;
@@ -98,6 +106,7 @@ interface CartState {
   clearPendingRoute: () => void;
   setAddressId: (id: number) => void;
   setCheckoutFlow: (active: boolean) => void;
+  setPickupType: (type: "instant" | "scheduled") => void;
   setBookingFlowActive: (active: boolean) => void;
   setPendingBookingMeasurement: (
     data: PendingBookingMeasurement | null,
@@ -137,8 +146,17 @@ export const useCartStore = create<CartState>()(
       pendingRouteParams: null,
       selectedAddressId: null,
       checkoutFlow: false,
+      pickupType: "instant",
       bookingFlowActive: false,
       pendingBookingMeasurement: null,
+      appliedOfferId: null,
+      appliedOfferPercent: 0,
+      appliedOfferTitle: "",
+
+      setAppliedOffer: (id, percent, title) =>
+        set({ appliedOfferId: id, appliedOfferPercent: percent, appliedOfferTitle: title }),
+      clearAppliedOffer: () =>
+        set({ appliedOfferId: null, appliedOfferPercent: 0, appliedOfferTitle: "" }),
 
       applyCart: (cart) => set(applyCartToState(cart)),
 
@@ -152,6 +170,9 @@ export const useCartStore = create<CartState>()(
           itemCount: 0,
           error: null,
           initialized: false,
+          appliedOfferId: null,
+          appliedOfferPercent: 0,
+          appliedOfferTitle: "",
         }),
 
       ensureCart: async () => {
@@ -330,6 +351,9 @@ export const useCartStore = create<CartState>()(
             pendingService: null,
             checkoutFlow: false,
             selectedAddressId: null,
+            appliedOfferId: null,
+            appliedOfferPercent: 0,
+            appliedOfferTitle: "",
           });
           void get()
             .refreshCart({ silent: true, allowCreate: true })
@@ -351,6 +375,7 @@ export const useCartStore = create<CartState>()(
         set({ pendingRoute: null, pendingRouteParams: null }),
       setAddressId: (id) => set({ selectedAddressId: id }),
       setCheckoutFlow: (active) => set({ checkoutFlow: active }),
+      setPickupType: (type) => set({ pickupType: type }),
       setBookingFlowActive: (active) => set({ bookingFlowActive: active }),
       setPendingBookingMeasurement: (data) =>
         set({ pendingBookingMeasurement: data }),
@@ -363,6 +388,7 @@ export const useCartStore = create<CartState>()(
           pendingRouteParams: null,
           selectedAddressId: null,
           checkoutFlow: false,
+          pickupType: "instant",
           bookingFlowActive: false,
           pendingBookingMeasurement: null,
         }),

@@ -1,5 +1,5 @@
 /**
- * Account security — /api/v1/users/change-email/* and change-mobile/*
+ * Account security - /api/v1/users/change-email/* and change-mobile/*
  */
 import { request } from "../../services/api";
 

@@ -3,54 +3,16 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, useRootNavigationState } from "expo-router";
 import { useEffect, useRef } from "react";
 import {
+  ActivityIndicator,
   Animated,
-  Easing,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { useAuthStore, type AuthState } from "../store/useAuthStore";
 
-function PulseDots() {
-  const dots = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
-
-  useEffect(() => {
-    const animations = dots.map((dot, i) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(i * 180),
-          Animated.timing(dot, { toValue: 1, duration: 320, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0, duration: 320, easing: Easing.in(Easing.ease), useNativeDriver: true }),
-          Animated.delay((2 - i) * 180 + 200),
-        ])
-      )
-    );
-    animations.forEach((a) => a.start());
-    return () => animations.forEach((a) => a.stop());
-  }, []);
-
-  return (
-    <View style={dotStyles.row}>
-      {dots.map((dot, i) => (
-        <Animated.View
-          key={i}
-          style={[dotStyles.dot, {
-            opacity: dot.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }),
-            transform: [{ scaleY: dot.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }],
-          }]}
-        />
-      ))}
-    </View>
-  );
-}
-
-const dotStyles = StyleSheet.create({
-  row: { flexDirection: "row", gap: 8, alignItems: "center" },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.85)" },
-});
-
 /**
- * App entry — splash until auth store hydrates and root navigation mounts,
+ * App entry - splash until auth store hydrates and root navigation mounts,
  * then declarative <Redirect> (never router.replace during initial mount).
  */
 export default function Index() {
@@ -59,24 +21,14 @@ export default function Index() {
   const isNavigationReady = rootNavigationState?.key != null;
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.88)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.spring(scaleAnim, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
-    ]).start();
-
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.06, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, []);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, [fadeAnim]);
 
   if (hydrated && isNavigationReady) {
     const role = useAuthStore.getState().user?.role;
@@ -94,81 +46,103 @@ export default function Index() {
 
   return (
     <LinearGradient
-      colors={["#083d43", "#0c6c75", "#1aa3b0"]}
+      colors={["#0c6c75", "#1aa3b0", "#2dd4bf"]}
       start={{ x: 0, y: 0 }}
-      end={{ x: 0.4, y: 1 }}
+      end={{ x: 0, y: 1 }}
       style={styles.root}
     >
-      {/* Background decorative circles */}
-      <View style={styles.circle1} />
-      <View style={styles.circle2} />
-      <View style={styles.circle3} />
-
-      <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
-        <Animated.View style={[styles.logoBox, { transform: [{ scale: pulseAnim }] }]}>
-          <Ionicons name="cut" size={54} color="#ffffff" />
-        </Animated.View>
+      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+        <View style={styles.logoBox}>
+          <Ionicons name="cut" size={52} color="#ffffff" />
+        </View>
         <Text style={styles.appName}>BookMyDarzi</Text>
         <Text style={styles.tagline}>Custom tailoring at your doorstep</Text>
+        <View style={styles.circle1} />
+        <View style={styles.circle2} />
       </Animated.View>
 
-      <View style={styles.bottomArea}>
-        <PulseDots />
-        <Text style={styles.loadingText}>Getting things ready…</Text>
+      <View style={styles.spinnerWrap}>
+        <ActivityIndicator size="small" color="rgba(255,255,255,0.7)" />
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
 
-      <Text style={styles.footer}>Powered By Blanket Technologies Pvt Ltd</Text>
+      <Text style={styles.footer}>
+        Powered By Blanket Technologies Pvt Ltd
+      </Text>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, alignItems: "center", justifyContent: "center" },
-
-  circle1: {
-    position: "absolute", width: 320, height: 320, borderRadius: 160,
-    backgroundColor: "rgba(255,255,255,0.04)", top: -100, right: -80,
+  root: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  circle2: {
-    position: "absolute", width: 220, height: 220, borderRadius: 110,
-    backgroundColor: "rgba(255,255,255,0.05)", bottom: 80, left: -70,
+  content: {
+    alignItems: "center",
+    justifyContent: "center",
   },
-  circle3: {
-    position: "absolute", width: 140, height: 140, borderRadius: 70,
-    backgroundColor: "rgba(255,255,255,0.03)", top: "40%", right: -40,
-  },
-
-  content: { alignItems: "center" },
-
   logoBox: {
-    width: 108, height: 108, borderRadius: 32,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems: "center", justifyContent: "center",
-    marginBottom: 28,
+    width: 100,
+    height: 100,
+    borderRadius: 30,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.25, shadowRadius: 20, elevation: 14,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.25)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
   },
-
   appName: {
-    fontSize: 38, fontWeight: "800", color: "#ffffff",
-    letterSpacing: -0.5, marginBottom: 10,
-    textShadowColor: "rgba(0,0,0,0.2)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8,
+    fontSize: 36,
+    fontWeight: "800",
+    color: "#ffffff",
+    letterSpacing: -0.5,
+    marginBottom: 8,
   },
   tagline: {
-    fontSize: 15, color: "rgba(255,255,255,0.75)",
-    textAlign: "center", lineHeight: 22, paddingHorizontal: 40,
+    fontSize: 15,
+    color: "rgba(255,255,255,0.8)",
+    textAlign: "center",
+    lineHeight: 22,
+    paddingHorizontal: 32,
   },
-
-  bottomArea: {
-    position: "absolute", bottom: 72,
-    alignItems: "center", gap: 14,
+  circle1: {
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    top: -120,
+    right: -80,
   },
-  loadingText: { fontSize: 13, color: "rgba(255,255,255,0.5)", letterSpacing: 0.3 },
-
+  circle2: {
+    position: "absolute",
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    bottom: -80,
+    left: -60,
+  },
+  spinnerWrap: {
+    position: "absolute",
+    bottom: 80,
+    alignItems: "center",
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.6)",
+  },
   footer: {
-    position: "absolute", bottom: 24,
-    fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: 0.2,
+    position: "absolute",
+    bottom: 24,
+    fontSize: 11,
+    color: "rgba(255,255,255,0.5)",
   },
 });

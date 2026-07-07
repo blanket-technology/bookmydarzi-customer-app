@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { registerDeviceToken, unregisterDeviceToken } from "./notificationService";
 
 Notifications.setNotificationHandler({
@@ -22,13 +23,17 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
 
   if (finalStatus !== "granted") {
-    if (__DEV__) console.log("[Push] Permission not granted — skipping registration");
+    if (__DEV__) console.log("[Push] Permission not granted - skipping registration");
     return null;
   }
 
   let token: string;
   try {
-    const result = await Notifications.getExpoPushTokenAsync();
+    const projectId: string | undefined =
+      Constants.expoConfig?.extra?.eas?.projectId;
+    const result = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined,
+    );
     token = result.data;
   } catch (err) {
     if (__DEV__) console.warn("[Push] Failed to get push token:", err);

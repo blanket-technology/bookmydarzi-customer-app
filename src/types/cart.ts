@@ -1,5 +1,5 @@
 // ============================================================================
-// Cart API types — aligned with GET /cart and POST /cart/checkout payloads
+// Cart API types - aligned with GET /cart and POST /cart/checkout payloads
 // ============================================================================
 
 /** A single measurement field shown in the entry preview chips. */
@@ -131,6 +131,10 @@ export interface UpdateCartServiceEntryPayload {
 export interface CartCheckoutPayload {
   address_id: number;
   payment_method?: "online";
+  pickup_type?: "instant" | "scheduled";
+  offer_id?: number;
+  scheduled_pickup_at?: string;
+  pickup_time_slot?: string;
 }
 
 /** One line in `line_items` on the checkout response. */

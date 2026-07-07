@@ -19,7 +19,7 @@ export function formatCustomerOrderStatusLabel(
   label: string | null | undefined,
 ): string {
   const raw = (label ?? "").trim();
-  if (!raw || raw === "—") return raw || "—";
+  if (!raw || raw === "-") return raw || "-";
   return raw
     .replace(/_/g, " ")
     .replace(/\s+/g, " ")
@@ -36,7 +36,7 @@ export function getBookingHeadline(
     return "Booking completed";
   }
   const formatted = formatCustomerOrderStatusLabel(statusLabel);
-  if (formatted && formatted !== "—") return formatted;
+  if (formatted && formatted !== "-") return formatted;
   return "Booking active";
 }
 
@@ -70,5 +70,5 @@ export const STATUS_ICON_STYLES: Record<
   error: { bg: "#FEECEC", icon: "#DC2626", iconName: "time-outline" },
 };
 
-/** Green accent for text links — matches reference */
+/** Green accent for text links - matches reference */
 export const BOOKING_LINK_GREEN = "#1F8A4C";

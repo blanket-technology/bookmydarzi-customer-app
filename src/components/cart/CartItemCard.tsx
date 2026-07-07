@@ -55,77 +55,67 @@ export default function CartItemCard({
 
   return (
     <View style={styles.card}>
-      {/* ── Top row: name + remove ─────────────────────────────────────── */}
-      <View style={styles.topRow}>
+      {/* Header strip */}
+      <View style={styles.header}>
+        <View style={styles.serviceIconBox}>
+          <Ionicons name="cut-outline" size={16} color={COLORS.primaryDark} />
+        </View>
         <View style={styles.nameBlock}>
-          <Text style={styles.serviceName} numberOfLines={2}>
-            {item.serviceName}
-          </Text>
+          <Text style={styles.serviceName} numberOfLines={2}>{item.serviceName}</Text>
           {item.categoryName ? (
             <View style={styles.categoryPill}>
               <Text style={styles.categoryText}>{item.categoryName}</Text>
             </View>
           ) : null}
         </View>
-        <TouchableOpacity
-          onPress={handleRemove}
-          hitSlop={10}
-          disabled={mutating}
-          style={styles.removeBtn}
-          accessibilityLabel={`Remove ${item.serviceName}`}
-        >
-          <Ionicons name="close" size={16} color={COLORS.error} />
+        <TouchableOpacity onPress={handleRemove} hitSlop={10} disabled={mutating}
+          style={styles.removeBtn} accessibilityLabel={`Remove ${item.serviceName}`}>
+          <Ionicons name="trash-outline" size={14} color={COLORS.error} />
         </TouchableOpacity>
       </View>
 
-      {/* ── Person / notes ────────────────────────────────────────────── */}
-      {item.personName || gender || item.notes ? (
+      {/* Person / notes meta */}
+      {(item.personName || gender || item.notes) ? (
         <View style={styles.metaRow}>
           {item.personName ? (
             <View style={styles.metaChip}>
-              <Ionicons name="person-outline" size={12} color={COLORS.gray} />
+              <Ionicons name="person-outline" size={11} color={COLORS.gray} />
               <Text style={styles.metaText}>
-                {item.personName}
-                {gender ? ` · ${gender}` : ""}
+                {item.personName}{gender ? ` · ${gender}` : ""}
               </Text>
             </View>
           ) : null}
           {item.notes ? (
             <View style={styles.metaChip}>
-              <Ionicons
-                name="document-text-outline"
-                size={12}
-                color={COLORS.gray}
-              />
-              <Text style={styles.metaText} numberOfLines={1}>
-                {item.notes}
-              </Text>
+              <Ionicons name="document-text-outline" size={11} color={COLORS.gray} />
+              <Text style={styles.metaText} numberOfLines={1}>{item.notes}</Text>
             </View>
           ) : null}
         </View>
       ) : null}
 
-      {/* ── Measurement chips ─────────────────────────────────────────── */}
+      {/* Measurement chips */}
       {previewChips.length > 0 ? (
         <View style={styles.chipsRow}>
-          {previewChips.map((m, idx) => (
+          {previewChips.slice(0, 5).map((m, idx) => (
             <View key={`${m.name}-${idx}`} style={styles.chip}>
-              <Text style={styles.chipText}>
-                {m.name}: {m.value}
-              </Text>
+              <Text style={styles.chipText}>{m.name}: {m.value}</Text>
             </View>
           ))}
+          {previewChips.length > 5 ? (
+            <View style={[styles.chip, styles.chipMore]}>
+              <Text style={styles.chipText}>+{previewChips.length - 5} more</Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
 
-      {/* ── Bottom row: price + qty ────────────────────────────────────── */}
+      {/* Bottom row */}
       <View style={styles.bottomRow}>
         <View style={styles.priceBlock}>
           <Text style={styles.lineTotal}>{item.lineTotalDisplay}</Text>
           {showPerItem ? (
-            <Text style={styles.perItem}>
-              {item.unitPriceDisplay} × {item.quantity}
-            </Text>
+            <Text style={styles.perItem}>{item.unitPriceDisplay} × {item.quantity}</Text>
           ) : (
             <Text style={styles.perItem}>{item.unitPriceDisplay}</Text>
           )}
@@ -134,30 +124,16 @@ export default function CartItemCard({
         <View style={styles.qtyWrap}>
           <TouchableOpacity
             style={[styles.qtyBtn, item.quantity <= 1 && styles.qtyBtnDisabled]}
-            onPress={onDecrease}
-            disabled={mutating || item.quantity <= 1}
-            hitSlop={6}
-            accessibilityLabel="Decrease quantity"
-          >
-            <Ionicons
-              name="remove"
-              size={16}
-              color={
-                item.quantity <= 1
-                  ? COLORS.grayBorder
-                  : COLORS.primaryDark
-              }
-            />
+            onPress={onDecrease} disabled={mutating || item.quantity <= 1}
+            hitSlop={6} accessibilityLabel="Decrease quantity">
+            <Ionicons name="remove" size={15}
+              color={item.quantity <= 1 ? COLORS.grayBorder : COLORS.primaryDark} />
           </TouchableOpacity>
           <Text style={styles.qtyValue}>{item.quantity}</Text>
           <TouchableOpacity
-            style={styles.qtyBtn}
-            onPress={onIncrease}
-            disabled={mutating}
-            hitSlop={6}
-            accessibilityLabel="Increase quantity"
-          >
-            <Ionicons name="add" size={16} color={COLORS.primaryDark} />
+            style={styles.qtyBtn} onPress={onIncrease} disabled={mutating}
+            hitSlop={6} accessibilityLabel="Increase quantity">
+            <Ionicons name="add" size={15} color={COLORS.primaryDark} />
           </TouchableOpacity>
         </View>
       </View>
@@ -168,26 +144,39 @@ export default function CartItemCard({
 const styles = StyleSheet.create({
   card: {
     marginBottom: SPACING.sm,
-    borderRadius: RADIUS.lg,
+    borderRadius: 18,
     backgroundColor: COLORS.white,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.grayBorder,
+    overflow: "hidden",
     ...SHADOW.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E8EAED",
   },
-
-  topRow: {
+  header: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: SPACING.sm,
-    marginBottom: SPACING.sm,
+    padding: SPACING.md,
+    paddingBottom: SPACING.sm,
+    backgroundColor: "#FAFBFC",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#ECEEF2",
   },
-  nameBlock: { flex: 1, gap: 4 },
+  serviceIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    marginTop: 1,
+  },
+  nameBlock: { flex: 1, gap: 5 },
   serviceName: {
     fontSize: 15,
     fontWeight: "700",
     color: COLORS.black,
-    lineHeight: 21,
+    lineHeight: 20,
   },
   categoryPill: {
     alignSelf: "flex-start",
@@ -196,26 +185,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  categoryText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: COLORS.primaryDark,
-  },
+  categoryText: { fontSize: 10, fontWeight: "700", color: COLORS.primaryDark },
   removeBtn: {
-    width: 28,
-    height: 28,
+    width: 30,
+    height: 30,
     borderRadius: 8,
-    backgroundColor: COLORS.errorLight,
+    backgroundColor: "#FEF2F2",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 2,
+    flexShrink: 0,
   },
 
   metaRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 6,
-    marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
   },
   metaChip: {
     flexDirection: "row",
@@ -229,7 +215,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.grayBorder,
   },
   metaText: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.gray,
     fontWeight: "500",
     maxWidth: 180,
@@ -239,70 +225,65 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 5,
-    marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
   },
   chip: {
-    backgroundColor: "#f0fafb",
+    backgroundColor: "#F0FAFB",
     borderRadius: RADIUS.full,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderWidth: 1,
     borderColor: "rgba(12,108,117,0.15)",
   },
-  chipText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: COLORS.primaryDark,
-  },
+  chipMore: { backgroundColor: COLORS.grayLight, borderColor: COLORS.grayBorder },
+  chipText: { fontSize: 10, fontWeight: "600", color: COLORS.primaryDark },
 
   bottomRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderTopWidth: 1,
-    borderTopColor: COLORS.grayBorder,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm + 2,
     paddingTop: SPACING.sm,
-    marginTop: 2,
+    marginTop: SPACING.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#ECEEF2",
   },
-  priceBlock: { gap: 1 },
+  priceBlock: { gap: 2 },
   lineTotal: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "800",
     color: COLORS.primaryDark,
+    letterSpacing: -0.3,
   },
-  perItem: {
-    fontSize: 12,
-    color: COLORS.gray,
-    fontWeight: "500",
-  },
+  perItem: { fontSize: 11, color: COLORS.gray, fontWeight: "500" },
 
   qtyWrap: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
-    backgroundColor: COLORS.offWhite,
+    backgroundColor: COLORS.white,
     borderRadius: RADIUS.full,
-    paddingHorizontal: 2,
-    paddingVertical: 2,
-    borderWidth: 1,
+    paddingHorizontal: 3,
+    paddingVertical: 3,
+    gap: 2,
+    borderWidth: 1.5,
     borderColor: COLORS.grayBorder,
   },
   qtyBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.primaryLight,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: COLORS.grayBorder,
   },
-  qtyBtnDisabled: { opacity: 0.35 },
+  qtyBtnDisabled: { opacity: 0.3, backgroundColor: COLORS.grayLight },
   qtyValue: {
     minWidth: 28,
     textAlign: "center",
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "800",
     color: COLORS.black,
   },
 });

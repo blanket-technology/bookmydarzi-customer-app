@@ -3,7 +3,7 @@ export const DEFAULT_CITY = "Noida";
 export const DEFAULT_STATE = "Uttar Pradesh";
 
 /**
- * All cities / localities currently served — Delhi NCR + Noida / Greater Noida.
+ * All cities / localities currently served - Delhi NCR + Noida / Greater Noida.
  * Compared case-insensitively so "delhi", "Delhi", "DELHI" all match.
  */
 export const SERVICE_CITIES = new Set([
@@ -27,12 +27,12 @@ export const SERVICE_CITIES = new Set([
   "lajpat nagar",
   "karol bagh",
   "connaught place",
-  // Haryana — NCR
+  // Haryana - NCR
   "gurugram",
   "gurgaon",
   "faridabad",
   "ballabhgarh",
-  // Uttar Pradesh — NCR
+  // Uttar Pradesh - NCR
   "noida",
   "greater noida",
   "ghaziabad",

@@ -172,7 +172,7 @@ function mapCheckoutResult(raw: unknown): CartCheckoutResult {
   };
 }
 
-/** GET /cart — returns null when no active cart exists */
+/** GET /cart - returns null when no active cart exists */
 export async function fetchCart(): Promise<ApiCart | null> {
   const res = await request<unknown>(BASE, { allowNotFound: true });
   if (res == null) return null;
@@ -181,7 +181,7 @@ export async function fetchCart(): Promise<ApiCart | null> {
   return null;
 }
 
-/** POST /cart — create a new cart */
+/** POST /cart - create a new cart */
 export async function createCart(): Promise<ApiCart> {
   const res = await request<unknown>(BASE, { method: "POST", body: {} });
   const cart = mapCart(res);
@@ -266,7 +266,7 @@ export async function deleteCartServiceEntry(entryId: number): Promise<ApiCart> 
   const mapped = mapCart(res);
   if (mapped.id > 0 || mapped.entries.length > 0) return mapped;
 
-  // Some backends return just {message} on delete — refetch to get fresh state.
+  // Some backends return just {message} on delete - refetch to get fresh state.
   const fresh = await fetchCart();
   return fresh ?? { ...EMPTY_CART };
 }
@@ -279,12 +279,19 @@ export async function checkoutCart(
     throw new Error("Delivery address is required.");
   }
 
+  const checkoutBody: Record<string, unknown> = {
+    address_id: payload.address_id,
+    payment_method: payload.payment_method ?? "online",
+    pickup_type: payload.pickup_type ?? "instant",
+  };
+
+  if (payload.offer_id) checkoutBody.offer_id = payload.offer_id;
+  if (payload.scheduled_pickup_at) checkoutBody.scheduled_pickup_at = payload.scheduled_pickup_at;
+  if (payload.pickup_time_slot) checkoutBody.pickup_time_slot = payload.pickup_time_slot;
+
   const res = await request<unknown>(`${BASE}/checkout`, {
     method: "POST",
-    body: {
-      address_id: payload.address_id,
-      payment_method: payload.payment_method ?? "online",
-    },
+    body: checkoutBody,
   });
 
   if (__DEV__) {

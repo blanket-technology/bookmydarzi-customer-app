@@ -353,7 +353,7 @@ export default function SignupScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Secondary CTA — Login with OTP */}
+          {/* Secondary CTA - Login with OTP */}
           <TouchableOpacity
             style={[styles.otpButton, loading && styles.buttonDisabled]}
             onPress={handleOtpLogin}

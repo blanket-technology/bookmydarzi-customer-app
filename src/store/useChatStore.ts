@@ -84,11 +84,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const msg = await sendOrderMessage(orderId, message);
       set((state) => {
         const t = state.threads[orderId] ?? emptyThread;
+        // WS event may have already added this message — dedup by id
+        const alreadyAdded = t.messages.some((m) => m.id === msg.id);
         return {
           sending: false,
           threads: {
             ...state.threads,
-            [orderId]: { ...t, messages: [...t.messages, msg] },
+            [orderId]: { ...t, messages: alreadyAdded ? t.messages : [...t.messages, msg] },
           },
         };
       });

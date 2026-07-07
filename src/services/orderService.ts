@@ -4,7 +4,7 @@
  * Legacy service kept for backward compatibility with useOrderStore.
  * The active order flow uses apiOrderService.ts directly.
  * These functions delegate to the same /orders endpoint using the real API.
- * User identity is established server-side via the Bearer token — no user_id needed.
+ * User identity is established server-side via the Bearer token - no user_id needed.
  */
 import type { ApiOrder, CreateOrderApiPayload } from "../types/api";
 import {

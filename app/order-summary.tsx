@@ -1,5 +1,5 @@
 /**
- * Order booking summary — GET /customer/orders/{order_id}/summary
+ * Order booking summary - GET /customer/orders/{order_id}/summary
  * Binds to nested payload: order, dates, service, billing, payment, delivery_address
  */
 import React, { useCallback, useState } from "react";
@@ -18,7 +18,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../store/useAuthStore";
 import { useFocusEffect } from "@react-navigation/native";
-import { COLORS, SPACING } from "../constants/theme";
+import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import { fetchCustomerOrderSummary } from "../src/services/customerOrderService";
 import { parsePositiveId } from "../src/services/paymentService";
 import type { CustomerOrderSummaryPayload } from "../src/types/customerOrders";
@@ -32,14 +32,15 @@ import {
 } from "../src/utils/customerOrderStatus";
 import {
   SUMMARY_NA,
-  getSummaryAmountPaid,
   getSummaryPlacedLabel,
   getSummaryScheduledLabel,
   getSummaryStatusHeadline,
-  summaryDateOnly,
   summaryMoney,
   summaryText,
 } from "../src/utils/orderSummaryDisplay";
+import { getPaymentStatusVisual } from "../src/utils/paymentStatus";
+
+// ─── Shared primitives ────────────────────────────────────────────────────────
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
@@ -52,25 +53,32 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function RowDivider() {
+  return <View style={styles.infoDivider} />;
+}
+
 function BillRow({
   label,
   value,
   bold,
   discount,
+  highlight,
 }: {
   label: string;
   value: string;
   bold?: boolean;
   discount?: boolean;
+  highlight?: boolean;
 }) {
   return (
-    <View style={styles.billRow}>
+    <View style={[styles.billRow, highlight && styles.billRowHighlight]}>
       <Text style={[styles.billLabel, bold && styles.billLabelBold]}>{label}</Text>
       <Text
         style={[
           styles.billValue,
           bold && styles.billValueBold,
           discount && styles.billDiscount,
+          highlight && styles.billValueHighlight,
         ]}
       >
         {value}
@@ -78,6 +86,18 @@ function BillRow({
     </View>
   );
 }
+
+function PaymentStatusBadge({ status }: { status: string | null | undefined }) {
+  const visual = getPaymentStatusVisual(status);
+  return (
+    <View style={[styles.payBadge, { backgroundColor: visual.bg }]}>
+      <View style={[styles.payBadgeDot, { backgroundColor: visual.color }]} />
+      <Text style={[styles.payBadgeText, { color: visual.color }]}>{visual.label}</Text>
+    </View>
+  );
+}
+
+// ─── Hero card ────────────────────────────────────────────────────────────────
 
 function SummaryStatusHero({ payload }: { payload: CustomerOrderSummaryPayload }) {
   const status = payload.order.status ?? "";
@@ -88,13 +108,32 @@ function SummaryStatusHero({ payload }: { payload: CustomerOrderSummaryPayload }
   const bookingId = summaryText(payload.order.order_code);
   const placed = getSummaryPlacedLabel(payload);
   const schedule = getSummaryScheduledLabel(payload);
-  const amount = getSummaryAmountPaid(payload);
+
+  // Context-aware amount row
+  const payStatus = (payload.payment.payment_status ?? "").toLowerCase().replace(/[^a-z]/g, "");
+  let amountLabel = "Amount paid";
+  let amountValue = summaryMoney(payload.billing.total_amount);
+  if (payStatus === "fullypaid" || payStatus === "paid" || payStatus === "success") {
+    amountLabel = "Total paid";
+  } else if (payStatus === "advancepaid" || payStatus === "partiallypaid") {
+    amountLabel = "Advance paid";
+  } else if (payStatus === "balancepending" || payStatus === "balancedue") {
+    amountLabel = "Advance paid";
+  } else if (
+    payStatus === "advancepending" ||
+    payStatus === "initiated" ||
+    payStatus === "pending" ||
+    payStatus === "failed" ||
+    payStatus === "paymentfailed"
+  ) {
+    amountLabel = "Amount due";
+  }
 
   return (
     <View style={[styles.heroCard, cardShadow]}>
       <View style={styles.heroTop}>
         <View style={[styles.iconBox, { backgroundColor: iconStyle.bg }]}>
-          <Ionicons name={iconStyle.iconName} size={20} color={iconStyle.icon} />
+          <Ionicons name={iconStyle.iconName} size={22} color={iconStyle.icon} />
         </View>
         <View style={styles.heroText}>
           <View style={styles.badgeRow}>
@@ -105,8 +144,14 @@ function SummaryStatusHero({ payload }: { payload: CustomerOrderSummaryPayload }
             </View>
           </View>
           <Text style={styles.headline}>{headline}</Text>
-          <Text style={styles.metaLine}>Booking id: {bookingId}</Text>
-          <Text style={styles.metaLine}>Placed: {placed}</Text>
+          <Text style={styles.metaLine}>
+            <Text style={styles.metaKey}>Booking ID  </Text>
+            {bookingId}
+          </Text>
+          <Text style={styles.metaLine}>
+            <Text style={styles.metaKey}>Placed  </Text>
+            {placed}
+          </Text>
           <Text style={styles.metaLine}>{schedule}</Text>
         </View>
       </View>
@@ -114,12 +159,14 @@ function SummaryStatusHero({ payload }: { payload: CustomerOrderSummaryPayload }
       <View style={styles.divider} />
 
       <View style={styles.amountRow}>
-        <Text style={styles.amountLabel}>Amount paid</Text>
-        <Text style={styles.amountValue}>{amount}</Text>
+        <Text style={styles.amountLabel}>{amountLabel}</Text>
+        <Text style={styles.amountValue}>{amountValue}</Text>
       </View>
     </View>
   );
 }
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function OrderSummaryScreen() {
   const insets = useSafeAreaInsets();
@@ -193,25 +240,30 @@ export default function OrderSummaryScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={12}>
           <Ionicons name="arrow-back" size={22} color={COLORS.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Booking summary</Text>
+        <Text style={styles.headerTitle}>Booking Summary</Text>
         <View style={{ width: 40 }} />
       </View>
 
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading summary...</Text>
+          <Text style={styles.loadingText}>Loading summary…</Text>
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Ionicons name="alert-circle-outline" size={44} color={COLORS.error} />
-          <Text style={styles.errorTitle}>{error}</Text>
+          <View style={styles.errorIconWrap}>
+            <Ionicons name="alert-circle-outline" size={40} color={COLORS.error} />
+          </View>
+          <Text style={styles.errorTitle}>Couldn't load summary</Text>
+          <Text style={styles.errorSub}>{error}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={load}>
-            <Text style={styles.retryText}>Retry</Text>
+            <Ionicons name="refresh-outline" size={16} color={COLORS.white} />
+            <Text style={styles.retryText}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : payload ? (
@@ -219,7 +271,7 @@ export default function OrderSummaryScreen() {
           contentContainerStyle={[
             styles.scroll,
             {
-              paddingBottom: insets.bottom + 88,
+              paddingBottom: insets.bottom + 100,
               maxWidth: contentMaxWidth,
               alignSelf: "center",
               width: "100%",
@@ -229,6 +281,7 @@ export default function OrderSummaryScreen() {
         >
           <SummaryStatusHero payload={payload} />
 
+          {/* Service */}
           <OrderScreenSection title="Service">
             <Text style={styles.serviceTitle}>
               {summaryText(payload.service.service_name)}
@@ -238,69 +291,97 @@ export default function OrderSummaryScreen() {
                 {summaryText(payload.service.category_name)}
               </Text>
             ) : null}
-            <InfoRow
-              label="Quantity"
-              value={
-                payload.service.quantity != null
-                  ? String(payload.service.quantity)
-                  : SUMMARY_NA
-              }
-            />
+            {payload.service.quantity != null ? (
+              <>
+                <RowDivider />
+                <InfoRow label="Quantity" value={String(payload.service.quantity)} />
+              </>
+            ) : null}
           </OrderScreenSection>
 
-          <OrderScreenSection title="Billing">
+          {/* Billing */}
+          <OrderScreenSection title="Price Breakdown">
             <BillRow label="Item total" value={summaryMoney(payload.billing.item_total)} />
-            <View style={styles.billDivider} />
-            <BillRow label="Discount" value={summaryMoney(payload.billing.discount)} discount />
-            <View style={styles.billDivider} />
-            <BillRow label="CGST" value={summaryMoney(payload.billing.cgst_amount)} />
-            <View style={styles.billDivider} />
-            <BillRow label="SGST" value={summaryMoney(payload.billing.sgst_amount)} />
-            <View style={styles.billDivider} />
-            <BillRow label="Convenience fee" value={summaryMoney(payload.billing.service_fee)} />
-            <View style={styles.billDivider} />
+            {Number(payload.billing.service_fee) > 0 ? (
+              <>
+                <View style={styles.billDivider} />
+                <BillRow label="Convenience fee" value={summaryMoney(payload.billing.service_fee)} />
+              </>
+            ) : null}
+            {Number(payload.billing.cgst_amount) > 0 || Number(payload.billing.sgst_amount) > 0 ? (
+              <>
+                <View style={styles.billDivider} />
+                <BillRow label="CGST (2.5%)" value={summaryMoney(payload.billing.cgst_amount)} />
+                <View style={styles.billDivider} />
+                <BillRow label="SGST (2.5%)" value={summaryMoney(payload.billing.sgst_amount)} />
+              </>
+            ) : Number(payload.billing.gst_amount) > 0 ? (
+              <>
+                <View style={styles.billDivider} />
+                <BillRow label="GST (5%)" value={summaryMoney(payload.billing.gst_amount)} />
+              </>
+            ) : null}
+            {Number(payload.billing.discount) > 0 ? (
+              <>
+                <View style={styles.billDivider} />
+                <BillRow
+                  label="Discount"
+                  value={`- ${summaryMoney(payload.billing.discount)}`}
+                  discount
+                />
+              </>
+            ) : null}
+            <View style={styles.billDividerBold} />
             <BillRow
               label="Total amount"
               value={summaryMoney(payload.billing.total_amount)}
               bold
+              highlight
             />
           </OrderScreenSection>
 
+          {/* Payment */}
           <OrderScreenSection title="Payment">
+            <View style={styles.paymentStatusRow}>
+              <Text style={styles.infoLabel}>Payment status</Text>
+              <PaymentStatusBadge status={payload.payment.payment_status} />
+            </View>
+            <RowDivider />
             <InfoRow
-              label="Payment method"
+              label="Method"
               value={summaryText(payload.payment.payment_method)}
             />
-            <View style={styles.infoDivider} />
-            <InfoRow
-              label="Payment status"
-              value={summaryText(payload.payment.payment_status)}
-            />
-            <View style={styles.infoDivider} />
-            <InfoRow
-              label="Transaction id"
-              value={summaryText(payload.payment.transaction_id)}
-            />
+            {payload.payment.transaction_id ? (
+              <>
+                <RowDivider />
+                <InfoRow
+                  label="Transaction ID"
+                  value={summaryText(payload.payment.transaction_id)}
+                />
+              </>
+            ) : null}
           </OrderScreenSection>
 
-          <OrderScreenSection title="Delivery address">
+          {/* Delivery address */}
+          <OrderScreenSection title="Delivery Address">
             <InfoRow label="Name" value={summaryText(payload.delivery_address.name)} />
-            <View style={styles.infoDivider} />
+            <RowDivider />
             <InfoRow label="Mobile" value={summaryText(payload.delivery_address.mobile)} />
-            <View style={styles.infoDivider} />
+            <RowDivider />
             <InfoRow
               label="Address"
               value={summaryText(payload.delivery_address.full_address)}
             />
           </OrderScreenSection>
 
+          {/* CTAs */}
           {needsPayment ? (
             <Pressable
               style={({ pressed }) => [styles.payNowCta, pressed && { opacity: 0.88 }]}
               onPress={handlePayNow}
             >
               <Ionicons name="card-outline" size={18} color={COLORS.white} />
-              <Text style={styles.payNowCtaText}>Pay now</Text>
+              <Text style={styles.payNowCtaText}>Pay Now</Text>
             </Pressable>
           ) : null}
 
@@ -308,7 +389,7 @@ export default function OrderSummaryScreen() {
             style={({ pressed }) => [styles.footerCta, pressed && { opacity: 0.88 }]}
             onPress={navigateToDetails}
           >
-            <Text style={styles.footerCtaText}>View booking details</Text>
+            <Text style={styles.footerCtaText}>View Full Booking Details</Text>
             <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
           </Pressable>
         </ScrollView>
@@ -317,31 +398,37 @@ export default function OrderSummaryScreen() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F5F7FA" },
+
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    backgroundColor: "#F5F7FA",
+    backgroundColor: COLORS.white,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.grayBorder,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.grayLight,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#E8EAED",
   },
   headerTitle: { fontSize: 17, fontWeight: "700", color: COLORS.black },
-  scroll: { padding: SPACING.lg, paddingTop: SPACING.sm },
+
+  scroll: { padding: SPACING.lg, paddingTop: SPACING.md },
+
+  // Hero
   heroCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
+    borderRadius: RADIUS.lg,
     marginBottom: SPACING.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#E8EAED",
@@ -350,15 +437,15 @@ const styles = StyleSheet.create({
   heroTop: {
     flexDirection: "row",
     alignItems: "flex-start",
-    paddingHorizontal: 14,
-    paddingTop: 14,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
     paddingBottom: 12,
     gap: 12,
   },
   iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -366,15 +453,11 @@ const styles = StyleSheet.create({
   badgeRow: { marginBottom: 6 },
   statusBadge: {
     alignSelf: "flex-start",
-    borderRadius: 20,
+    borderRadius: RADIUS.full,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "capitalize",
-  },
+  statusBadgeText: { fontSize: 11, fontWeight: "700", textTransform: "capitalize" },
   headline: {
     fontSize: 16,
     fontWeight: "700",
@@ -382,48 +465,36 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 6,
   },
-  metaLine: {
-    fontSize: 12,
-    color: "#6B7280",
-    lineHeight: 17,
-  },
+  metaLine: { fontSize: 12, color: "#6B7280", lineHeight: 18 },
+  metaKey: { fontWeight: "600", color: "#9CA3AF" },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: "#ECEEF2",
-    marginHorizontal: 14,
+    marginHorizontal: SPACING.md,
   },
   amountRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 14,
+    paddingHorizontal: SPACING.md,
     paddingVertical: 12,
   },
   amountLabel: { fontSize: 13, color: "#6B7280" },
-  amountValue: { fontSize: 15, fontWeight: "700", color: "#1F2937" },
-  serviceTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#1F2937",
-    marginBottom: 4,
-  },
-  serviceSubtitle: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginBottom: 10,
-  },
+  amountValue: { fontSize: 16, fontWeight: "800", color: "#1F2937" },
+
+  // Service
+  serviceTitle: { fontSize: 15, fontWeight: "700", color: "#1F2937", marginBottom: 2 },
+  serviceSubtitle: { fontSize: 13, color: "#6B7280", marginBottom: 4 },
+
+  // Info rows
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 12,
-    paddingVertical: 4,
+    paddingVertical: 7,
   },
-  infoLabel: {
-    flex: 0.9,
-    fontSize: 13,
-    color: "#6B7280",
-  },
+  infoLabel: { flex: 0.9, fontSize: 13, color: "#6B7280" },
   infoValue: {
     flex: 1.3,
     fontSize: 13,
@@ -434,55 +505,84 @@ const styles = StyleSheet.create({
   infoDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: "#ECEEF2",
-    marginVertical: 8,
+    marginVertical: 2,
   },
+
+  // Bill rows
   billRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 2,
+    paddingVertical: 6,
     gap: 12,
+  },
+  billRowHighlight: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: 8,
+    marginHorizontal: -8,
   },
   billDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: "#ECEEF2",
-    marginVertical: 8,
+    marginVertical: 2,
+  },
+  billDividerBold: {
+    height: 1,
+    backgroundColor: "#D1D5DB",
+    marginVertical: 6,
   },
   billLabel: { fontSize: 13, color: "#6B7280", flex: 1 },
-  billLabelBold: { fontWeight: "700", color: "#1F2937" },
+  billLabelBold: { fontWeight: "700", color: "#1F2937", fontSize: 14 },
   billValue: { fontSize: 13, fontWeight: "600", color: "#1F2937" },
-  billValueBold: { fontSize: 15, fontWeight: "800" },
+  billValueBold: { fontSize: 15, fontWeight: "800", color: "#1F2937" },
+  billValueHighlight: { color: COLORS.primaryDark },
   billDiscount: { color: "#16A34A" },
+
+  // Payment status badge
+  paymentStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 7,
+  },
+  payBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  payBadgeDot: { width: 6, height: 6, borderRadius: 3 },
+  payBadgeText: { fontSize: 12, fontWeight: "700" },
+
+  // CTAs
   payNowCta: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 8,
     backgroundColor: COLORS.primaryDark,
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: RADIUS.lg,
+    paddingVertical: 15,
     marginTop: SPACING.sm,
+    ...SHADOW.card,
   },
-  payNowCtaText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: COLORS.white,
-  },
+  payNowCtaText: { fontSize: 15, fontWeight: "700", color: COLORS.white },
   footerCta: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
     backgroundColor: BOOKING_LINK_GREEN,
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: RADIUS.lg,
+    paddingVertical: 15,
     marginTop: SPACING.sm,
   },
-  footerCtaText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: COLORS.white,
-  },
+  footerCtaText: { fontSize: 15, fontWeight: "700", color: COLORS.white },
+
+  // States
   center: {
     flex: 1,
     alignItems: "center",
@@ -490,13 +590,26 @@ const styles = StyleSheet.create({
     padding: SPACING.xl,
     gap: SPACING.sm,
   },
+  errorIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: SPACING.sm,
+  },
   loadingText: { fontSize: 14, color: COLORS.gray },
-  errorTitle: { fontSize: 14, color: COLORS.error, textAlign: "center" },
+  errorTitle: { fontSize: 16, fontWeight: "700", color: "#1F2937" },
+  errorSub: { fontSize: 13, color: COLORS.gray, textAlign: "center" },
   retryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     backgroundColor: COLORS.primaryDark,
-    borderRadius: 20,
+    borderRadius: RADIUS.full,
     paddingHorizontal: 24,
-    paddingVertical: 10,
+    paddingVertical: 11,
     marginTop: SPACING.sm,
   },
   retryText: { fontSize: 14, fontWeight: "700", color: COLORS.white },

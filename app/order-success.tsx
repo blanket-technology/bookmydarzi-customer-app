@@ -1,5 +1,5 @@
 /**
- * Order Success Screen — shown after cart checkout
+ * Order Success Screen - shown after cart checkout
  */
 import React, { useEffect, useRef } from "react";
 import {
@@ -35,7 +35,7 @@ export default function OrderSuccessScreen() {
   const orderAmountDisplay =
     Number.isFinite(parsedAmount) && parsedAmount > 0
       ? formatMoney(parsedAmount)
-      : "—";
+      : "-";
 
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -98,14 +98,23 @@ export default function OrderSuccessScreen() {
         ) : null}
 
         <Text style={styles.note}>
-          You will receive updates as your order progresses.
+          Our team will arrange cloth pickup shortly. You will receive a notification with updates.
         </Text>
       </Animated.View>
 
       <Animated.View style={[styles.btns, { opacity: fadeAnim }]}>
         <TouchableOpacity
           style={styles.primaryBtn}
-          onPress={() => router.replace("/(tabs)/orders")}
+          onPress={() => {
+            if (orderId) {
+              router.replace({
+                pathname: "/order-summary" as never,
+                params: { orderId },
+              });
+            } else {
+              router.replace("/(tabs)/orders");
+            }
+          }}
           activeOpacity={0.85}
         >
           <Ionicons name="navigate-outline" size={20} color={COLORS.primaryDark} />

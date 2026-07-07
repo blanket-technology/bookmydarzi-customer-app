@@ -8,15 +8,18 @@ interface Props {
   item: CustomerOrderListItem;
   index: number;
   onSummaryPress: (orderId: number) => void;
+  onPayNow?: (orderId: number) => void;
 }
 
-function CustomerOrderCard({ item, index, onSummaryPress }: Props) {
+function CustomerOrderCard({ item, index, onSummaryPress, onPayNow }: Props) {
   const serviceLine =
     item.serviceTitle && item.serviceTitle !== ORDER_DISPLAY_FALLBACK
       ? item.serviceSubtitle && item.serviceSubtitle !== ORDER_DISPLAY_FALLBACK
         ? `${item.serviceTitle} · ${item.serviceSubtitle}`
         : item.serviceTitle
       : undefined;
+
+  const needsPayment = item.canPayNow === true;
 
   return (
     <Animated.View entering={FadeInDown.delay(index * 40).duration(350)}>
@@ -28,6 +31,7 @@ function CustomerOrderCard({ item, index, onSummaryPress }: Props) {
         amountPaidDisplay={item.amountPaidDisplay}
         serviceLine={serviceLine}
         onSummaryPress={() => onSummaryPress(item.id)}
+        onPayNow={needsPayment && onPayNow ? () => onPayNow(item.id) : undefined}
         showRatingPlaceholder
       />
     </Animated.View>

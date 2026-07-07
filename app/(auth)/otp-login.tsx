@@ -1,8 +1,8 @@
 /**
  * OTP Login Screen
  *
- * Step 1 — Phone entry: user enters 10-digit mobile number → POST /auth/login/otp/request
- * Step 2 — OTP entry:   user enters 6-digit OTP → POST /auth/login/otp/verify
+ * Step 1 - Phone entry: user enters 10-digit mobile number → POST /auth/login/otp/request
+ * Step 2 - OTP entry:   user enters 6-digit OTP → POST /auth/login/otp/verify
  *
  * On success: tokens are saved, user is authenticated, navigated to app.
  */

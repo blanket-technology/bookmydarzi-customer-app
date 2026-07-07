@@ -94,7 +94,7 @@ export function resolvePayableAmount(raw: unknown): number {
   return resolveFromFieldList(raw, AMOUNT_FIELD_PRIORITY);
 }
 
-/** Advance/booking amount only — for cart store display mapping. */
+/** Advance/booking amount only - for cart store display mapping. */
 export function resolveAdvanceBookingAmount(raw: unknown): number {
   return resolveFromFieldList(raw, ADVANCE_FIELD_PRIORITY);
 }

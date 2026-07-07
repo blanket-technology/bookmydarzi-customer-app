@@ -10,7 +10,7 @@
  *   PATCH  /orders/{order_id}/cancel    → Cancel own order
  *
  * All requests use the Bearer token from SecureStore automatically via request().
- * No user_id is sent — the backend identifies the user from the JWT token.
+ * No user_id is sent - the backend identifies the user from the JWT token.
  */
 import { request } from "../../services/api";
 import type { CreateOrderApiPayload, ApiOrder, ApiOrderTracking } from "../types/api";
@@ -24,7 +24,7 @@ const BASE = "/orders";
 function mapOrder(raw: any): ApiOrder {
   if (!raw) throw new Error("Invalid order data received from server");
 
-  // Status normalisation — backend uses snake_case or PascalCase
+  // Status normalisation - backend uses snake_case or PascalCase
   const rawStatus: string = (
     raw?.Status ?? raw?.status ?? "pending"
   ).toLowerCase();
@@ -245,11 +245,11 @@ export async function fetchApiOrderTracking(id: number): Promise<ApiOrderTrackin
 // Creates a draft order for the current authenticated user.
 // ---------------------------------------------------------------------------
 export async function createApiOrder(payload: CreateOrderApiPayload): Promise<ApiOrder> {
-  // Build a clean body — only include fields with real values
+  // Build a clean body - only include fields with real values
   const body: Record<string, unknown> = {
     service_id: payload.service_id,
     address_id: payload.address_id,
-    // Backend expects "YYYY-MM-DD" — slice the ISO string
+    // Backend expects "YYYY-MM-DD" - slice the ISO string
     expected_delivery_date: payload.expected_delivery_date.slice(0, 10),
     urgency_level: payload.urgency_level ?? "standard",
     subtotal: typeof payload.subtotal === "number" ? payload.subtotal : 0,

@@ -150,7 +150,7 @@ function toAuthResponse(res: any, fallback: Partial<User> = {}): AuthResponse {
 // Email auth
 // ---------------------------------------------------------------------------
 
-/** POST /auth/email/signup — sends email OTP, no JWT */
+/** POST /auth/email/signup - sends email OTP, no JWT */
 export async function registerRequest(
   payload: RegisterPayload
 ): Promise<MessageResponse> {
@@ -167,7 +167,7 @@ export async function registerRequest(
   });
 }
 
-/** POST /auth/email/verify-otp — verify signup OTP and return JWT */
+/** POST /auth/email/verify-otp - verify signup OTP and return JWT */
 export async function verifyEmailOtpRequest(
   email: string,
   otp: string
@@ -186,7 +186,7 @@ export async function verifyEmailOtpRequest(
   return auth;
 }
 
-/** POST /auth/email/resend-otp — resend signup OTP */
+/** POST /auth/email/resend-otp - resend signup OTP */
 export async function resendEmailOtpRequest(email: string): Promise<MessageResponse> {
   return authRequest<MessageResponse>("/auth/email/resend-otp", {
     method: "POST",
@@ -213,7 +213,7 @@ export async function loginRequest(payload: LoginPayload): Promise<AuthResponse>
   }
   if (!auth.refresh_token?.trim() && __DEV__) {
     console.warn(
-      "[AuthService] login: refresh_token missing from response — refresh may fail after access token expires",
+      "[AuthService] login: refresh_token missing from response - refresh may fail after access token expires",
     );
   }
   return auth;
@@ -257,7 +257,7 @@ export async function verifyOtpRequest(
 // Session
 // ---------------------------------------------------------------------------
 
-/** POST /auth/logout — revoke refresh session */
+/** POST /auth/logout - revoke refresh session */
 export async function logoutRequest(): Promise<void> {
   let refreshToken: string | null = null;
   try {

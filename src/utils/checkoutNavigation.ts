@@ -18,10 +18,13 @@ export function resolveCheckoutAddressId(): number | null {
 }
 
 /**
- * Cart checkout — validate address, create order, open Razorpay payment screen.
+ * Cart checkout - validate address, create order, open Razorpay payment screen.
  * Skips Order Summary / review screen.
  */
-export async function executeCheckoutFromCart(router: Router): Promise<void> {
+export async function executeCheckoutFromCart(
+  router: Router,
+  scheduled?: { scheduledPickupAt: string; pickupTimeSlot: string },
+): Promise<void> {
   const cart = useCartStore.getState();
   if (cart.itemCount <= 0 || cart.entries.length === 0) return;
 
@@ -41,12 +44,18 @@ export async function executeCheckoutFromCart(router: Router): Promise<void> {
   cart.setAddressId(addressId);
 
   try {
-    // result.advanceAmount is the exact figure the backend will charge —
+    // result.advanceAmount is the exact figure the backend will charge -
     // this is what gets passed to the payment screen, never a locally
     // recomputed value.
     const result = await cart.checkout({
       address_id: addressId,
       payment_method: "online",
+      pickup_type: cart.pickupType ?? "instant",
+      ...(cart.appliedOfferId ? { offer_id: cart.appliedOfferId } : {}),
+      ...(scheduled ? {
+        scheduled_pickup_at: scheduled.scheduledPickupAt,
+        pickup_time_slot: scheduled.pickupTimeSlot,
+      } : {}),
     });
 
     useOrderStore.getState().invalidateCache();
@@ -80,5 +89,5 @@ export async function executeCheckoutFromCart(router: Router): Promise<void> {
   }
 }
 
-/** @deprecated Use executeCheckoutFromCart — kept for imports during migration */
+/** @deprecated Use executeCheckoutFromCart - kept for imports during migration */
 export const navigateToCheckoutFromCart = executeCheckoutFromCart;

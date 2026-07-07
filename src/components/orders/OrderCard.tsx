@@ -153,7 +153,7 @@ const OrderCard = memo(({ item, index, onCancel }: Props) => {
                     Ref: {paymentInfo.transaction_id}
                   </Text>
                 ) : null}
-                {detailAmountDisplay !== "—" ? (
+                {detailAmountDisplay !== "-" ? (
                   <Text style={styles.paymentMeta}>
                     Amount: {detailAmountDisplay}
                   </Text>
@@ -165,7 +165,7 @@ const OrderCard = memo(({ item, index, onCancel }: Props) => {
                 ) : null}
               </>
             ) : (
-              <Text style={styles.sectionEmpty}>—</Text>
+              <Text style={styles.sectionEmpty}>-</Text>
             )}
           </View>
         )}
@@ -175,7 +175,7 @@ const OrderCard = memo(({ item, index, onCancel }: Props) => {
             {trackingLoading ? (
               <ActivityIndicator size="small" color={COLORS.primary} />
             ) : tracking.length === 0 ? (
-              <Text style={styles.sectionEmpty}>—</Text>
+              <Text style={styles.sectionEmpty}>-</Text>
             ) : (
               tracking.map((step, i) => {
                 const display = mapTrackingStepForDisplay(step);

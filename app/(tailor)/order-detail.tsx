@@ -1,11 +1,16 @@
+/**
+ * Tailor order detail + stitching action buttons.
+ * tailor_assigned       → "Start Stitching"     → stitching_in_progress
+ * stitching_in_progress → "Mark Stitching Done" → stitching_completed
+ * stitching_completed   → "Waiting for delivery" (employee picks up next)
+ * Shows only: order code, service, measurements. No customer contact or payment info.
+ */
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,142 +19,39 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
-import { getTailorOrder, updateStitchingStatus, type TailorOrder } from "../../src/services/tailorService";
+import {
+  getTailorOrder,
+  updateStitchingStatus,
+} from "../../src/services/tailorService";
 
-const TEAL = "#0c6c75";
-const TEAL_LIGHT = "#1aa3b0";
+const TEAL = "#149694";
+const AMBER = "#D97706";
+const GREEN = "#16A34A";
 
-const STATUS_COLORS: Record<string, string> = {
-  tailor_assigned: "#F59E0B",
-  cloth_pickup_pending: "#F97316",
-  cloth_picked_up: "#0D9488",
-  stitching_in_progress: "#8B5CF6",
-  stitching_completed: "#16A34A",
-  out_for_delivery: "#3B82F6",
-  delivered: "#065F46",
+const STATUS_META: Record<string, { label: string; color: string }> = {
+  tailor_assigned:       { label: "Awaiting Start",    color: TEAL },
+  stitching_in_progress: { label: "In Progress",       color: AMBER },
+  stitching_completed:   { label: "Stitching Done",    color: GREEN },
+  out_for_delivery:      { label: "Out for Delivery",  color: "#7C3AED" },
+  delivered:             { label: "Delivered",          color: "#065F46" },
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  tailor_assigned: "Tailor Assigned",
-  cloth_pickup_pending: "Pickup Pending",
-  cloth_picked_up: "Cloth Collected — Ready to Stitch",
-  stitching_in_progress: "Stitching in Progress",
-  stitching_completed: "Stitching Complete",
-  out_for_delivery: "Out for Delivery",
-  delivered: "Delivered",
-};
-
-const STAGES = [
-  { key: "cloth_picked_up", label: "Cloth\nCollected", icon: "shirt-outline" as const },
-  { key: "stitching_in_progress", label: "Stitching\nStarted", icon: "cut-outline" as const },
-  { key: "stitching_completed", label: "Stitching\nDone", icon: "checkmark-circle-outline" as const },
-];
-
-const STAGE_ORDER = [
-  "tailor_assigned",
-  "cloth_pickup_pending",
-  "cloth_picked_up",
-  "stitching_in_progress",
-  "stitching_completed",
-  "out_for_delivery",
-  "delivered",
-];
-
-function StageTracker({ status, color }: { status: string; color: string }) {
-  const currentIdx = STAGE_ORDER.indexOf(status);
-  return (
-    <View style={trackerStyles.row}>
-      {STAGES.map((stage, i) => {
-        const stageIdx = STAGE_ORDER.indexOf(stage.key);
-        const done = currentIdx >= stageIdx;
-        const active = status === stage.key;
-        return (
-          <View key={stage.key} style={trackerStyles.stageWrap}>
-            {i > 0 && (
-              <View
-                style={[
-                  trackerStyles.connector,
-                  done && currentIdx > STAGE_ORDER.indexOf(STAGES[i - 1].key) && {
-                    backgroundColor: color,
-                  },
-                ]}
-              />
-            )}
-            <View
-              style={[
-                trackerStyles.iconCircle,
-                { borderColor: done ? color : COLORS.grayBorder },
-                active && { backgroundColor: color },
-                done && !active && { backgroundColor: color + "18" },
-              ]}
-            >
-              <Ionicons
-                name={stage.icon}
-                size={16}
-                color={active ? "#fff" : done ? color : COLORS.grayBorder}
-              />
-            </View>
-            <Text style={[trackerStyles.stageLabel, done && { color }]}>{stage.label}</Text>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-const trackerStyles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.sm,
-  },
-  stageWrap: { alignItems: "center", flex: 1, position: "relative" },
-  connector: {
-    position: "absolute",
-    top: 17,
-    right: "50%",
-    left: "-50%",
-    height: 2,
-    backgroundColor: COLORS.grayBorder,
-    zIndex: 0,
-  },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
-    zIndex: 1,
-    backgroundColor: "transparent",
-  },
-  stageLabel: {
-    fontSize: 10,
-    color: COLORS.gray,
-    textAlign: "center",
-    ...FONTS.medium,
-    lineHeight: 14,
-  },
-});
-
-function InfoRow({ label, value }: { label: string; value?: string | null }) {
+function Row({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
   return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.rowValue}>{value}</Text>
     </View>
   );
 }
 
-function MeasCell({ label, value }: { label: string; value?: number | null }) {
+function MeasRow({ label, value }: { label: string; value?: number | null }) {
   if (value == null) return null;
   return (
-    <View style={styles.measCell}>
-      <Text style={styles.measValue}>{value}"</Text>
-      <Text style={styles.measLabel}>{label}</Text>
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.rowValue}>{value}"</Text>
     </View>
   );
 }
@@ -159,7 +61,7 @@ export default function TailorOrderDetail() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [order, setOrder] = useState<TailorOrder | null>(null);
+  const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
@@ -179,47 +81,24 @@ export default function TailorOrderDetail() {
     }
   }, [orderId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  const status = (order?.Status ?? "").toLowerCase();
-  const statusColor = STATUS_COLORS[status] ?? TEAL;
-  const statusLabel = STATUS_LABELS[status] ?? status.replace(/_/g, " ");
+  const status = (order?.Status ?? order?.status ?? "").toLowerCase();
+  const statusMeta = STATUS_META[status] ?? { label: status.replace(/_/g, " "), color: COLORS.gray };
+  const statusColor = statusMeta.color;
 
-  // Extract customer info from address (OrderResponse shape)
-  const customerName = order?.address?.full_name;
-  const customerMobile = order?.address?.mobile;
-  const addressParts = [
-    order?.address?.address_line_1,
-    order?.address?.address_line_2,
-    order?.address?.city,
-    order?.address?.pincode,
-  ].filter(Boolean);
-  const addressText = addressParts.length ? addressParts.join(", ") : null;
+  const measurement = order?.measurement ?? order?.Measurement;
 
-  const measurement = order?.measurement;
-
-  const callCustomer = () => {
-    if (!customerMobile) return;
-    Linking.openURL(`tel:${customerMobile}`).catch(() =>
-      Alert.alert("Error", "Could not open phone app")
-    );
-  };
-
-  const runAction = (
-    newStatus: "stitching_in_progress" | "stitching_completed",
-    confirmMsg: string
-  ) => {
-    Alert.alert("Confirm Action", confirmMsg, [
+  const runAction = (newStatus: "stitching_in_progress" | "stitching_completed", confirmMsg: string) => {
+    Alert.alert("Confirm", confirmMsg, [
       { text: "Cancel", style: "cancel" },
       {
-        text: "Confirm",
+        text: "Yes",
         onPress: async () => {
           setActing(true);
           try {
             await updateStitchingStatus(orderId, newStatus);
-            await load();
+            load();
           } catch (e: any) {
             Alert.alert("Error", e?.message ?? "Action failed");
           } finally {
@@ -230,183 +109,149 @@ export default function TailorOrderDetail() {
     ]);
   };
 
-  type ActionDef = { label: string; icon: string; color: string; onPress: () => void };
-  const ACTION_MAP: Record<string, ActionDef> = {
-    cloth_picked_up: {
-      label: "Start Stitching",
-      icon: "cut-outline",
-      color: "#8B5CF6",
-      onPress: () =>
-        runAction("stitching_in_progress", "Cloth is with you — start stitching for this order?"),
-    },
-    stitching_in_progress: {
-      label: "Mark Stitching Done",
-      icon: "checkmark-circle-outline",
-      color: "#16A34A",
-      onPress: () =>
-        runAction("stitching_completed", "Mark stitching as completed? Employee will be notified to collect."),
-    },
+  type ActionConfig = {
+    label: string;
+    icon: string;
+    color: string;
+    onPress: () => void;
   };
 
-  const action = ACTION_MAP[status];
-  const isWaiting = ["tailor_assigned", "cloth_pickup_pending"].includes(status);
-  const isDone = ["stitching_completed", "out_for_delivery", "delivered"].includes(status);
-
-  const WAITING_MESSAGES: Record<string, string> = {
-    tailor_assigned: "Cloth pickup from customer is being scheduled.",
-    cloth_pickup_pending: "Employee is on the way to collect cloth from the customer.",
+  const getAction = (): ActionConfig | null => {
+    if (status === "tailor_assigned") {
+      return {
+        label: "Start Stitching",
+        icon: "cut-outline",
+        color: TEAL,
+        onPress: () =>
+          runAction("stitching_in_progress", "Mark this order as stitching in progress?"),
+      };
+    }
+    if (status === "stitching_in_progress") {
+      return {
+        label: "Mark Stitching Done",
+        icon: "checkmark-circle-outline",
+        color: GREEN,
+        onPress: () =>
+          runAction("stitching_completed", "Mark stitching as completed for this order?"),
+      };
+    }
+    return null;
   };
+
+  const action = getAction();
+  const isWaiting = status === "stitching_completed" || status === "out_for_delivery" || status === "delivered";
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <LinearGradient
-        colors={[TEAL, TEAL_LIGHT]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.header}
-      >
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
+          <Ionicons name="arrow-back" size={22} color={COLORS.black} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerCode}>{order?.OrderCode ?? "Order"}</Text>
-          <Text style={styles.headerSub}>Order Detail</Text>
-        </View>
+        <Text style={styles.headerTitle}>Order Detail</Text>
         <View style={{ width: 40 }} />
-      </LinearGradient>
+      </View>
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={TEAL} />
+          <ActivityIndicator size="large" color={INDIGO} />
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Ionicons name="cloud-offline-outline" size={44} color={COLORS.grayBorder} />
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={load}>
-            <Text style={styles.retryText}>Try Again</Text>
+            <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <>
-          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-
-            {/* Status + Stage Tracker */}
-            <View style={styles.section}>
-              <View style={[styles.statusRow, { backgroundColor: statusColor + "12" }]}>
-                <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
-              </View>
-              <View style={{ height: 18 }} />
-              <StageTracker status={status} color={statusColor} />
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Status */}
+            <View style={[styles.statusBanner, { backgroundColor: statusColor + "1A" }]}>
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Text style={[styles.statusText, { color: statusColor }]}>
+                {statusMeta.label}
+              </Text>
             </View>
 
-            {/* Waiting / Info banner */}
-            {isWaiting ? (
-              <View style={styles.infoBanner}>
-                <Ionicons name="time-outline" size={18} color="#D97706" />
-                <Text style={styles.infoBannerText}>
-                  {WAITING_MESSAGES[status] ?? "Waiting for cloth to arrive."}
+            {/* Assignment banner */}
+            {status === "tailor_assigned" ? (
+              <View style={styles.claimedBanner}>
+                <Ionicons name="checkmark-circle-outline" size={16} color="#16A34A" />
+                <Text style={styles.claimedText}>
+                  You've been assigned this order — start stitching when ready
                 </Text>
               </View>
             ) : null}
 
-            {/* Measurements — top priority for tailors */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Measurements</Text>
-              {measurement ? (
-                <>
-                  <View style={styles.measHeader}>
-                    <Text style={styles.measProfileName}>
-                      {measurement.profile_name ?? "Measurement Profile"}
-                    </Text>
-                    <View style={styles.measTags}>
-                      {measurement.gender ? (
-                        <View style={styles.measTag}>
-                          <Text style={styles.measTagText}>{measurement.gender}</Text>
-                        </View>
-                      ) : null}
-                      {measurement.fit_preference ? (
-                        <View style={[styles.measTag, { backgroundColor: TEAL + "15", borderColor: TEAL + "30" }]}>
-                          <Text style={[styles.measTagText, { color: TEAL }]}>
-                            {measurement.fit_preference}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
-                  <View style={styles.measGrid}>
-                    <MeasCell label="Chest" value={measurement.chest} />
-                    <MeasCell label="Waist" value={measurement.waist} />
-                    <MeasCell label="Hips" value={measurement.hips} />
-                    <MeasCell label="Shoulder" value={measurement.shoulder} />
-                    <MeasCell label="Neck" value={measurement.neck} />
-                    <MeasCell label="Sleeve" value={measurement.sleeve_length} />
-                    <MeasCell label="Inseam" value={measurement.inseam} />
-                    <MeasCell label="Height" value={measurement.height} />
-                  </View>
-                  {measurement.notes ? (
-                    <View style={styles.measNotes}>
-                      <Ionicons name="document-text-outline" size={14} color={COLORS.gray} />
-                      <Text style={styles.measNotesText}>{measurement.notes}</Text>
-                    </View>
-                  ) : null}
-                </>
-              ) : (
-                <View style={styles.noMeasWrap}>
-                  <View style={styles.noMeasIcon}>
-                    <Ionicons name="alert-circle-outline" size={24} color="#F59E0B" />
-                  </View>
-                  <Text style={styles.noMeasText}>
-                    No measurements yet. Employee will update before cloth arrives.
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Customer */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Customer</Text>
-              <InfoRow label="Name" value={customerName} />
-              {customerMobile ? (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Mobile</Text>
-                  <TouchableOpacity onPress={callCustomer} style={styles.callBtn}>
-                    <Ionicons name="call-outline" size={13} color={TEAL} />
-                    <Text style={styles.callBtnText}>{customerMobile}</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-              <InfoRow label="Address" value={addressText} />
-            </View>
-
-            {/* Order Info */}
+            {/* Order info */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Order Info</Text>
-              <InfoRow label="Order Code" value={order?.OrderCode} />
-              <InfoRow
-                label="Amount"
-                value={order?.AmountDisplay ?? (order?.FinalAmount != null ? `₹${order.FinalAmount}` : null)}
+              <Row label="Order Code" value={order?.OrderCode ?? order?.order_code} />
+              <Row
+                label="Created"
+                value={
+                  order?.CreatedAt
+                    ? new Date(order.CreatedAt).toLocaleString("en-IN")
+                    : null
+                }
               />
-              <InfoRow label="Service" value={order?.ServiceTitle ?? order?.ServiceName} />
-              <InfoRow label="Category" value={order?.ServiceSubtitle} />
-              <InfoRow label="Urgency" value={order?.UrgencyLevel} />
-              {order?.ClothDetails ? <InfoRow label="Cloth" value={order.ClothDetails} /> : null}
-              {order?.CustomizationNotes ? (
-                <InfoRow label="Customization" value={order.CustomizationNotes} />
-              ) : null}
-              {order?.Description ? <InfoRow label="Notes" value={order.Description} /> : null}
             </View>
 
-            {isDone ? (
-              <View style={styles.doneCard}>
-                <Ionicons name="checkmark-circle" size={20} color="#16A34A" />
-                <Text style={styles.doneText}>
+            {/* Service */}
+            {(order?.service?.name ?? order?.ServiceName) ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Service</Text>
+                <Row label="Service" value={order?.service?.name ?? order?.ServiceName} />
+                <Row
+                  label="Category"
+                  value={order?.service?.category ?? order?.category?.name}
+                />
+                <Row label="Notes" value={order?.SpecialInstructions ?? order?.notes} />
+              </View>
+            ) : null}
+
+            {/* Measurement - the key data for tailors */}
+            {measurement ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Measurements</Text>
+                <Row label="Profile" value={measurement.profile_name} />
+                <Row label="Gender" value={measurement.gender} />
+                <Row label="Fit" value={measurement.fit_preference ?? measurement.fit} />
+                <MeasRow label="Chest" value={measurement.chest} />
+                <MeasRow label="Waist" value={measurement.waist} />
+                <MeasRow label="Hips" value={measurement.hips} />
+                <MeasRow label="Shoulder" value={measurement.shoulder} />
+                <MeasRow label="Neck" value={measurement.neck} />
+                <MeasRow label="Sleeve" value={measurement.sleeve_length} />
+                <MeasRow label="Inseam" value={measurement.inseam} />
+                <MeasRow label="Height" value={measurement.height} />
+                <Row label="Notes" value={measurement.notes} />
+              </View>
+            ) : (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Measurements</Text>
+                <View style={styles.noMeasWrap}>
+                  <Ionicons name="alert-circle-outline" size={20} color="#F59E0B" />
+                  <Text style={styles.noMeasText}>
+                    No measurements recorded yet. Ask employee to update.
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Waiting state */}
+            {isWaiting ? (
+              <View style={styles.waitingCard}>
+                <Ionicons name="hourglass-outline" size={18} color="#6B7280" />
+                <Text style={styles.waitingText}>
                   {status === "stitching_completed"
-                    ? "Stitching complete — employee will collect and deliver."
+                    ? "Stitching complete — waiting for employee to deliver"
                     : status === "out_for_delivery"
-                    ? "Order is out for delivery."
-                    : "Order delivered successfully."}
+                    ? "Order is out for delivery"
+                    : "Order delivered successfully"}
                 </Text>
               </View>
             ) : null}
@@ -414,19 +259,23 @@ export default function TailorOrderDetail() {
             <View style={{ height: 100 }} />
           </ScrollView>
 
-          {/* Action Bar */}
+          {/* Bottom action */}
           {action ? (
             <View style={[styles.actionBar, { paddingBottom: insets.bottom + 8 }]}>
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: action.color }, acting && styles.disabledBtn]}
+                style={[
+                  styles.actionBtn,
+                  { backgroundColor: action.color },
+                  acting && styles.disabledBtn,
+                ]}
                 onPress={action.onPress}
                 disabled={acting}
               >
                 {acting ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={COLORS.white} />
                 ) : (
                   <>
-                    <Ionicons name={action.icon as any} size={18} color="#fff" />
+                    <Ionicons name={action.icon as any} size={18} color={COLORS.white} />
                     <Text style={styles.actionBtnText}>{action.label}</Text>
                   </>
                 )}
@@ -435,16 +284,9 @@ export default function TailorOrderDetail() {
           ) : isWaiting ? (
             <View style={[styles.actionBar, { paddingBottom: insets.bottom + 8 }]}>
               <View style={styles.waitingBar}>
-                <Ionicons name="hourglass-outline" size={18} color="#D97706" />
-                <Text style={styles.waitingBarText}>Waiting for cloth pickup</Text>
-              </View>
-            </View>
-          ) : isDone && status === "stitching_completed" ? (
-            <View style={[styles.actionBar, { paddingBottom: insets.bottom + 8 }]}>
-              <View style={[styles.waitingBar, { backgroundColor: "#D1FAE5" }]}>
-                <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
-                <Text style={[styles.waitingBarText, { color: "#065F46" }]}>
-                  Employee notified to collect
+                <Ionicons name="hourglass-outline" size={18} color="#6B7280" />
+                <Text style={styles.waitingBarText}>
+                  {status === "stitching_completed" ? "Waiting for delivery" : "Completed"}
                 </Text>
               </View>
             </View>
@@ -462,152 +304,90 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: SPACING.md,
-    paddingVertical: 14,
+    paddingVertical: 12,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.grayBorder,
   },
   backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerCenter: { alignItems: "center", flex: 1 },
-  headerCode: { fontSize: 15, ...FONTS.bold, color: "#fff" },
-  headerSub: { fontSize: 11, color: "rgba(255,255,255,0.7)", ...FONTS.medium },
+  headerTitle: { fontSize: 16, ...FONTS.bold, color: COLORS.black },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   errorText: { color: COLORS.error, fontSize: 14, textAlign: "center", paddingHorizontal: 24 },
-  retryBtn: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    backgroundColor: TEAL,
-    borderRadius: RADIUS.md,
-  },
+  retryBtn: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: TEAL, borderRadius: RADIUS.md },
   retryText: { color: COLORS.white, ...FONTS.semiBold },
   scroll: { padding: SPACING.md, gap: 12 },
-  section: {
-    backgroundColor: COLORS.white,
-    borderRadius: RADIUS.lg,
+  statusBanner: {
+    flexDirection: "row",
+    alignItems: "center",
     padding: SPACING.md,
-    ...SHADOW.card,
+    borderRadius: RADIUS.md,
+    gap: 8,
   },
+  statusDot: { width: 10, height: 10, borderRadius: 5 },
+  statusText: { fontSize: 13, ...FONTS.bold, letterSpacing: 0.3 },
+  unclaimedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: TEAL + "12",
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: TEAL + "30",
+  },
+  unclaimedText: { fontSize: 13, color: TEAL, flex: 1 },
+  claimedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F0FDF4",
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  claimedText: { fontSize: 13, color: "#15803D", flex: 1 },
+  section: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, padding: SPACING.md, ...SHADOW.card },
   sectionTitle: {
     fontSize: 11,
     ...FONTS.semiBold,
     color: COLORS.gray,
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: RADIUS.md,
-  },
-  statusDot: { width: 10, height: 10, borderRadius: 5 },
-  statusText: {
-    fontSize: 13,
-    ...FONTS.bold,
-    textTransform: "capitalize",
-    letterSpacing: 0.3,
-    flex: 1,
-  },
-  infoBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: "#FEF3C7",
-    borderRadius: RADIUS.md,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#FDE68A",
-  },
-  infoBannerText: { fontSize: 13, color: "#92400E", flex: 1, lineHeight: 18 },
-  infoRow: {
+  row: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: COLORS.grayLight,
   },
-  infoLabel: { fontSize: 13, color: COLORS.gray, flex: 1 },
-  infoValue: {
-    fontSize: 13,
-    color: COLORS.black,
-    ...FONTS.medium,
-    flex: 2,
-    textAlign: "right",
-  },
-  callBtn: {
+  rowLabel: { fontSize: 13, color: COLORS.gray, flex: 1 },
+  rowValue: { fontSize: 13, color: COLORS.black, ...FONTS.medium, flex: 2, textAlign: "right" },
+  actionRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    flex: 2,
-    justifyContent: "flex-end",
-  },
-  callBtnText: { fontSize: 13, color: TEAL, ...FONTS.semiBold },
-  measHeader: {
-    flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  measProfileName: { fontSize: 14, ...FONTS.bold, color: COLORS.black },
-  measTags: { flexDirection: "row", gap: 6 },
-  measTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.grayLight,
-    borderWidth: 1,
-    borderColor: COLORS.grayBorder,
-  },
-  measTagText: {
-    fontSize: 11,
-    color: COLORS.gray,
-    ...FONTS.medium,
-    textTransform: "capitalize",
-  },
-  measGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 4 },
-  measCell: {
-    width: "22%",
-    backgroundColor: TEAL + "0D",
-    borderRadius: RADIUS.md,
-    padding: 10,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: TEAL + "25",
+    paddingVertical: 7,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.grayLight,
   },
-  measValue: { fontSize: 16, ...FONTS.bold, color: TEAL },
-  measLabel: { fontSize: 10, color: COLORS.gray, ...FONTS.medium, marginTop: 2 },
-  measNotes: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 6,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: COLORS.grayLight,
-  },
-  measNotesText: { fontSize: 13, color: COLORS.gray, flex: 1, lineHeight: 18 },
-  noMeasWrap: { flexDirection: "row", alignItems: "center", gap: 12 },
-  noMeasIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#FEF3C7",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  noMeasText: { fontSize: 13, color: "#92400E", flex: 1, lineHeight: 18 },
-  doneCard: {
+  linkBtn: { flexDirection: "row", alignItems: "center", gap: 4, flex: 2, justifyContent: "flex-end" },
+  linkBtnText: { fontSize: 13, color: TEAL, ...FONTS.semiBold, textAlign: "right", flex: 1 },
+  noMeasWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
+  noMeasText: { fontSize: 13, color: "#92400E", flex: 1 },
+  waitingCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    backgroundColor: "#D1FAE5",
+    gap: 8,
+    backgroundColor: "#F9FAFB",
     borderRadius: RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: "#A7F3D0",
+    borderColor: "#E5E7EB",
   },
-  doneText: { fontSize: 13, color: "#065F46", flex: 1, lineHeight: 18, ...FONTS.medium },
+  waitingText: { fontSize: 13, color: "#6B7280", flex: 1 },
   actionBar: {
     paddingHorizontal: SPACING.md,
     paddingTop: 12,
@@ -620,19 +400,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: RADIUS.md,
-    paddingVertical: 15,
+    paddingVertical: 14,
     gap: 8,
   },
   disabledBtn: { opacity: 0.6 },
-  actionBtnText: { color: "#fff", fontSize: 15, ...FONTS.semiBold },
+  actionBtnText: { color: COLORS.white, fontSize: 15, ...FONTS.semiBold },
   waitingBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#F3F4F6",
     borderRadius: RADIUS.md,
     paddingVertical: 14,
   },
-  waitingBarText: { fontSize: 14, color: "#92400E", ...FONTS.medium },
+  waitingBarText: { fontSize: 14, color: "#6B7280", ...FONTS.medium },
 });

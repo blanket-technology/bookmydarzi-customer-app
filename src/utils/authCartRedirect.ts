@@ -4,7 +4,7 @@ import { useAuthStore } from "../../store/useAuthStore";
 import { postPopularServiceToCart } from "./popularCartAdd";
 import { safeRouterReplace } from "./safeNavigation";
 
-/** Post-login redirect — deferred until root layout is mounted. */
+/** Post-login redirect - deferred until root layout is mounted. */
 export function navigateAfterAuthWithCart(router: Router): void {
   const {
     pendingRoute,

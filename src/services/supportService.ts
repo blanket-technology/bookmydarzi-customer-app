@@ -1,5 +1,5 @@
 /**
- * Customer support API — /api/v1/support/*
+ * Customer support API - /api/v1/support/*
  * Tickets, threaded replies, and FAQs.
  */
 

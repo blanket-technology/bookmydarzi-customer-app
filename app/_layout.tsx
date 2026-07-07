@@ -10,6 +10,10 @@ import {
   registerForPushNotifications,
   unregisterFromPushNotifications,
 } from "../src/services/pushService";
+import { wsService } from "../src/services/wsService";
+import { useCartStore } from "../src/store/useCartStore";
+import { useHomeStore } from "../src/store/useHomeStore";
+import { useOrderStore } from "../src/store/useOrderStore";
 
 function PushNotificationSetup() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -42,6 +46,44 @@ function PushNotificationSetup() {
   return null;
 }
 
+function WebSocketSetup() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      wsService.disconnect();
+      return;
+    }
+
+    wsService.connect();
+
+    const unsubs = [
+      wsService.on("BILLING_UPDATED", () => {
+        useCartStore.getState().refreshCart({ silent: true });
+      }),
+      wsService.on("HOME_UPDATED", () => {
+        useHomeStore.getState().loadHomeData(true);
+      }),
+      wsService.on("ORDER_STATUS_UPDATED", (data) => {
+        useOrderStore.getState().invalidateCache();
+        const code = (data.order_code as string) ?? "";
+        const status = ((data.status as string) ?? "").replace(/_/g, " ");
+        useToastStore.getState().show(
+          `Order ${code}: ${status}`,
+          "info",
+        );
+      }),
+    ];
+
+    return () => {
+      unsubs.forEach((u) => u());
+      wsService.disconnect();
+    };
+  }, [isAuthenticated]);
+
+  return null;
+}
+
 function AuthGuard() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const hydrated = useAuthStore((s) => s._hasHydrated);
@@ -67,6 +109,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthGuard />
+        <WebSocketSetup />
         <PushNotificationSetup />
         <AppToast />
         <Stack screenOptions={{ headerShown: false }}>

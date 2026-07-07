@@ -2,8 +2,8 @@
  * Measurement Screen
  *
  * Three options:
- *   1. Add Measurements Now  — fill the form, save, then add to cart
- *   2. Use Saved Measurements — pick from previously saved profiles
+ *   1. Add Measurements Now  - fill the form, save, then add to cart
+ *   2. Use Saved Measurements - pick from previously saved profiles
  */
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -533,7 +533,7 @@ export default function MeasurementScreen() {
                 How would you like to proceed?
               </Text>
 
-              {/* Option 1 — Add new */}
+              {/* Option 1 - Add new */}
               <TouchableOpacity
                 style={styles.optionCard}
                 onPress={() => void openAddMeasurementForm()}
@@ -566,7 +566,7 @@ export default function MeasurementScreen() {
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* Option 2 — Use saved */}
+              {/* Option 2 - Use saved */}
               <TouchableOpacity
                 style={[styles.optionCard, styles.optionCardOutline]}
                 onPress={() => setMode("saved")}

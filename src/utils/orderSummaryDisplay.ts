@@ -65,11 +65,11 @@ export function getSummaryScheduledLabel(payload: CustomerOrderSummaryPayload): 
     const delivered =
       payload.dates.delivered_at ?? payload.order.completed_at ?? null;
     if (delivered) return `Delivered ${summaryDateTime(delivered)}`;
-    return "Delivered —";
+    return "Delivered -";
   }
   const expected = payload.dates.expected_delivery_date;
   if (expected) return `Expected ${summaryDateOnly(expected)}`;
-  return "Expected delivery —";
+  return "Expected delivery -";
 }
 
 export function getSummaryPlacedLabel(payload: CustomerOrderSummaryPayload): string {

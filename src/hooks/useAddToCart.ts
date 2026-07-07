@@ -29,7 +29,7 @@ async function resolvePopularServiceId(row: PopularServiceRow): Promise<number> 
 }
 
 /**
- * Home Popular Services add-to-cart — POST only, no screen navigation.
+ * Home Popular Services add-to-cart - POST only, no screen navigation.
  * Sub-services / measurement flows use their own handlers on those screens.
  */
 export function useAddToCart() {

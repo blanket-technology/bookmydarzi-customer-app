@@ -1,5 +1,5 @@
 /**
- * User profile & account — /api/v1/users/*
+ * User profile & account - /api/v1/users/*
  */
 import { request } from "../../services/api";
 

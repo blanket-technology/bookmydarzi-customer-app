@@ -1,6 +1,6 @@
 /**
  * Patches react-native-razorpay android/build.gradle for Expo SDK 54 / AGP 8+.
- * Runs at prebuild on EAS (after npm install) — does not rely on patch-package alone.
+ * Runs at prebuild on EAS (after npm install) - does not rely on patch-package alone.
  */
 const { withDangerousMod } = require("@expo/config-plugins");
 const fs = require("fs");
@@ -37,7 +37,7 @@ function withRazorpayGradle(config) {
       const gradlePath = path.join(config.modRequest.projectRoot, RAZORPAY_BUILD_GRADLE);
 
       if (!fs.existsSync(gradlePath)) {
-        console.warn("[withRazorpayGradle] react-native-razorpay android/build.gradle not found — skip");
+        console.warn("[withRazorpayGradle] react-native-razorpay android/build.gradle not found - skip");
         return config;
       }
 

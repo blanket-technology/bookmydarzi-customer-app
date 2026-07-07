@@ -31,6 +31,7 @@ export interface TailorOrder {
   Id: number;
   OrderCode: string;
   Status: string;
+  TailorId?: number | null;
   PaymentStatus?: string;
   PaymentStatusLabel?: string;
   FinalAmount?: number;
@@ -46,6 +47,9 @@ export interface TailorOrder {
   CreatedAt: string;
   address?: TailorOrderAddress;
   measurement?: TailorOrderMeasurement;
+  CustomerName?: string;
+  CustomerMobile?: string;
+  customer?: { name?: string; mobile?: string };
 }
 
 export interface TailorOrderListResponse {
@@ -82,4 +86,19 @@ export async function updateStitchingStatus(
     method: "PATCH",
     body: { status },
   });
+}
+
+export async function listQueueOrders(params: {
+  page?: number;
+  limit?: number;
+} = {}): Promise<TailorOrderListResponse> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.limit) q.set("limit", String(params.limit));
+  const qs = q.toString();
+  return request<TailorOrderListResponse>(`/tailor/orders/queue${qs ? `?${qs}` : ""}`);
+}
+
+export async function claimOrder(orderId: number): Promise<TailorOrder> {
+  return request<TailorOrder>(`/tailor/orders/${orderId}/claim`, { method: "PATCH" });
 }
