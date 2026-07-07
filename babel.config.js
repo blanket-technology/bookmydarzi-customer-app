@@ -3,7 +3,7 @@ module.exports = function (api) {
   return {
     presets: ["babel-preset-expo"],
     plugins: [
-      // Must be listed last — required for react-native-reanimated
+      // Must be listed last - required for react-native-reanimated
       "react-native-reanimated/plugin",
     ],
   };

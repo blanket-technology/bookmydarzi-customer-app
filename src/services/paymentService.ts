@@ -1,6 +1,6 @@
 /**
 
- * Payment API — /api/v1/payments/*
+ * Payment API - /api/v1/payments/*
 
  * Razorpay checkout is opened on PaymentScreen.
  * Webhooks (POST /payments/webhook, POST /payments/razorpay/webhook) are backend-only.
@@ -116,7 +116,7 @@ function isForbiddenError(err: unknown): boolean {
 
 
 
-/** Payment already completed — do not create or reopen checkout */
+/** Payment already completed - do not create or reopen checkout */
 
 export class PaymentAlreadyCompletedError extends Error {
 
@@ -496,7 +496,7 @@ function buildSessionValidationError(
 
     console.error(
 
-      `[PaymentService] ${context} — missing Razorpay session fields:`,
+      `[PaymentService] ${context} - missing Razorpay session fields:`,
 
       missing.join(", ") || "(none)",
 
@@ -848,7 +848,7 @@ export async function resolvePaymentSessionForOrder(
 
         console.log(
 
-          "[PaymentService] POST create blocked — active payment exists; refetching GET /payments/order"
+          "[PaymentService] POST create blocked - active payment exists; refetching GET /payments/order"
 
         );
 
@@ -934,7 +934,7 @@ export async function resolvePaymentSessionForOrder(
 
 
 
-/** POST /api/v1/payments/create — Razorpay session */
+/** POST /api/v1/payments/create - Razorpay session */
 
 export async function createPaymentSession(
 
@@ -979,7 +979,7 @@ export async function createPaymentSession(
 
 
 /**
- * POST /api/v1/payments/balance — remaining-balance Razorpay session.
+ * POST /api/v1/payments/balance - remaining-balance Razorpay session.
  *
  * The amount is derived server-side from ORDERS.RemainingAmount; the client must
  * NOT send an amount. Requires the advance to already be paid. The resulting
@@ -1042,7 +1042,7 @@ export async function createPayment(payload: CreatePaymentPayload): Promise<ApiP
 
 
 
-/** GET /api/v1/payments/order/{order_id} — returns null if no payment record yet (404) */
+/** GET /api/v1/payments/order/{order_id} - returns null if no payment record yet (404) */
 
 export async function getPaymentByOrderId(orderId: unknown): Promise<ApiPayment | null> {
 
@@ -1080,7 +1080,7 @@ export async function getPaymentById(paymentId: unknown): Promise<ApiPayment | n
 
 /**
  * PATCH /api/v1/payments/{payment_id}/status
- * Backend typically restricts this to admin/webhook — not for mobile checkout.
+ * Backend typically restricts this to admin/webhook - not for mobile checkout.
  */
 export async function updatePaymentStatus(
 
@@ -1132,7 +1132,7 @@ export async function updatePaymentStatus(
 
 
 
-/** POST /api/v1/payments/verify — Razorpay signature verification (server-side) */
+/** POST /api/v1/payments/verify - Razorpay signature verification (server-side) */
 
 export async function verifyRazorpayPayment(
 
@@ -1232,7 +1232,7 @@ async function pollPaymentUntilTerminal(
 
   for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
 
-    if (latest.status === "paid" || latest.status === "completed") return latest;
+    if (isPaymentSuccess(latest.status)) return latest;
 
     await sleep(POLL_INTERVAL_MS);
 
@@ -1335,7 +1335,7 @@ export async function syncPaymentForOrder(orderId: unknown): Promise<ApiPayment 
 
 
 /**
- * GET /api/v1/payments/{payment_id}/refund — list refunds for a payment.
+ * GET /api/v1/payments/{payment_id}/refund - list refunds for a payment.
  * Owner (their order) or admin only. Used to show refund status to the customer.
  */
 export async function getRefundsForPayment(paymentId: unknown): Promise<Refund[]> {

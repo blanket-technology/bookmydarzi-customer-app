@@ -1,4 +1,4 @@
-# DarziApp — Project Documentation
+# DarziApp - Project Documentation
 
 **Version:** 1.0.0
 **Platform:** React Native (Expo)
@@ -39,7 +39,7 @@
 - Chat with tailors
 - Manage their profile and body measurements
 
-The app is designed with a **mock data system** that simulates real backend API calls. When the backend is ready, only the service layer needs to be updated — all screens, stores, and components remain unchanged.
+The app is designed with a **mock data system** that simulates real backend API calls. When the backend is ready, only the service layer needs to be updated - all screens, stores, and components remain unchanged.
 
 ---
 
@@ -69,8 +69,8 @@ The app is designed with a **mock data system** that simulates real backend API 
 DarziApp/
 │
 ├── app/                          # Expo Router screens (file-based routing)
-│   ├── _layout.tsx               # Root layout — Stack navigator
-│   ├── index.tsx                 # Entry point — redirects after hydration
+│   ├── _layout.tsx               # Root layout - Stack navigator
+│   ├── index.tsx                 # Entry point - redirects after hydration
 │   ├── (auth)/                   # Auth route group
 │   │   ├── _layout.tsx           # Auth stack layout
 │   │   ├── login.tsx             # Login screen
@@ -177,7 +177,7 @@ The app follows a strict layered architecture. UI components never access data d
 ┌──────────────────▼──────────────────────────┐
 │           State Management Layer             │
 │  useAuthStore, useOrderStore, useSearchStore │
-│  (Zustand — persisted via AsyncStorage)      │
+│  (Zustand - persisted via AsyncStorage)      │
 └──────────────────┬──────────────────────────┘
                    │ calls
 ┌──────────────────▼──────────────────────────┐
@@ -189,7 +189,7 @@ The app follows a strict layered architecture. UI components never access data d
 ┌──────────────────▼──────────────────────────┐
 │              Mock Data Layer                 │
 │  src/data/services.ts, tailors.ts, etc.      │
-│  (TypeScript arrays — replace with API)      │
+│  (TypeScript arrays - replace with API)      │
 └─────────────────────────────────────────────┘
 ```
 
@@ -396,7 +396,7 @@ export async function getOrders(userId: string): Promise<Order[]> {
 }
 ```
 
-**Nothing else changes** — stores, screens, and components are untouched.
+**Nothing else changes** - stores, screens, and components are untouched.
 
 ---
 
@@ -408,7 +408,7 @@ export async function getOrders(userId: string): Promise<Order[]> {
 - Greeting with time-based message (Good Morning/Afternoon/Evening)
 - Login button (top-right) → navigates to login screen
 - Avatar button (if logged in) → navigates to profile
-- **Live search** with 400ms debounce — filters services and tailors
+- **Live search** with 400ms debounce - filters services and tailors
 - "No Results Found" empty state
 - Hero banner with gradient and CTA buttons
 - Services grid (popular services from mock data)
@@ -498,8 +498,8 @@ export async function getOrders(userId: string): Promise<Order[]> {
 |---|---|---|
 | `OrderCard` | item, index, onCancel | Full order card with tracking timeline |
 | `BookingCard` | item, index, onCancel | Booking card with cancel action |
-| `OrderCardSkeleton` | — | Loading placeholder for order cards |
-| `ServiceCardSkeleton` | — | Loading placeholder for service cards |
+| `OrderCardSkeleton` | - | Loading placeholder for order cards |
+| `ServiceCardSkeleton` | - | Loading placeholder for service cards |
 
 ---
 

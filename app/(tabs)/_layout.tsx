@@ -1,11 +1,10 @@
 /**
- * Tab navigator — Home, Orders, Cart, Profile.
+ * Tab navigator - Home, Orders, Cart, Profile.
  * Bookings & chat live under app/(disabled)/ and are not registered here.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import {
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -18,13 +17,13 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { COLORS, RADIUS, SHADOW } from "../../constants/theme";
+import { COLORS, RADIUS } from "../../constants/theme";
 import { useAppLanguage } from "../../src/i18n/useAppLanguage";
 import { useCartStore } from "../../src/store/useCartStore";
 import { useCartBootstrap } from "../../src/hooks/useCartBootstrap";
 import { useAuthStore } from "../../store/useAuthStore";
 
-/** Teal accent — matches Home header (#149694) */
+/** Teal accent - matches Home header (#149694) */
 const TAB_ACTIVE_TEAL = "#149694";
 
 const TABS = [
@@ -60,17 +59,9 @@ const VISIBLE_TAB_NAMES = new Set<string>(TAB_ROUTE_ORDER);
 const TAB_ICON_SIZE = 22;
 const TAB_LABEL_LINE_HEIGHT = 12;
 const TAB_LABEL_SLOT_HEIGHT = 13;
-const TAB_DOT_SLOT_HEIGHT = 5;
 const TAB_ICON_SLOT_HEIGHT = 26;
-/** Fixed tab content height excluding device safe-area inset */
-const TAB_BAR_CONTENT_HEIGHT =
-  4 + // paddingTop
-  2 + // tabBtn vertical padding (1 × 2)
-  5 +
-  1 + // activePillSlot + marginBottom
-  TAB_ICON_SLOT_HEIGHT +
-  TAB_LABEL_SLOT_HEIGHT +
-  TAB_DOT_SLOT_HEIGHT; // 56
+/** Approximate tab content height excluding device safe-area inset */
+const TAB_BAR_CONTENT_HEIGHT = 6 + 4 + (TAB_ICON_SLOT_HEIGHT + 4) + 3 + TAB_LABEL_SLOT_HEIGHT; // ~56
 
 interface TabButtonProps {
   label: string;
@@ -78,7 +69,7 @@ interface TabButtonProps {
   iconOutline: string;
   isFocused: boolean;
   onPress: () => void;
-  /** When set (including 0), shows a count badge on the tab icon — used by Cart */
+  /** When set (including 0), shows a count badge on the tab icon - used by Cart */
   badgeCount?: number;
 }
 
@@ -96,10 +87,9 @@ function TabButton({
     transform: [{ scale: scale.value }],
   }));
 
-  const dotStyle = useAnimatedStyle(
+  const pillBg = useAnimatedStyle(
     () => ({
-      opacity: withTiming(isFocused ? 1 : 0, { duration: 200 }),
-      transform: [{ scale: withSpring(isFocused ? 1 : 0.6) }],
+      opacity: withTiming(isFocused ? 1 : 0, { duration: 180 }),
     }),
     [isFocused],
   );
@@ -116,7 +106,7 @@ function TabButton({
       style={styles.tabBtn}
       onPress={onPress}
       onPressIn={() => {
-        scale.value = withSpring(0.92, { damping: 18, stiffness: 320 });
+        scale.value = withSpring(0.90, { damping: 18, stiffness: 320 });
       }}
       onPressOut={() => {
         scale.value = withSpring(1, { damping: 18, stiffness: 320 });
@@ -126,25 +116,18 @@ function TabButton({
       accessibilityState={{ selected: isFocused }}
     >
       <Animated.View style={[styles.tabInner, animStyle]}>
-        <View style={styles.activePillSlot}>
-          {isFocused ? <View style={styles.activePill} /> : null}
-        </View>
-
+        {/* Active icon pill background */}
         <View style={styles.iconSlot}>
+          <Animated.View style={[styles.iconPill, pillBg]} />
           <Ionicons
-            name={
-              (isFocused ? icon : iconOutline) as keyof typeof Ionicons.glyphMap
-            }
+            name={(isFocused ? icon : iconOutline) as keyof typeof Ionicons.glyphMap}
             size={TAB_ICON_SIZE}
             color={isFocused ? TAB_ACTIVE_TEAL : "#9CA3AF"}
           />
           {showBadge ? (
             <View style={[styles.tabBadge, badgeEmpty && styles.tabBadgeEmpty]}>
               <Text
-                style={[
-                  styles.tabBadgeText,
-                  badgeEmpty && styles.tabBadgeTextEmpty,
-                ]}
+                style={[styles.tabBadgeText, badgeEmpty && styles.tabBadgeTextEmpty]}
                 allowFontScaling={false}
               >
                 {badgeLabel}
@@ -162,10 +145,6 @@ function TabButton({
           >
             {label}
           </Text>
-        </View>
-
-        <View style={styles.dotSlot}>
-          <Animated.View style={[styles.dot, dotStyle]} />
         </View>
       </Animated.View>
     </TouchableOpacity>
@@ -247,22 +226,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "stretch",
     backgroundColor: COLORS.white,
-    paddingTop: 4,
-    paddingHorizontal: 4,
+    paddingTop: 6,
+    paddingBottom: 2,
+    paddingHorizontal: 8,
     minHeight: TAB_BAR_CONTENT_HEIGHT,
-    overflow: "hidden",
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: COLORS.grayBorder,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: { elevation: 8 },
-      web: SHADOW.strong,
-    }),
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 12,
   },
   tabBtn: {
     flex: 1,
@@ -270,38 +244,35 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: "stretch",
     justifyContent: "center",
-    paddingVertical: 1,
+    paddingVertical: 2,
   },
   tabInner: {
     width: "100%",
     alignItems: "center",
-    justifyContent: "flex-start",
+    justifyContent: "center",
+    gap: 3,
     paddingHorizontal: 2,
   },
-  activePillSlot: {
-    width: "100%",
-    height: 5,
-    alignItems: "center",
-    justifyContent: "flex-end",
-    marginBottom: 1,
-  },
-  activePill: {
-    width: 26,
-    height: 3,
-    borderRadius: RADIUS.full,
-    backgroundColor: TAB_ACTIVE_TEAL,
-  },
   iconSlot: {
-    width: TAB_ICON_SLOT_HEIGHT,
-    height: TAB_ICON_SLOT_HEIGHT,
+    width: TAB_ICON_SLOT_HEIGHT + 10,
+    height: TAB_ICON_SLOT_HEIGHT + 4,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
   },
+  iconPill: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: RADIUS.full,
+    backgroundColor: `${TAB_ACTIVE_TEAL}18`,
+  },
   tabBadge: {
     position: "absolute",
-    top: -3,
-    right: -8,
+    top: -2,
+    right: -4,
     minWidth: 16,
     height: 16,
     borderRadius: 8,
@@ -322,7 +293,6 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     lineHeight: 11,
     textAlign: "center",
-    ...Platform.select({ android: { includeFontPadding: false } }),
   },
   tabBadgeTextEmpty: {
     color: "#9CA3AF",
@@ -341,22 +311,9 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     textAlign: "center",
     width: "100%",
-    ...Platform.select({ android: { includeFontPadding: false } }),
   },
   tabLabelActive: {
     color: TAB_ACTIVE_TEAL,
     fontWeight: "700",
-  },
-  dotSlot: {
-    width: "100%",
-    height: TAB_DOT_SLOT_HEIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: TAB_ACTIVE_TEAL,
   },
 });

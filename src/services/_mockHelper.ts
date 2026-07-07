@@ -1,7 +1,7 @@
 /**
- * Mock API helper — simulates network latency and optional errors.
+ * Mock API helper - simulates network latency and optional errors.
  * When real backend is ready, replace mockRequest() with real HTTP calls.
- * All service files use this helper — only this file needs to change.
+ * All service files use this helper - only this file needs to change.
  */
 
 const BASE_DELAY_MS = 400;

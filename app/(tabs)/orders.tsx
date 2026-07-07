@@ -1,5 +1,5 @@
 /**
- * Customer Orders — Active / Completed tabs
+ * Customer Orders - Active / Completed tabs
  * GET /customer/orders/active | /completed
  */
 import React, { useCallback, useState } from "react";
@@ -85,11 +85,15 @@ export default function OrdersScreen() {
     [isAuthenticated],
   );
 
+  // Track whether each tab has been loaded at least once (ref avoids re-triggering effect)
+  const everLoaded = React.useRef<Record<OrdersTab, boolean>>({ active: false, completed: false });
+
   useFocusEffect(
     useCallback(() => {
-      const hasCache = tab === "active" ? activeOrders.length > 0 : completedOrders.length > 0;
-      loadTab(tab, hasCache);
-    }, [tab, activeOrders.length, completedOrders.length, loadTab]),
+      const silent = everLoaded.current[tab]; // silent refresh if we already have data
+      loadTab(tab, silent);
+      everLoaded.current[tab] = true;
+    }, [tab, loadTab]),
   );
 
   const handleRefresh = () => {
@@ -107,15 +111,26 @@ export default function OrdersScreen() {
     [router],
   );
 
+  const handlePayNow = useCallback(
+    (orderId: number) => {
+      router.push({
+        pathname: "/order-summary" as never,
+        params: { orderId: String(orderId) },
+      });
+    },
+    [router],
+  );
+
   const renderOrder = useCallback(
     ({ item, index }: { item: CustomerOrderListItem; index: number }) => (
       <CustomerOrderCard
         item={item}
         index={index}
         onSummaryPress={handleSummaryPress}
+        onPayNow={handlePayNow}
       />
     ),
-    [handleSummaryPress],
+    [handleSummaryPress, handlePayNow],
   );
 
   if (!isAuthenticated) {

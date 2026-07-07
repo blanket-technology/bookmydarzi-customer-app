@@ -1,5 +1,5 @@
 /**
- * Wishlist / Favourites API — /api/v1/wishlist/*
+ * Wishlist / Favourites API - /api/v1/wishlist/*
  * Supports both service and tailor favourites.
  */
 
@@ -30,7 +30,7 @@ function mapItem(raw: any): WishlistItem {
   };
 }
 
-/** GET /wishlist — optionally filter by item_type */
+/** GET /wishlist - optionally filter by item_type */
 export async function getWishlist(itemType?: WishlistItemType): Promise<WishlistItem[]> {
   const query = itemType ? `?item_type=${itemType}` : "";
   const res = await request<any>(`${BASE}${query}`);
@@ -39,13 +39,13 @@ export async function getWishlist(itemType?: WishlistItemType): Promise<Wishlist
   return list.map(mapItem);
 }
 
-/** POST /wishlist — add a service or tailor */
+/** POST /wishlist - add a service or tailor */
 export async function addToWishlist(payload: WishlistAddPayload): Promise<WishlistItem> {
   const res = await request<any>(BASE, { method: "POST", body: { ...payload } });
   return mapItem(unwrap(res));
 }
 
-/** GET /wishlist/check — is a given service/tailor wishlisted? */
+/** GET /wishlist/check - is a given service/tailor wishlisted? */
 export async function checkWishlist(
   itemType: WishlistItemType,
   ids: { serviceId?: number; tailorId?: number },

@@ -11,7 +11,7 @@ export interface ProfileUpdateResult {
   raw: unknown;
 }
 
-/** JSON profile fields only — never send multipart here. Uses shared `request()` auth + refresh. */
+/** JSON profile fields only - never send multipart here. Uses shared `request()` auth + refresh. */
 export async function updateProfile(
   _userId: string,
   payload: ProfileUpdatePayload,
@@ -128,7 +128,7 @@ async function authenticatedMultipartFetch(
   return response;
 }
 
-/** POST /users/profile/photo — multipart field `file` only. */
+/** POST /users/profile/photo - multipart field `file` only. */
 async function uploadProfilePhotoFile(localUri: string): Promise<string | null> {
   const form = new FormData();
   form.append("file", imageFileFromUri(localUri) as unknown as Blob);

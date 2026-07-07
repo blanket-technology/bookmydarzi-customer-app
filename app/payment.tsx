@@ -1,5 +1,5 @@
 /**
- * PaymentScreen — Razorpay checkout for Pay Now orders.
+ * PaymentScreen - Razorpay checkout for Pay Now orders.
  * Route params: orderId, amount, customerName?, email?, phone?
  */
 import { Ionicons } from "@expo/vector-icons";
@@ -68,7 +68,7 @@ export default function PaymentScreen() {
   const isBusy = useRef(false);
   const razorpayAvailable = isRazorpayNativeAvailable();
 
-  const finishSuccess = useCallback(() => {
+  const finishSuccess = useCallback((paidAmountRupees?: number) => {
     useOrderStore.getState().invalidateCache();
     void useCartStore
       .getState()
@@ -77,7 +77,7 @@ export default function PaymentScreen() {
       pathname: "/order-success" as any,
       params: {
         orderId: String(orderId),
-        payment: "paid",
+        amount: paidAmountRupees != null ? String(paidAmountRupees) : undefined,
       },
     });
   }, [orderId, router]);
@@ -162,7 +162,7 @@ export default function PaymentScreen() {
         );
       }
 
-      finishSuccess();
+      finishSuccess(session.amount / 100);
     } catch (err) {
       if (err instanceof DevelopmentBuildRequiredError) {
         setState("dev_build_required");
@@ -281,7 +281,7 @@ export default function PaymentScreen() {
             <Text style={styles.devBuildTitle}>Development build required</Text>
             <Text style={styles.devBuildText}>{EXPO_GO_RAZORPAY_MESSAGE}</Text>
             <Text style={styles.devBuildHint}>
-              Your order #{orderId ?? "—"} is saved. Install the dev build, then
+              Your order #{orderId ?? "-"} is saved. Install the dev build, then
               open Pay Now again from My Orders or complete payment from this
               screen.
             </Text>

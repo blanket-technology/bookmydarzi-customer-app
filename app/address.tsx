@@ -37,6 +37,7 @@ import { safeRouterReplace } from "../src/utils/safeNavigation";
 import { executeCheckoutFromCart } from "../src/utils/checkoutNavigation";
 import type { AddCartServiceEntryPayload } from "../src/types/cart";
 import { LocationSelectField } from "../src/components/common/LocationSelectField";
+import { MapPinPicker, type PickedLocation } from "../src/components/common/MapPinPicker";
 import { useHardwareBackHandler } from "../src/hooks/useHardwareBackHandler";
 import {
   DEFAULT_CITY,
@@ -200,6 +201,7 @@ export default function AddressScreen() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [serviceability, setServiceability] =
     useState<ServiceabilityResult | null>(null);
+  const [mapPickerVisible, setMapPickerVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -451,6 +453,36 @@ export default function AddressScreen() {
       setGpsLoading(false);
     }
   };
+
+  const handleMapConfirm = useCallback(
+    async (picked: PickedLocation) => {
+      setMapPickerVisible(false);
+      setGpsCoords({ latitude: picked.latitude, longitude: picked.longitude, accuracy: null });
+      setServiceability(null);
+
+      if (picked.address) {
+        const geo = picked.address;
+        if (geo.line1 && !line1.trim()) setLine1(geo.line1);
+        if (geo.line2 && !line2.trim()) setLine2(geo.line2);
+        if (geo.city) {
+          setCity(geo.city);
+          const matchedState = findStateForCity(geo.city) || geo.state;
+          if (matchedState) setState(matchedState);
+        } else if (geo.state) {
+          setState(geo.state);
+        }
+        if (geo.pincode) setPincode(geo.pincode);
+      }
+
+      try {
+        const svc = await checkServiceability(picked.latitude, picked.longitude);
+        setServiceability(svc);
+      } catch {
+        // non-fatal
+      }
+    },
+    [line1, line2],
+  );
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
@@ -722,26 +754,37 @@ export default function AddressScreen() {
                     : "Add Address"}
               </Text>
 
-              {/* ── Location button ──────────────────── */}
-              <TouchableOpacity
-                style={[styles.gpsBtn, gpsLoading && styles.gpsBtnDisabled]}
-                onPress={() => void handleUseMyLocation()}
-                disabled={gpsLoading}
-                activeOpacity={0.8}
-              >
-                {gpsLoading ? (
-                  <ActivityIndicator size="small" color={COLORS.primaryDark} />
-                ) : (
-                  <Ionicons
-                    name="locate-outline"
-                    size={18}
-                    color={COLORS.primaryDark}
-                  />
-                )}
-                <Text style={styles.gpsBtnText}>
-                  {gpsLoading ? "Detecting location…" : "Use my current location"}
-                </Text>
-              </TouchableOpacity>
+              {/* ── Location buttons ──────────────────── */}
+              <View style={styles.locationBtnRow}>
+                <TouchableOpacity
+                  style={[styles.gpsBtn, styles.gpsBtnFlex, gpsLoading && styles.gpsBtnDisabled]}
+                  onPress={() => void handleUseMyLocation()}
+                  disabled={gpsLoading}
+                  activeOpacity={0.8}
+                >
+                  {gpsLoading ? (
+                    <ActivityIndicator size="small" color={COLORS.primaryDark} />
+                  ) : (
+                    <Ionicons
+                      name="locate-outline"
+                      size={18}
+                      color={COLORS.primaryDark}
+                    />
+                  )}
+                  <Text style={styles.gpsBtnText} numberOfLines={1}>
+                    {gpsLoading ? "Detecting…" : "Use my location"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.gpsBtn, styles.mapBtn]}
+                  onPress={() => setMapPickerVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="map-outline" size={18} color={COLORS.primaryDark} />
+                  <Text style={styles.gpsBtnText} numberOfLines={1}>Pick on map</Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Serviceability badge */}
               {serviceability !== null ? (
@@ -1134,6 +1177,12 @@ export default function AddressScreen() {
         ) : null}
       </View>
 
+      <MapPinPicker
+        visible={mapPickerVisible}
+        initialCoords={gpsCoords}
+        onConfirm={handleMapConfirm}
+        onClose={() => setMapPickerVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -1547,6 +1596,11 @@ const styles = StyleSheet.create({
   },
 
   // ── Geo-tagging ──────────────────────────────────────────────────────────
+  locationBtnRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
   gpsBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1557,14 +1611,16 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
     backgroundColor: COLORS.primaryLight,
   },
+  gpsBtnFlex: { flex: 1 },
+  mapBtn: { flex: 1 },
   gpsBtnDisabled: { opacity: 0.6 },
   gpsBtnText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
     color: COLORS.primaryDark,
+    flexShrink: 1,
   },
   svcBadge: {
     flexDirection: "row",

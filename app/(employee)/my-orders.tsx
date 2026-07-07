@@ -1,9 +1,9 @@
 /**
- * Employee "My Work" tab — orders currently assigned to this employee only.
+ * Employee "My Work" tab - orders currently assigned to this employee only.
  */
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -16,26 +16,27 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
 import { listEmployeeOrders, type EmployeeOrder } from "../../src/services/employeeService";
-import { useAuthStore } from "../../store/useAuthStore";
 
 const TEAL = "#149694";
 
 const STATUS_COLORS: Record<string, string> = {
   order_accepted: "#8B5CF6",
-  tailor_assigned: "#F59E0B",
   cloth_pickup_pending: "#F97316",
   cloth_picked_up: "#F97316",
+  cloth_at_hub: "#8B5CF6",
+  tailor_assigned: "#F59E0B",
   stitching_in_progress: "#EC4899",
   stitching_completed: "#10B981",
   out_for_delivery: "#3B82F6",
 };
 
 const NEXT_ACTION: Record<string, string> = {
-  order_accepted: "Assign Tailor →",
-  tailor_assigned: "Schedule Pickup →",
+  order_accepted: "Schedule Pickup →",
   cloth_pickup_pending: "Confirm Pickup →",
-  cloth_picked_up: "Start Stitching →",
-  stitching_in_progress: "Mark Stitching Done →",
+  cloth_picked_up: "Mark Cloth at Hub →",
+  cloth_at_hub: "Waiting for tailor…",
+  tailor_assigned: "Schedule Pickup →",
+  stitching_in_progress: "Tailor stitching…",
   stitching_completed: "Mark Out for Delivery →",
   out_for_delivery: "Mark Delivered →",
 };
@@ -50,7 +51,7 @@ function WorkCard({ order, onPress }: { order: EmployeeOrder; onPress: () => voi
         <Text style={styles.code}>{order.order_code}</Text>
         <View style={[styles.badge, { backgroundColor: statusColor + "1A" }]}>
           <Text style={[styles.badgeText, { color: statusColor }]}>
-            {(order.status ?? "").replace(/_/g, " ")}
+            {order.status.replace(/_/g, " ")}
           </Text>
         </View>
       </View>
@@ -74,13 +75,11 @@ function WorkCard({ order, onPress }: { order: EmployeeOrder; onPress: () => voi
 export default function MyOrders() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const user = useAuthStore((s) => s.user);
 
   const [orders, setOrders] = useState<EmployeeOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const isFirstMount = useRef(true);
 
   const load = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -101,13 +100,6 @@ export default function MyOrders() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (isFirstMount.current) { isFirstMount.current = false; return; }
-      load();
-    }, [load])
-  );
 
   const onRefresh = useCallback(() => { setRefreshing(true); load(true); }, [load]);
 

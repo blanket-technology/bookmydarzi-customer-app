@@ -1,5 +1,5 @@
 /**
- * Help & Support — /api/v1/support
+ * Help & Support - /api/v1/support
  * Tabs: my tickets (raise + view) and FAQs.
  */
 import { Ionicons } from "@expo/vector-icons";

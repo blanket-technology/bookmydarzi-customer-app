@@ -3,7 +3,7 @@ import { useMeasurementStore } from "../store/useMeasurementStore";
 import type { AddCartServiceEntryPayload } from "../types/cart";
 import { buildSelectedMeasurements } from "./cartMeasurement";
 
-/** POST /cart/service-entry for a resolved popular service id — no navigation. */
+/** POST /cart/service-entry for a resolved popular service id - no navigation. */
 export async function postPopularServiceToCart(serviceId: number): Promise<void> {
   if (serviceId <= 0) {
     throw new Error("A valid service is required.");

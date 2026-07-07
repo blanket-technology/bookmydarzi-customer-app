@@ -1,5 +1,5 @@
 /**
- * Employee order queue — shows unassigned orders + orders claimed by this employee.
+ * Employee order queue - shows unassigned orders + orders claimed by this employee.
  * Employees can accept new orders directly from this screen.
  */
 import { Ionicons } from "@expo/vector-icons";

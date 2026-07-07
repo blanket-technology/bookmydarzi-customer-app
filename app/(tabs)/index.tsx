@@ -145,7 +145,7 @@ function getRecentOrderStatusStyle(status: string, statusLabel: string): StatusB
   }
 
   const formatted = formatCustomerOrderStatusLabel(statusLabel || status);
-  return { bg: "#F3F4F6", text: "#6B7280", label: formatted || "—" };
+  return { bg: "#F3F4F6", text: "#6B7280", label: formatted || "-" };
 }
 
 /** Extract duration text from API description when present (e.g. "1-2 days"). */
@@ -166,7 +166,7 @@ function extractDurationLabel(
 // ---------------------------------------------------------------------------
 // Banner carousel
 // ---------------------------------------------------------------------------
-function BannerCarousel({ banners }: { banners: ApiBanner[] }) {
+function BannerCarousel({ banners, onPress }: { banners: ApiBanner[]; onPress: (banner: ApiBanner) => void }) {
   const { width: screenWidth } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
@@ -268,7 +268,7 @@ function BannerCarousel({ banners }: { banners: ApiBanner[] }) {
                     {item.Subtitle}
                   </Text>
                 ) : null}
-                <TouchableOpacity style={carousel.cta} activeOpacity={0.88}>
+                <TouchableOpacity style={carousel.cta} activeOpacity={0.88} onPress={() => onPress(item)}>
                   <Text style={carousel.ctaText}>Explore</Text>
                   <Ionicons name="arrow-forward" size={14} color={COLORS.primaryDark} />
                 </TouchableOpacity>
@@ -398,7 +398,7 @@ const carousel = StyleSheet.create({
 });
 
 // ---------------------------------------------------------------------------
-// Category icons — horizontal row
+// Category icons - horizontal row
 // ---------------------------------------------------------------------------
 const CATEGORY_ICONS: Record<string, { icon: string; color: string; bg: string }> = {
   mens: { icon: "shirt-outline", color: "#0c6c75", bg: "#E0F7F8" },
@@ -707,7 +707,7 @@ const searchRow = StyleSheet.create({
 });
 
 // ---------------------------------------------------------------------------
-// Voice search action — UI placeholder until speech-to-text is integrated
+// Voice search action - UI placeholder until speech-to-text is integrated
 // ---------------------------------------------------------------------------
 function VoiceSearchButton() {
   const scale = useSharedValue(1);
@@ -717,7 +717,7 @@ function VoiceSearchButton() {
   }));
 
   const handleVoicePress = () => {
-    // TODO: Integrate voice search — launch speech recognition and set search query
+    // TODO: Integrate voice search - launch speech recognition and set search query
   };
 
   return (
@@ -769,12 +769,15 @@ export default function HomeScreen() {
   const { addresses, fetchAddresses } = useAddressStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [recentOrders, setRecentOrders] = useState<CustomerOrderListItem[]>([]);
+  const recentOrdersLastFetched = useRef<number>(0);
 
-  const loadRecentOrders = useCallback(async () => {
+  const loadRecentOrders = useCallback(async (force = false) => {
     if (!isAuthenticated) {
       setRecentOrders([]);
       return;
     }
+    // Skip re-fetch if data is less than 60 seconds old (tab switches)
+    if (!force && Date.now() - recentOrdersLastFetched.current < 60_000) return;
     try {
       const [active, completed] = await Promise.all([
         fetchActiveCustomerOrders(),
@@ -786,27 +789,21 @@ export default function HomeScreen() {
       }
       const sorted = Array.from(merged.values()).sort((a, b) => b.id - a.id);
       setRecentOrders(sorted.slice(0, 4));
-      console.log(
-        `[HomeScreen] recent orders loaded: active=${active.length} completed=${completed.length} showing=${Math.min(sorted.length, 4)}`,
-      );
-    } catch (err) {
-      console.warn(
-        "[HomeScreen] recent orders failed:",
-        err instanceof Error ? err.message : err,
-      );
+      recentOrdersLastFetched.current = Date.now();
+    } catch {
       setRecentOrders([]);
     }
   }, [isAuthenticated]);
 
   useFocusEffect(
     useCallback(() => {
-      if (isAuthenticated && user?.role === "user") {
+      if (isAuthenticated) {
         void useCartStore
           .getState()
           .refreshCart({ silent: true, allowCreate: false })
           .catch(() => {});
       }
-    }, [isAuthenticated, user?.role]),
+    }, [isAuthenticated]),
   );
 
   const handleCategoryPress = useCallback(
@@ -818,12 +815,6 @@ export default function HomeScreen() {
           serviceCategories,
         );
       }
-      console.log(
-        `[catalogCategoryMap] ${cat.Name} | ${catalogCategoryId} | ${catalogCategoryId > 0 ? "Success" : "Failed"}`,
-      );
-      console.log(
-        `[HomeScreen] category press — name="${cat.Name}" homeId=${cat.Id} catalogCategoryId=${catalogCategoryId}`,
-      );
       router.push({
         pathname: "/sub-services",
         params: {
@@ -844,30 +835,8 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadHomeData();
-  }, []);
+  }, [loadHomeData]);
 
-  useEffect(() => {
-    console.log("API Categories", serviceCategories.length);
-    console.log("Store Categories", serviceCategories.length);
-    console.log("Rendered Categories", serviceCategories.length);
-    console.log("API Popular", popularServices.length);
-    console.log("Rendered Popular", popularServices.length);
-    console.log(
-      `[HomeScreen] render inputs — categories=${serviceCategories.length} popularServices=${popularServices.length} banners=${banners.length}`,
-    );
-    if (popularServices.length > 0) {
-      console.log(
-        `[HomeScreen] popularServices sample:`,
-        JSON.stringify(
-          popularServices.slice(0, 3).map((row) => ({
-            name: row.sub.Name,
-            price: row.sub.BasePrice,
-            category: row.category.Name,
-          })),
-        ),
-      );
-    }
-  }, [serviceCategories.length, popularServices, banners.length]);
 
   useFocusEffect(
     useCallback(() => {
@@ -885,7 +854,7 @@ export default function HomeScreen() {
       await loadHomeData(true);
       if (isAuthenticated) {
         await fetchAddresses();
-        await loadRecentOrders();
+        await loadRecentOrders(true);
       }
     }, [isAuthenticated, fetchAddresses, loadHomeData, loadRecentOrders]),
   );
@@ -980,6 +949,37 @@ export default function HomeScreen() {
     router.push("/(tabs)/orders");
   }, [router]);
 
+  const handleBannerPress = useCallback(
+    (banner: ApiBanner) => {
+      // Try to match a category from RedirectUrl (e.g. "/sub-services?categoryId=2" or "category/2")
+      if (banner.RedirectUrl) {
+        const match = banner.RedirectUrl.match(/(\d+)/);
+        if (match) {
+          const categoryId = Number(match[1]);
+          const cat = serviceCategories.find((c) => c.Id === categoryId);
+          if (cat) {
+            router.push({
+              pathname: "/sub-services",
+              params: { catalogCategoryId: String(cat.Id), categoryName: cat.Name },
+            });
+            return;
+          }
+        }
+      }
+      // Default: navigate to first service category
+      if (serviceCategories.length > 0) {
+        const first = [...serviceCategories].sort(
+          (a, b) => (a.DisplayOrder ?? 0) - (b.DisplayOrder ?? 0),
+        )[0];
+        router.push({
+          pathname: "/sub-services",
+          params: { catalogCategoryId: String(first.Id), categoryName: first.Name },
+        });
+      }
+    },
+    [router, serviceCategories],
+  );
+
   return (
     <View style={styles.root}>
       {/* Teal header */}
@@ -1065,7 +1065,7 @@ export default function HomeScreen() {
         </View>
       </LinearGradient>
 
-      {/* Search — overlaps header + sheet */}
+      {/* Search - overlaps header + sheet */}
       <View style={[styles.searchFloat, { top: insets.top + (isAuthenticated ? 92 : 100) }]}>
         <View style={styles.searchBar}>
           <Ionicons name="search-outline" size={20} color={COLORS.gray} />
@@ -1179,7 +1179,7 @@ export default function HomeScreen() {
                 </Animated.View>
               ) : null}
 
-              {banners.length > 0 ? <BannerCarousel banners={banners} /> : null}
+              {banners.length > 0 ? <BannerCarousel banners={banners} onPress={handleBannerPress} /> : null}
 
               {popularList.length > 0 ? (
                 <Animated.View
@@ -1457,11 +1457,11 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   welcomeHeadline: {
-    fontSize: 10,
+    fontSize: 20,
     fontWeight: "800",
     color: "#111827",
-    lineHeight: 14,
-    letterSpacing: -0.2,
+    lineHeight: 26,
+    letterSpacing: -0.3,
   },
   sectionTitle: {
     fontSize: 17,

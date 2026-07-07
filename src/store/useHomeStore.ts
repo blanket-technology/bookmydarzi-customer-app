@@ -142,26 +142,6 @@ export const useHomeStore = create<HomeState>((set, get) => ({
 
 
 
-      console.log(
-
-        `[HomeStore] loaded — banners=${banners.length} categories=${serviceCategories.length} popularApi=${popularFromApi.length} popularHome=${popularFromHome.length} popularFinal=${popularServices.length}`,
-
-      );
-
-
-
-      if (popularServices.length === 0) {
-
-        console.warn(
-
-          "[HomeStore] popularServices is empty — Popular Services section will be hidden",
-
-        );
-
-      }
-
-
-
       set({
 
         banners,

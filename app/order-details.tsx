@@ -1,5 +1,5 @@
 /**
- * Full order details — GET /customer/orders/{order_id}/details
+ * Full order details - GET /customer/orders/{order_id}/details
  * Binds to: order, service, pricing, payment, delivery_address, measurement, tracking_timeline
  */
 import { Ionicons } from "@expo/vector-icons";
@@ -12,20 +12,27 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { COLORS, RADIUS, SPACING } from "../constants/theme";
+import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import OrderScreenSection from "../src/components/orders/OrderScreenSection";
-import { fetchCustomerOrderDetails } from "../src/services/customerOrderService";
+import { getPaymentStatusVisual } from "../src/utils/paymentStatus";
+import {
+  fetchCustomerOrderDetails,
+  fetchOrderRating,
+  submitOrderRating,
+} from "../src/services/customerOrderService";
 import {
   PaymentAlreadyCompletedError,
   confirmRazorpayPayment,
   parsePositiveId,
   resolveBalancePaymentSessionForOrder,
 } from "../src/services/paymentService";
+import { wsService } from "../src/services/wsService";
 import { downloadAndShareInvoice } from "../src/services/invoiceService";
 import {
   PaymentCancelledError,
@@ -52,6 +59,10 @@ import {
   getDetailsPaidAmount,
   getDetailsStatusHeadline,
 } from "../src/utils/orderDetailsDisplay";
+
+// Module-level cache: survives component unmount/remount within the app session.
+// Key format: "<orderId>:<status>" — prevents the same popup from repeating.
+const _shownPopups = new Set<string>();
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
@@ -105,6 +116,30 @@ function BillRow({
   );
 }
 
+function PaymentStatusBadge({ status }: { status: string | null | undefined }) {
+  const visual = getPaymentStatusVisual(status);
+  return (
+    <View style={[detailBadgeStyles.badge, { backgroundColor: visual.bg }]}>
+      <View style={[detailBadgeStyles.dot, { backgroundColor: visual.color }]} />
+      <Text style={[detailBadgeStyles.text, { color: visual.color }]}>{visual.label}</Text>
+    </View>
+  );
+}
+
+const detailBadgeStyles = StyleSheet.create({
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    alignSelf: "flex-start",
+  },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  text: { fontSize: 12, fontWeight: "700" },
+});
+
 function DetailsStatusHero({
   payload,
 }: {
@@ -113,31 +148,40 @@ function DetailsStatusHero({
   const status = payload.order.status ?? "";
   const tone = getCustomerOrderStatusTone(status);
   const iconStyle = STATUS_ICON_STYLES[tone];
-  const statusBadge = formatCustomerOrderStatusLabel(status);
+  const statusBadge = payload.order.customer_status ?? formatCustomerOrderStatusLabel(status);
   const headline = getDetailsStatusHeadline(payload);
   const orderCode = detailsText(payload.order.order_code);
   const urgency = detailsText(payload.order.urgency_level);
   const amount = getDetailsPaidAmount(payload);
 
+  const payNorm = (payload.payment.payment_status ?? "").toLowerCase().replace(/[^a-z]/g, "");
+  let amountLabel = "Amount paid";
+  if (payNorm === "fullypaid" || payNorm === "paid" || payNorm === "success") {
+    amountLabel = "Total paid";
+  } else if (payNorm === "advancepaid" || payNorm === "partiallypaid") {
+    amountLabel = "Advance paid";
+  } else if (payNorm === "balancepending" || payNorm === "balancedue") {
+    amountLabel = "Advance paid";
+  } else if (
+    payNorm === "advancepending" || payNorm === "initiated" ||
+    payNorm === "pending" || payNorm === "failed" || payNorm === "paymentfailed"
+  ) {
+    amountLabel = "Amount due";
+  }
+
   return (
     <View
       style={[styles.heroCard, cardShadow]}
       accessible
-      accessibilityLabel={`${headline}. Status: ${statusBadge}. Order ${orderCode}. Amount paid ${amount}.`}
+      accessibilityLabel={`${headline}. Status: ${statusBadge}. Order ${orderCode}. ${amountLabel} ${amount}.`}
     >
       <View style={styles.heroTop}>
         <View style={[styles.iconBox, { backgroundColor: iconStyle.bg }]}>
-          <Ionicons
-            name={iconStyle.iconName}
-            size={20}
-            color={iconStyle.icon}
-          />
+          <Ionicons name={iconStyle.iconName} size={22} color={iconStyle.icon} />
         </View>
         <View style={styles.heroText}>
           <View style={styles.badgeRow}>
-            <View
-              style={[styles.statusBadge, { backgroundColor: iconStyle.bg }]}
-            >
+            <View style={[styles.statusBadge, { backgroundColor: iconStyle.bg }]}>
               <Text style={[styles.statusBadgeText, { color: iconStyle.icon }]}>
                 {statusBadge}
               </Text>
@@ -149,14 +193,17 @@ function DetailsStatusHero({
             ) : null}
           </View>
           <Text style={styles.headline}>{headline}</Text>
-          <Text style={styles.metaLine}>Order: {orderCode}</Text>
+          <Text style={styles.metaLine}>
+            <Text style={styles.metaKey}>Order  </Text>
+            {orderCode}
+          </Text>
         </View>
       </View>
 
       <View style={styles.divider} />
 
       <View style={styles.amountRow}>
-        <Text style={styles.amountLabel}>Amount paid</Text>
+        <Text style={styles.amountLabel}>{amountLabel}</Text>
         <Text style={styles.amountValue}>{amount}</Text>
       </View>
     </View>
@@ -168,7 +215,7 @@ function TrackingTimeline({
   orderStatus,
 }: {
   items: OrderDetailsTimelineItem[];
-  /** Overall order status — determines whether the final timeline step renders as done. */
+  /** Overall order status - determines whether the final timeline step renders as done. */
   orderStatus: string;
 }) {
   if (!items.length) {
@@ -176,7 +223,7 @@ function TrackingTimeline({
   }
 
   // The last timeline entry only gets a checkmark once the order itself has
-  // reached a completed state — not just because it's the last row rendered.
+  // reached a completed state - not just because it's the last row rendered.
   const orderIsCompleted = isCompletedCustomerOrderStatus(orderStatus);
 
   return (
@@ -199,14 +246,16 @@ function TrackingTimeline({
                 style={[
                   styles.timelineDot,
                   isDone && styles.timelineDotDone,
-                  isLast && styles.timelineDotActive,
+                  isLast && !isDone && styles.timelineDotActive,
                 ]}
               >
                 {isDone ? (
-                  <Ionicons name="checkmark" size={12} color={COLORS.white} />
+                  <Ionicons name="checkmark" size={10} color={COLORS.white} />
                 ) : null}
               </View>
-              {!isLast ? <View style={styles.timelineLine} /> : null}
+              {!isLast ? (
+                <View style={[styles.timelineLine, isDone && styles.timelineLineDone]} />
+              ) : null}
             </View>
             <View style={styles.timelineContent}>
               <Text
@@ -226,6 +275,119 @@ function TrackingTimeline({
   );
 }
 
+type StatusCardConfig = {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  bg: string;
+  border: string;
+  message: string;
+};
+
+function StatusContextCard({ payload }: { payload: CustomerOrderDetailsPayload }) {
+  const status = (payload.order.status ?? "").toLowerCase();
+  const pickupType = (payload.order.pickup_type ?? "instant").toLowerCase();
+
+  const configs: Partial<Record<string, StatusCardConfig>> = {
+    order_accepted: {
+      icon: "checkmark-circle",
+      iconColor: "#16A34A",
+      bg: "#F0FDF4",
+      border: "#BBF7D0",
+      message:
+        pickupType === "scheduled"
+          ? "Your order is confirmed! Our team will call you to schedule a convenient cloth pickup time."
+          : "Your order is confirmed! Our team will head to your location shortly to collect your cloth.",
+    },
+    cloth_pickup_pending: {
+      icon: "bicycle",
+      iconColor: "#F59E0B",
+      bg: "#FFFBEB",
+      border: "#FDE68A",
+      message:
+        pickupType === "scheduled"
+          ? "Our team will contact you to arrange a convenient pickup time. Please keep your phone reachable."
+          : "Our team is on the way to pick up your cloth. Please be available at your delivery address.",
+    },
+    cloth_picked_up: {
+      icon: "checkmark-done-circle",
+      iconColor: "#0D9488",
+      bg: "#F0FDFA",
+      border: "#99F6E4",
+      message: "Your cloth has been collected and is on its way to our workshop.",
+    },
+    cloth_at_hub: {
+      icon: "business",
+      iconColor: "#7C3AED",
+      bg: "#F5F3FF",
+      border: "#DDD6FE",
+      message: "Your cloth has arrived at our workshop. Stitching will begin shortly.",
+    },
+    stitching_in_progress: {
+      icon: "cut",
+      iconColor: "#EC4899",
+      bg: "#FDF2F8",
+      border: "#FBCFE8",
+      message: "Your garment is being carefully stitched by your tailor.",
+    },
+    stitching_completed: {
+      icon: "ribbon",
+      iconColor: "#16A34A",
+      bg: "#F0FDF4",
+      border: "#BBF7D0",
+      message: "Stitching is complete! Your garment will be out for delivery soon.",
+    },
+    out_for_delivery: {
+      icon: "bicycle",
+      iconColor: "#3B82F6",
+      bg: "#EFF6FF",
+      border: "#BFDBFE",
+      message: "Your order is out for delivery. Please be available to receive it.",
+    },
+    delivered: {
+      icon: "home",
+      iconColor: "#16A34A",
+      bg: "#F0FDF4",
+      border: "#BBF7D0",
+      message: "Your order has been delivered. We hope you love your new garment!",
+    },
+  };
+
+  const config = configs[status];
+  if (!config) return null;
+
+  return (
+    <View
+      style={[
+        statusCardStyles.card,
+        { backgroundColor: config.bg, borderColor: config.border },
+      ]}
+    >
+      <Ionicons name={config.icon} size={20} color={config.iconColor} />
+      <Text style={[statusCardStyles.text, { color: config.iconColor }]}>
+        {config.message}
+      </Text>
+    </View>
+  );
+}
+
+const statusCardStyles = StyleSheet.create({
+  card: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 12,
+  },
+  text: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 19,
+  },
+});
+
 export default function OrderDetailsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -244,6 +406,33 @@ export default function OrderDetailsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "invoice" | "balance">(null);
 
+  // Rating state
+  const [ratingValue, setRatingValue] = useState(0);
+  const [ratingComment, setRatingComment] = useState("");
+  const [alreadyRated, setAlreadyRated] = useState(false);
+  const [existingRating, setExistingRating] = useState(0);
+  const [ratingBusy, setRatingBusy] = useState(false);
+
+  const showStatusPopup = React.useCallback(
+    (status: string, orderCode: string | null) => {
+      const code = orderCode ?? `#${orderId}`;
+      if (status === "order_accepted") {
+        Alert.alert(
+          "Order Accepted!",
+          `Great news! Your order ${code} has been accepted. Our team will arrange cloth pickup from your location shortly.`,
+          [{ text: "Got it", style: "default" }],
+        );
+      } else if (status === "delivered") {
+        Alert.alert(
+          "Order Delivered!",
+          `Your order ${code} has been delivered. We hope you love your new garment! Thank you for choosing us.`,
+          [{ text: "Thanks!", style: "default" }],
+        );
+      }
+    },
+    [orderId],
+  );
+
   const load = useCallback(async () => {
     if (orderId === null) {
       setError("Invalid order reference.");
@@ -255,6 +444,29 @@ export default function OrderDetailsScreen() {
     try {
       const data = await fetchCustomerOrderDetails(orderId);
       setPayload(data);
+      // Fetch existing rating when delivered
+      if ((data.order.status ?? "").toLowerCase() === "delivered") {
+        try {
+          const ratingInfo = await fetchOrderRating(orderId);
+          if (ratingInfo.already_rated) {
+            setAlreadyRated(true);
+            setExistingRating(ratingInfo.rating);
+            setRatingValue(ratingInfo.rating);
+          }
+        } catch {
+          // non-critical
+        }
+      }
+      // Show a one-time popup per order+status combination (module-level cache persists across remounts)
+      const status = (data.order.status ?? "").toLowerCase();
+      const cacheKey = `${orderId}:${status}`;
+      if (
+        (status === "order_accepted" || status === "delivered") &&
+        !_shownPopups.has(cacheKey)
+      ) {
+        _shownPopups.add(cacheKey);
+        setTimeout(() => showStatusPopup(status, data.order.order_code), 400);
+      }
     } catch (err) {
       setPayload(null);
       setError(
@@ -263,13 +475,25 @@ export default function OrderDetailsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [orderId]);
+  }, [orderId, showStatusPopup]);
 
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load]),
   );
+
+  // Re-fetch when the backend pushes an ORDER_STATUS_UPDATED event for this order
+  React.useEffect(() => {
+    if (orderId === null) return;
+    return wsService.on("ORDER_STATUS_UPDATED", (data) => {
+      const updatedId = data.order_id ?? data.orderId ?? data.id;
+      // null/undefined updatedId means "all orders updated" — refresh anyway
+      if (updatedId == null || Number(updatedId) === orderId) {
+        load();
+      }
+    });
+  }, [orderId, load]);
 
   // Normalize "Advance Paid" / "advance_paid" / "balance pending" → "advancepaid" etc.
   const paymentStatus = (payload?.payment.payment_status ?? "")
@@ -291,25 +515,11 @@ export default function OrderDetailsScreen() {
       paymentStatus === "paymentfailed" ||
       paymentStatus === "failed");
 
-  const isPaymentComplete =
-    !isBalanceDue &&
-    !isAdvancePending &&
-    paymentStatus !== "" &&
-    !paymentStatus.includes("pending") &&
-    !paymentStatus.includes("failed") &&
-    !paymentStatus.includes("refund");
-
+  // Backend issues invoices only once the order is placed - not while it is
+  // pending payment, payment-failed, or cancelled.
   const orderStatusKey = (payload?.order.status ?? "")
     .toLowerCase()
     .replace(/[^a-z]/g, "");
-
-  // Derived billing amounts for the pricing breakdown
-  const serviceFeeNum = Number(payload?.pricing.service_fee ?? 0);
-  const finalAmountNum = Number(payload?.pricing.final_amount ?? 0);
-  const remainingBalance = Math.max(finalAmountNum - serviceFeeNum, 0);
-
-  // Backend issues invoices only once the order is placed — not while it is
-  // pending payment, payment-failed, or cancelled.
   const invoiceAvailable =
     !!payload &&
     !["pendingpayment", "paymentfailed", "cancelled"].includes(orderStatusKey);
@@ -386,6 +596,23 @@ export default function OrderDetailsScreen() {
     }
   };
 
+  const handleSubmitRating = async () => {
+    if (orderId === null || ratingValue < 1 || ratingBusy || alreadyRated) return;
+    setRatingBusy(true);
+    try {
+      await submitOrderRating(orderId, ratingValue, ratingComment.trim() || undefined);
+      setAlreadyRated(true);
+      setExistingRating(ratingValue);
+      Alert.alert("Thank you!", "Your rating has been submitted.");
+    } catch (err) {
+      Alert.alert("Error", err instanceof Error ? err.message : "Could not submit rating.");
+    } finally {
+      setRatingBusy(false);
+    }
+  };
+
+  const isDelivered = (payload?.order.status ?? "").toLowerCase() === "delivered";
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -409,19 +636,19 @@ export default function OrderDetailsScreen() {
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Ionicons
-            name="alert-circle-outline"
-            size={44}
-            color={COLORS.error}
-          />
-          <Text style={styles.errorTitle}>{error}</Text>
+          <View style={styles.errorIconWrap}>
+            <Ionicons name="alert-circle-outline" size={40} color={COLORS.error} />
+          </View>
+          <Text style={styles.errorTitle}>Couldn't load details</Text>
+          <Text style={styles.errorSub}>{error}</Text>
           <TouchableOpacity
             style={styles.retryBtn}
             onPress={load}
             accessibilityRole="button"
             accessibilityLabel="Retry loading booking details"
           >
-            <Text style={styles.retryText}>Retry</Text>
+            <Ionicons name="refresh-outline" size={16} color={COLORS.white} />
+            <Text style={styles.retryText}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : payload ? (
@@ -439,6 +666,8 @@ export default function OrderDetailsScreen() {
         >
           <DetailsStatusHero payload={payload} />
 
+          <StatusContextCard payload={payload} />
+
           <OrderScreenSection title="Service">
             <Text style={styles.serviceTitle}>
               {detailsText(payload.service.service_name)}
@@ -452,6 +681,37 @@ export default function OrderDetailsScreen() {
               label="Base price"
               value={detailsMoney(payload.service.base_price)}
             />
+            {payload.order.pickup_type ? (
+              <>
+                <RowDivider />
+                <InfoRow
+                  label="Pickup preference"
+                  value={
+                    payload.order.pickup_type.toLowerCase() === "scheduled"
+                      ? "Scheduled pickup"
+                      : "Instant pickup"
+                  }
+                />
+                {payload.order.pickup_time_slot ? (
+                  <>
+                    <RowDivider />
+                    <InfoRow label="Pickup slot" value={payload.order.pickup_time_slot} />
+                  </>
+                ) : null}
+                {payload.order.scheduled_pickup_at ? (
+                  <>
+                    <RowDivider />
+                    <InfoRow
+                      label="Scheduled for"
+                      value={new Date(payload.order.scheduled_pickup_at).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    />
+                  </>
+                ) : null}
+              </>
+            ) : null}
           </OrderScreenSection>
 
           <OrderScreenSection title="Pricing">
@@ -466,54 +726,57 @@ export default function OrderDetailsScreen() {
               discount
             />
             <RowDivider />
-            <BillRow label="CGST" value={detailsMoney(payload.pricing.cgst_amount)} />
-            <RowDivider />
-            <BillRow label="SGST" value={detailsMoney(payload.pricing.sgst_amount)} />
-            <RowDivider />
             <BillRow
-              label="Convenience fee (advance)"
-              value={detailsMoney(payload.pricing.service_fee)}
+              label="GST"
+              value={detailsMoney(payload.pricing.gst_amount)}
             />
             <RowDivider />
             <BillRow
-              label="Total amount"
+              label="Final amount"
               value={detailsMoney(payload.pricing.final_amount)}
               bold
             />
-            {serviceFeeNum > 0 && remainingBalance > 0 ? (
+          </OrderScreenSection>
+
+          <OrderScreenSection title="Payment">
+            <View style={styles.payStatusRow}>
+              <Text style={styles.infoLabel}>Status</Text>
+              <PaymentStatusBadge status={payload.payment.payment_status} />
+            </View>
+            <RowDivider />
+            <InfoRow
+              label="Amount paid"
+              value={detailsMoney(payload.payment.amount)}
+            />
+            {isBalanceDue && payload.pricing.final_amount != null &&
+             payload.payment.amount != null ? (
               <>
                 <RowDivider />
-                <BillRow
-                  label="Remaining on delivery"
-                  value={detailsMoney(remainingBalance)}
+                <InfoRow
+                  label="Remaining balance"
+                  value={detailsMoney(
+                    Number(payload.pricing.final_amount) - Number(payload.payment.amount),
+                  )}
+                />
+              </>
+            ) : null}
+            <RowDivider />
+            <InfoRow
+              label="Method"
+              value={detailsText(payload.payment.payment_method)}
+            />
+            {payload.payment.transaction_id ? (
+              <>
+                <RowDivider />
+                <InfoRow
+                  label="Transaction ID"
+                  value={detailsText(payload.payment.transaction_id)}
                 />
               </>
             ) : null}
           </OrderScreenSection>
 
-          <OrderScreenSection title="Payment">
-            <InfoRow
-              label="Amount"
-              value={detailsMoney(payload.payment.amount)}
-            />
-            <RowDivider />
-            <InfoRow
-              label="Payment method"
-              value={detailsText(payload.payment.payment_method)}
-            />
-            <RowDivider />
-            <InfoRow
-              label="Payment status"
-              value={detailsText(payload.payment.payment_status)}
-            />
-            <RowDivider />
-            <InfoRow
-              label="Transaction id"
-              value={detailsText(payload.payment.transaction_id)}
-            />
-          </OrderScreenSection>
-
-          <OrderScreenSection title="Delivery address">
+          <OrderScreenSection title="Delivery Address">
             <InfoRow
               label="Name"
               value={detailsText(payload.delivery_address.name)}
@@ -528,21 +791,21 @@ export default function OrderDetailsScreen() {
               label="Address"
               value={detailsText(payload.delivery_address.address_line_1)}
             />
-            <RowDivider />
-            <InfoRow
-              label="City"
-              value={detailsText(payload.delivery_address.city)}
-            />
-            <RowDivider />
-            <InfoRow
-              label="State"
-              value={detailsText(payload.delivery_address.state)}
-            />
-            <RowDivider />
-            <InfoRow
-              label="Pincode"
-              value={detailsText(payload.delivery_address.pincode)}
-            />
+            {(payload.delivery_address.city || payload.delivery_address.state || payload.delivery_address.pincode) ? (
+              <>
+                <RowDivider />
+                <InfoRow
+                  label="Location"
+                  value={[
+                    payload.delivery_address.city,
+                    payload.delivery_address.state,
+                    payload.delivery_address.pincode,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
+                />
+              </>
+            ) : null}
           </OrderScreenSection>
 
           <OrderScreenSection title="Measurement">
@@ -576,6 +839,67 @@ export default function OrderDetailsScreen() {
             />
           </OrderScreenSection>
 
+          {isDelivered ? (
+            <OrderScreenSection title="Rate your experience">
+              {alreadyRated ? (
+                <View style={ratingStyles.doneWrap}>
+                  <Ionicons name="star" size={22} color="#F59E0B" />
+                  <Text style={ratingStyles.doneText}>
+                    You rated this order {existingRating} star{existingRating !== 1 ? "s" : ""}. Thank you!
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Text style={ratingStyles.prompt}>How was your experience?</Text>
+                  <View style={ratingStyles.starsRow}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <TouchableOpacity
+                        key={star}
+                        onPress={() => setRatingValue(star)}
+                        hitSlop={8}
+                        accessibilityLabel={`Rate ${star} star${star !== 1 ? "s" : ""}`}
+                      >
+                        <Ionicons
+                          name={star <= ratingValue ? "star" : "star-outline"}
+                          size={32}
+                          color={star <= ratingValue ? "#F59E0B" : "#D1D5DB"}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {ratingValue > 0 ? (
+                    <TextInput
+                      style={ratingStyles.commentInput}
+                      placeholder="Add a comment (optional)"
+                      placeholderTextColor="#9CA3AF"
+                      value={ratingComment}
+                      onChangeText={setRatingComment}
+                      multiline
+                      maxLength={500}
+                      numberOfLines={3}
+                    />
+                  ) : null}
+                  <TouchableOpacity
+                    style={[
+                      ratingStyles.submitBtn,
+                      (ratingValue < 1 || ratingBusy) && ratingStyles.submitDisabled,
+                    ]}
+                    onPress={handleSubmitRating}
+                    disabled={ratingValue < 1 || ratingBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel="Submit rating"
+                  >
+                    {ratingBusy ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={ratingStyles.submitText}>Submit rating</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </OrderScreenSection>
+          ) : null}
+
           <OrderScreenSection title="Actions">
             {isAdvancePending ? (
               <TouchableOpacity
@@ -590,7 +914,7 @@ export default function OrderDetailsScreen() {
               </TouchableOpacity>
             ) : null}
 
-            {isBalanceDue && orderStatusKey !== "delivered" ? (
+            {isBalanceDue ? (
               <TouchableOpacity
                 style={[styles.actionPrimary, busy !== null && styles.actionDisabled]}
                 onPress={handlePayBalance}
@@ -607,13 +931,6 @@ export default function OrderDetailsScreen() {
               </TouchableOpacity>
             ) : null}
 
-            {isPaymentComplete ? (
-              <View style={styles.paymentDoneBanner}>
-                <Ionicons name="checkmark-circle" size={20} color="#16A34A" />
-                <Text style={styles.paymentDoneText}>Payment fully received</Text>
-              </View>
-            ) : null}
-
             <TouchableOpacity
               style={[styles.actionSecondary, busy !== null && styles.actionDisabled]}
               onPress={() =>
@@ -623,10 +940,10 @@ export default function OrderDetailsScreen() {
                 })
               }
               accessibilityRole="button"
-              accessibilityLabel="Chat with tailor"
+              accessibilityLabel="Chat with support"
             >
               <Ionicons name="chatbubble-ellipses-outline" size={18} color={COLORS.primaryDark} />
-              <Text style={styles.actionSecondaryText}>Chat with tailor</Text>
+              <Text style={styles.actionSecondaryText}>Chat</Text>
             </TouchableOpacity>
 
             {invoiceAvailable ? (
@@ -691,7 +1008,7 @@ const styles = StyleSheet.create({
   scroll: { padding: SPACING.lg, paddingTop: SPACING.sm },
   heroCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
+    borderRadius: RADIUS.lg,
     marginBottom: SPACING.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#E8EAED",
@@ -751,7 +1068,14 @@ const styles = StyleSheet.create({
   metaLine: {
     fontSize: 12,
     color: "#6B7280",
-    lineHeight: 17,
+    lineHeight: 18,
+  },
+  metaKey: { fontWeight: "600", color: "#9CA3AF" },
+  payStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 7,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -783,7 +1107,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 12,
-    paddingVertical: 4,
+    paddingVertical: 7,
   },
   infoLabel: {
     flex: 0.9,
@@ -800,17 +1124,17 @@ const styles = StyleSheet.create({
   infoDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: "#ECEEF2",
-    marginVertical: 8,
+    marginVertical: 2,
   },
   billRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 2,
+    paddingVertical: 6,
     gap: 12,
   },
   billLabel: { fontSize: 13, color: "#6B7280", flex: 1 },
-  billLabelBold: { fontWeight: "700", color: "#1F2937" },
+  billLabelBold: { fontWeight: "700", color: "#1F2937", fontSize: 14 },
   billValue: { fontSize: 13, fontWeight: "600", color: "#1F2937" },
   billValueBold: { fontSize: 15, fontWeight: "800" },
   billDiscount: { color: "#16A34A" },
@@ -848,6 +1172,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#E5E7EB",
     marginVertical: 2,
   },
+  timelineLineDone: {
+    backgroundColor: "#22A06B",
+  },
   timelineContent: {
     flex: 1,
     paddingBottom: 14,
@@ -874,9 +1201,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     backgroundColor: COLORS.primaryDark,
-    borderRadius: RADIUS.md,
-    paddingVertical: 14,
+    borderRadius: RADIUS.lg,
+    paddingVertical: 15,
     marginBottom: SPACING.sm,
+    ...SHADOW.card,
   },
   actionPrimaryText: { fontSize: 15, fontWeight: "700", color: COLORS.white },
   actionSecondary: {
@@ -884,30 +1212,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
     paddingVertical: 13,
     marginBottom: SPACING.sm,
+    borderWidth: 1.5,
+    borderColor: COLORS.primaryLight,
   },
-  actionSecondaryText: { fontSize: 14, fontWeight: "700", color: COLORS.primaryDark },
-  actionDisabled: { opacity: 0.6 },
-  paymentDoneBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#F0FDF4",
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: SPACING.sm,
-  },
-  paymentDoneText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#16A34A",
-  },
+  actionSecondaryText: { fontSize: 14, fontWeight: "600", color: COLORS.primaryDark },
+  actionDisabled: { opacity: 0.55 },
   center: {
     flex: 1,
     alignItems: "center",
@@ -916,13 +1229,62 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   loadingText: { fontSize: 14, color: COLORS.gray },
-  errorTitle: { fontSize: 14, color: COLORS.error, textAlign: "center" },
+  errorIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: SPACING.sm,
+  },
+  errorTitle: { fontSize: 16, fontWeight: "700", color: "#1F2937" },
+  errorSub: { fontSize: 13, color: COLORS.gray, textAlign: "center" },
   retryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     backgroundColor: COLORS.primaryDark,
-    borderRadius: 20,
+    borderRadius: RADIUS.full,
     paddingHorizontal: 24,
-    paddingVertical: 10,
+    paddingVertical: 11,
     marginTop: SPACING.sm,
   },
   retryText: { fontSize: 14, fontWeight: "700", color: COLORS.white },
+});
+
+const ratingStyles = StyleSheet.create({
+  prompt: { fontSize: 14, color: COLORS.gray, marginBottom: 12 },
+  starsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 14,
+  },
+  commentInput: {
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    borderRadius: RADIUS.md,
+    padding: 12,
+    fontSize: 14,
+    color: COLORS.black,
+    minHeight: 72,
+    textAlignVertical: "top",
+    marginBottom: 14,
+  },
+  submitBtn: {
+    backgroundColor: COLORS.primaryDark,
+    borderRadius: RADIUS.full,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  submitDisabled: { opacity: 0.45 },
+  submitText: { fontSize: 14, fontWeight: "700", color: COLORS.white },
+  doneWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+  },
+  doneText: { fontSize: 14, fontWeight: "600", color: "#92400E", flex: 1 },
 });

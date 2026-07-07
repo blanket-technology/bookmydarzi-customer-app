@@ -1,6 +1,6 @@
 /**
  * Single source of truth for Expo configuration (SDK 54).
- * Replaces app.json — do not add a static app.json alongside this file.
+ * Replaces app.json - do not add a static app.json alongside this file.
  */
 /** @type {import("expo/config").ExpoConfig} */
 module.exports = {
@@ -22,6 +22,7 @@ module.exports = {
   },
   android: {
     package: "com.darziapp.mobile",
+    googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ?? "",
     adaptiveIcon: {
       backgroundColor: "#E6F4FE",
       foregroundImage: "./assets/images/android-icon-foreground.png",
@@ -100,7 +101,7 @@ module.exports = {
     reactCompiler: true,
   },
   extra: {
-    apiUrl: process.env.EXPO_PUBLIC_API_URL ?? "http://192.168.1.43:8000",
+    apiUrl: process.env.EXPO_PUBLIC_API_URL ?? "https://web-production-efff7.up.railway.app",
     eas: {
       projectId: "55f606c1-bb85-411c-ad29-dc68cee99844",
     },

@@ -1,5 +1,5 @@
 /**
- * Notifications feed — GET /api/v1/notifications
+ * Notifications feed - GET /api/v1/notifications
  * Lists the signed-in user's in-app notifications with read/mark-all-read.
  */
 import { Ionicons } from "@expo/vector-icons";

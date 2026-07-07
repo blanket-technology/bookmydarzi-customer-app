@@ -5,6 +5,7 @@
 export interface CatalogStitchingType {
   service_id: number;
   name: string;
+  description?: string | null;
   base_price: number;
   display_order: number;
   service_line_id: number;
@@ -16,6 +17,7 @@ export interface CatalogStitchingType {
 export interface CatalogServiceLine {
   id: number;
   name: string;
+  description?: string | null;
   display_order: number;
   image_url: string | null;
   starting_price: number;
@@ -25,6 +27,7 @@ export interface CatalogServiceLine {
 export interface CatalogDirectService {
   service_id: number;
   name: string;
+  description?: string | null;
   base_price: number;
   display_order: number;
   service_line_id: number | null;

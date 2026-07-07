@@ -23,7 +23,7 @@ export function isDevClientOrStandalone(): boolean {
  */
 export function isRazorpayNativeAvailable(): boolean {
   if (Platform.OS === "web") return false;
-  // Never load native Razorpay in Expo Go — avoids native module crash
+  // Never load native Razorpay in Expo Go - avoids native module crash
   if (isExpoGo()) return false;
 
   try {

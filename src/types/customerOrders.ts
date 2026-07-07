@@ -122,7 +122,11 @@ export interface OrderDetailsOrderBlock {
   order_code: string | null;
   order_id: number | null;
   status: string | null;
+  customer_status: string | null;
   urgency_level: string | null;
+  pickup_type: string | null;
+  pickup_time_slot: string | null;
+  scheduled_pickup_at: string | null;
 }
 
 export interface OrderDetailsServiceBlock {

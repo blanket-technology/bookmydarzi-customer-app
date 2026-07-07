@@ -75,15 +75,28 @@ function normalizeOrder(raw: any): EmployeeOrder {
   ].filter(Boolean);
   return {
     id: raw.Id ?? raw.id,
-    order_code: raw.OrderCode ?? raw.order_code ?? String(raw.Id ?? raw.id ?? ""),
+    order_code:
+      raw.OrderCode ?? raw.order_code ?? String(raw.Id ?? raw.id ?? ""),
     status: raw.Status ?? raw.status ?? "",
     payment_status: raw.PaymentStatus ?? raw.payment_status ?? "",
-    assigned_employee_id: raw.AssignedEmployeeId ?? raw.assigned_employee_id ?? null,
-    customer_name: addr.full_name ?? addr.FullName ?? raw.CustomerName ?? raw.customer_name ?? null,
-    customer_mobile: addr.mobile ?? addr.Mobile ?? raw.CustomerMobile ?? raw.customer_mobile ?? null,
+    assigned_employee_id:
+      raw.AssignedEmployeeId ?? raw.assigned_employee_id ?? null,
+    customer_name:
+      addr.full_name ??
+      addr.FullName ??
+      raw.CustomerName ??
+      raw.customer_name ??
+      null,
+    customer_mobile:
+      addr.mobile ??
+      addr.Mobile ??
+      raw.CustomerMobile ??
+      raw.customer_mobile ??
+      null,
     address: addrParts.length ? addrParts.join(", ") : null,
     tailor_name: raw.TailorName ?? raw.tailor_name ?? null,
-    total_amount: raw.FinalAmount ?? raw.final_amount ?? raw.total_amount ?? null,
+    total_amount:
+      raw.FinalAmount ?? raw.final_amount ?? raw.total_amount ?? null,
     created_at: raw.CreatedAt ?? raw.created_at ?? "",
   };
 }
@@ -115,7 +128,30 @@ export async function getEmployeeOrder(orderId: number): Promise<any> {
   return request<any>(`/employee/orders/${orderId}`);
 }
 
-/** Public endpoint — no auth required */
+export async function getEmployeeOrderForChat(orderId: number): Promise<any> {
+  return request<any>(`/employee/chat/orders/${orderId}`);
+}
+
+export async function listAllOrdersForChat(params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<EmployeeOrderListResponse> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.limit) q.set("limit", String(params.limit));
+  if (params.search) q.set("search", params.search);
+  const res = await request<any>(`/employee/chat/orders?${q.toString()}`);
+  const raw = Array.isArray(res?.orders) ? res.orders : Array.isArray(res) ? res : [];
+  return {
+    orders: raw.map(normalizeOrder),
+    total: res?.total ?? raw.length,
+    page: res?.page ?? 1,
+    limit: res?.limit ?? raw.length,
+  };
+}
+
+/** Public endpoint - no auth required */
 export async function listTailors(): Promise<TailorProfile[]> {
   return request<TailorProfile[]>("/tailors");
 }
@@ -123,7 +159,7 @@ export async function listTailors(): Promise<TailorProfile[]> {
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
 export async function acceptOrder(
-  orderId: number
+  orderId: number,
 ): Promise<EmployeeActionResponse> {
   return request<EmployeeActionResponse>(`/employee/orders/${orderId}/accept`, {
     method: "PATCH",
@@ -132,74 +168,94 @@ export async function acceptOrder(
 
 export async function assignTailor(
   orderId: number,
-  tailorId: number
+  tailorId: number,
 ): Promise<EmployeeActionResponse> {
   return request<EmployeeActionResponse>(
     `/employee/orders/${orderId}/assign-tailor`,
-    { method: "PATCH", body: { tailor_id: tailorId } }
+    { method: "PATCH", body: { tailor_id: tailorId } },
   );
 }
 
-export async function schedulePickup(
-  orderId: number
+export async function rejectOrder(
+  orderId: number,
 ): Promise<EmployeeActionResponse> {
+  return request<EmployeeActionResponse>(`/employee/orders/${orderId}/reject`, {
+    method: "PATCH",
+  });
+}
+
+export async function schedulePickup(
+  orderId: number,
+  pickupType?: "instant" | "scheduled",
+): Promise<EmployeeActionResponse> {
+  const body: Record<string, unknown> | undefined = pickupType
+    ? { pickup_type: pickupType }
+    : undefined;
   return request<EmployeeActionResponse>(
     `/employee/orders/${orderId}/schedule-pickup`,
-    { method: "PATCH" }
+    { method: "PATCH", body },
+  );
+}
+
+export async function markClothAtHub(
+  orderId: number,
+): Promise<EmployeeActionResponse> {
+  return request<EmployeeActionResponse>(
+    `/employee/orders/${orderId}/cloth-at-hub`,
+    { method: "PATCH" },
   );
 }
 
 export async function confirmPickup(
-  orderId: number
+  orderId: number,
 ): Promise<EmployeeActionResponse> {
-  return request<EmployeeActionResponse>(
-    `/employee/orders/${orderId}/pickup`,
-    { method: "PATCH" }
-  );
+  return request<EmployeeActionResponse>(`/employee/orders/${orderId}/pickup`, {
+    method: "PATCH",
+  });
 }
 
 export async function startStitching(
-  orderId: number
+  orderId: number,
 ): Promise<EmployeeActionResponse> {
   return request<EmployeeActionResponse>(
     `/employee/orders/${orderId}/start-stitching`,
-    { method: "PATCH" }
+    { method: "PATCH" },
   );
 }
 
 export async function completeStitching(
-  orderId: number
+  orderId: number,
 ): Promise<EmployeeActionResponse> {
   return request<EmployeeActionResponse>(
     `/employee/orders/${orderId}/complete-stitching`,
-    { method: "PATCH" }
+    { method: "PATCH" },
   );
 }
 
 export async function markOutForDelivery(
-  orderId: number
+  orderId: number,
 ): Promise<EmployeeActionResponse> {
   return request<EmployeeActionResponse>(
     `/employee/orders/${orderId}/delivery`,
-    { method: "PATCH" }
+    { method: "PATCH" },
   );
 }
 
 export async function completeOrder(
-  orderId: number
+  orderId: number,
 ): Promise<EmployeeActionResponse> {
   return request<EmployeeActionResponse>(
     `/employee/orders/${orderId}/complete`,
-    { method: "PATCH" }
+    { method: "PATCH" },
   );
 }
 
 export async function collectMeasurement(
   orderId: number,
-  data: MeasurementInput
+  data: MeasurementInput,
 ): Promise<EmployeeActionResponse> {
   return request<EmployeeActionResponse>(
     `/employee/orders/${orderId}/measurement`,
-    { method: "POST", body: data as unknown as Record<string, unknown> }
+    { method: "POST", body: data as unknown as Record<string, unknown> },
   );
 }

@@ -139,7 +139,8 @@ function mapListItem(raw: Record<string, unknown>): CustomerOrderListItem {
     bookingId: bookingId || (id > 0 ? `ORD${id}` : ORDER_DISPLAY_FALLBACK),
     status,
     statusLabel: orderDisplayValue(
-      pickStr(raw, "statusLabel", "StatusLabel", "status_label") || status,
+      pickStr(raw, "statusLabel", "StatusLabel", "status_label",
+              "CustomerStatus", "customer_status") || status,
     ),
     scheduledLabel: orderDisplayValue(scheduledLabel || raw.created_at?.toString()),
     amountPaidDisplay: formatAmountDisplay(raw),
@@ -464,7 +465,11 @@ function mapDetailsOrderBlock(raw: Record<string, unknown>): OrderDetailsOrderBl
     order_code: nullableStr(order.order_code ?? order.orderCode),
     order_id: nullableNum(order.order_id ?? order.orderId ?? order.id ?? order.Id),
     status: nullableStr(order.status ?? order.Status),
+    customer_status: nullableStr(order.customer_status ?? order.CustomerStatus),
     urgency_level: nullableStr(order.urgency_level ?? order.urgencyLevel),
+    pickup_type: nullableStr(order.pickup_type ?? order.pickupType ?? order.PickupType),
+    pickup_time_slot: nullableStr(order.pickup_time_slot ?? order.pickupTimeSlot ?? order.PickupTimeSlot),
+    scheduled_pickup_at: nullableStr(order.scheduled_pickup_at ?? order.scheduledPickupAt ?? order.ScheduledPickupAt),
   };
 }
 
@@ -577,5 +582,27 @@ export async function fetchCustomerOrderDetails(
 ): Promise<CustomerOrderDetailsPayload> {
   const res = await request<unknown>(`${BASE}/${orderId}/details`);
   return mapCustomerOrderDetailsPayload(orderId, res);
+}
+
+export interface OrderRatingInfo {
+  order_id: number;
+  rating: number;
+  comment: string | null;
+  already_rated: boolean;
+}
+
+export async function fetchOrderRating(orderId: number): Promise<OrderRatingInfo> {
+  return request<OrderRatingInfo>(`${BASE}/${orderId}/rating`);
+}
+
+export async function submitOrderRating(
+  orderId: number,
+  rating: number,
+  comment?: string,
+): Promise<OrderRatingInfo> {
+  return request<OrderRatingInfo>(`${BASE}/${orderId}/rating`, {
+    method: "POST",
+    body: { rating, comment: comment || null },
+  });
 }
 

@@ -82,7 +82,7 @@ const FAQS: FaqItem[] = [
     category: "booking",
     question: "How do I track my order status?",
     answer:
-      "Go to the 'Orders' tab to see all your orders and their current status — from Pending to In Progress, Ready, and Delivered.",
+      "Go to the 'Orders' tab to see all your orders and their current status - from Pending to In Progress, Ready, and Delivered.",
   },
   {
     id: 5,
@@ -112,14 +112,14 @@ const FAQS: FaqItem[] = [
     category: "payments",
     question: "What payment methods are accepted?",
     answer:
-      "We accept all major payment methods via Razorpay — including UPI, credit/debit cards, net banking, and popular wallets.",
+      "We accept all major payment methods via Razorpay - including UPI, credit/debit cards, net banking, and popular wallets.",
   },
   {
     id: 9,
     category: "payments",
     question: "My payment failed. What should I do?",
     answer:
-      "If a payment fails, no amount is deducted. You can retry from the Order Details screen. If the amount was debited but the order is not confirmed, please contact support — we will resolve it within 24 hours.",
+      "If a payment fails, no amount is deducted. You can retry from the Order Details screen. If the amount was debited but the order is not confirmed, please contact support - we will resolve it within 24 hours.",
   },
   {
     id: 10,
@@ -142,7 +142,7 @@ const FAQS: FaqItem[] = [
     category: "services",
     question: "What types of stitching services do you offer?",
     answer:
-      "We offer a wide range — including normal stitching, designer stitching, alterations, kids' clothing, ethnic wear, and more. Browse all services on the Home screen.",
+      "We offer a wide range - including normal stitching, designer stitching, alterations, kids' clothing, ethnic wear, and more. Browse all services on the Home screen.",
   },
   {
     id: 13,
@@ -179,7 +179,7 @@ const FAQS: FaqItem[] = [
     category: "delivery",
     question: "Do you deliver to my location?",
     answer:
-      "We currently serve Delhi NCR and selected pin codes. You can check serviceability by entering your address in the address form — a green badge confirms coverage.",
+      "We currently serve Delhi NCR and selected pin codes. You can check serviceability by entering your address in the address form - a green badge confirms coverage.",
   },
   {
     id: 18,
@@ -349,12 +349,8 @@ export default function FaqScreen() {
         ) : null}
       </View>
 
-      {/* Category chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryScroll}
-      >
+      {/* Category chips — 3-per-row equal-width grid */}
+      <View style={styles.categoryGrid}>
         {categories.map((cat) => {
           const active = activeCategory === cat;
           return (
@@ -369,9 +365,8 @@ export default function FaqScreen() {
             >
               <Ionicons
                 name={CATEGORY_ICONS[cat] as any}
-                size={13}
-                color={active ? COLORS.white : COLORS.gray}
-                style={{ marginRight: 4 }}
+                size={14}
+                color={active ? COLORS.white : COLORS.primaryDark}
               />
               <Text style={[styles.catChipText, active && styles.catChipTextActive]}>
                 {CATEGORY_LABELS[cat]}
@@ -379,7 +374,7 @@ export default function FaqScreen() {
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
 
       {/* FAQ list */}
       <ScrollView
@@ -538,28 +533,34 @@ const styles = StyleSheet.create({
     height: "100%",
   },
 
-  categoryScroll: {
+  categoryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    gap: SPACING.sm,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+    gap: 8,
   },
   catChip: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    justifyContent: "center",
+    gap: 5,
+    // Each chip is exactly 1/3 of the row (2 gaps of 8px each in a 3-col row)
+    flexBasis: "30%",
+    flexGrow: 1,
+    height: 40,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: COLORS.grayBorder,
-    marginRight: SPACING.sm,
   },
   catChipActive: {
     backgroundColor: COLORS.primaryDark,
     borderColor: COLORS.primaryDark,
   },
   catChipText: { fontSize: 12, fontWeight: "600", color: COLORS.gray },
-  catChipTextActive: { color: COLORS.white },
+  catChipTextActive: { color: COLORS.white, fontWeight: "700" },
 
   listContent: { paddingHorizontal: SPACING.lg, paddingTop: 4 },
 

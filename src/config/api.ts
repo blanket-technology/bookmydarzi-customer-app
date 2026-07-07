@@ -2,12 +2,12 @@
  * Single source of truth for API origin (host + port, no trailing slash).
  * Override at build/runtime with EXPO_PUBLIC_API_URL in .env
  */
-export const API_BASE_URL = "http://192.168.1.43:8000";
+export const API_BASE_URL = "https://web-production-efff7.up.railway.app";
 
 /** Path prefix for all v1 REST endpoints */
 export const API_V1_PATH = "/api/v1";
 
-/** Resolved origin — env wins over default */
+/** Resolved origin - env wins over default */
 export function resolveApiOrigin(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
   const raw = fromEnv || API_BASE_URL;

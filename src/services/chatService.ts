@@ -1,8 +1,8 @@
 /**
- * Order-scoped chat API — /api/v1/chat/orders/{order_id}/*
+ * Order-scoped chat API - /api/v1/chat/orders/{order_id}/*
  *
  * Chat is between an order's customer and their assigned tailor (admin may read).
- * There is no global "conversations" list on the backend — each thread is tied
+ * There is no global "conversations" list on the backend - each thread is tied
  * to an order.
  */
 

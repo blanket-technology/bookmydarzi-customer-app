@@ -1,5 +1,5 @@
 /**
- * Dev-client networking — allow cleartext HTTP to Metro (port 8081) and local APIs.
+ * Dev-client networking - allow cleartext HTTP to Metro (port 8081) and local APIs.
  * SDK 54 removed android.usesCleartextTraffic from app.json schema.
  */
 const {

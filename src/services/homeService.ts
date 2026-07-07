@@ -172,7 +172,7 @@ export function buildPopularFromCategories(
     .slice(0, 12);
 }
 
-/** GET /home — banners, categories, offers, tailors */
+/** GET /home - banners, categories, offers, tailors */
 export async function fetchHomeData(): Promise<HomeApiResponse> {
   const res = await request<unknown>("/home", { skipAuth: true });
   const normalized = normalizeHomeResponse(res);
@@ -181,10 +181,6 @@ export async function fetchHomeData(): Promise<HomeApiResponse> {
     (sum, cat) => sum + (cat.SubCategories?.length ?? 0),
     0,
   );
-  console.log(
-    `[HomeService] GET /home normalized — banners=${normalized.banners.length} categories=${normalized.service_categories.length} subcategories=${subCount}`,
-  );
-
   return normalized;
 }
 
@@ -195,24 +191,15 @@ export async function fetchHomeData(): Promise<HomeApiResponse> {
 export async function fetchPopularServicesForHome(): Promise<PopularServiceRow[]> {
   let res = await request<unknown>("/services?popular=true", { skipAuth: true });
   let items = extractServiceItems(res);
-  console.log(
-    `[HomeService] GET /services?popular=true — items=${items.length} body=${JSON.stringify(res).slice(0, 400)}`,
-  );
 
   if (items.length === 0) {
     res = await request<unknown>("/services?limit=12", { skipAuth: true });
     items = extractServiceItems(res);
-    console.log(
-      `[HomeService] GET /services?limit=12 fallback — items=${items.length}`,
-    );
   }
 
-  const rows = items
+  return items
     .map((item) => mapServiceItemToPopularRow(item))
     .filter((row): row is PopularServiceRow => row != null)
     .sort((a, b) => (a.sub.DisplayOrder ?? 0) - (b.sub.DisplayOrder ?? 0))
     .slice(0, 12);
-
-  console.log(`[HomeService] popular services mapped — count=${rows.length}`);
-  return rows;
 }

@@ -20,9 +20,18 @@ export default function TailorLayout() {
       }}
     >
       <Tabs.Screen
+        name="queue"
+        options={{
+          title: "Order Queue",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="layers-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
-          title: "My Orders",
+          title: "My Work",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cut-outline" size={size} color={color} />
           ),

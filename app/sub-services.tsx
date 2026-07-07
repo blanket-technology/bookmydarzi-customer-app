@@ -50,6 +50,49 @@ const GRID_GAP = SPACING.md;
 const CARD_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
 
 // ---------------------------------------------------------------------------
+// Smart service descriptions — used when backend returns no description
+// ---------------------------------------------------------------------------
+const SERVICE_DESCRIPTION_MAP: Array<[string, string]> = [
+  ["blazer",          "Formal & business style tailoring"],
+  ["suit",            "Full custom-fit formal wear"],
+  ["kurta",           "Traditional Indian ethnic attire"],
+  ["sherwani",        "Elegant ethnic occasion wear"],
+  ["indo-western",    "Fusion contemporary style"],
+  ["indo western",    "Fusion contemporary style"],
+  ["waist coat",      "Layered formal styling"],
+  ["waistcoat",       "Layered formal styling"],
+  ["shirt",           "Casual & formal stitching"],
+  ["pant",            "Tailored bottom wear"],
+  ["trouser",         "Formal lower wear tailoring"],
+  ["jean",            "Custom denim fit"],
+  ["sarees fall",     "Saree finishing & fall pleating"],
+  ["saree",           "Traditional saree stitching"],
+  ["blouse",          "Designer & pattern blouse stitching"],
+  ["leheng",          "Bridal & festive occasion wear"],
+  ["salwar",          "Traditional & fusion styling"],
+  ["skirt",           "Custom length & silhouette"],
+  ["frock",           "Kids party & casual wear"],
+  ["dress",           "Custom-fit dress stitching"],
+  ["repair",          "Fix & restore your garments"],
+  ["resize",          "Perfect fit adjustments"],
+  ["embroidery",      "Decorative thread & needlework"],
+  ["hemm",            "Precise length adjustment"],
+  ["linen",           "Fabric lining & inner finish"],
+  ["astar",           "Fabric lining & inner finish"],
+  ["jacket",          "Styled outerwear tailoring"],
+  ["coat",            "Formal outerwear stitching"],
+  ["pajama",          "Comfortable lower wear"],
+];
+
+function getServiceFallbackDescription(name: string): string {
+  const lower = name.toLowerCase();
+  for (const [keyword, desc] of SERVICE_DESCRIPTION_MAP) {
+    if (lower.includes(keyword)) return desc;
+  }
+  return "Expert tailoring & stitching";
+}
+
+// ---------------------------------------------------------------------------
 // Icon / colour map
 // ---------------------------------------------------------------------------
 const CATEGORY_ICONS: Record<
@@ -81,7 +124,7 @@ function getCategoryStyle(name: string) {
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 // ---------------------------------------------------------------------------
-// Service Option Modal — shown when user taps a sub-service card
+// Service Option Modal - shown when user taps a sub-service card
 // ---------------------------------------------------------------------------
 interface ServiceOptionModalProps {
   visible: boolean;
@@ -134,7 +177,7 @@ function ServiceOptionModal({
 
           <Text style={modal.question}>How would you like to proceed?</Text>
 
-          {/* Option 1 — Add measurement */}
+          {/* Option 1 - Add measurement */}
           <TouchableOpacity style={modal.optionCard} onPress={onAddMeasurement} activeOpacity={0.8}>
             <LinearGradient
               colors={["#0c6c75", "#1aa3b0"]}
@@ -155,7 +198,7 @@ function ServiceOptionModal({
             </LinearGradient>
           </TouchableOpacity>
 
-          {/* Option 2 — Add by our tailor */}
+          {/* Option 2 - Add by our tailor */}
           <TouchableOpacity style={modal.optionCard} onPress={onAddByTailor} activeOpacity={0.8}>
             <View style={modal.optionCardInner}>
               <View style={[modal.optionIcon, { backgroundColor: COLORS.primaryLight }]}>
@@ -356,12 +399,18 @@ function SubServiceCard({ item, index, categoryName, onPress }: SubServiceCardPr
           {/* Image / icon area */}
           <View style={styles.imageContainer}>
             {hasImage && !imageFailed ? (
-              <Image
-                source={{ uri: imageUrl! }}
-                style={styles.cardImage}
-                resizeMode="cover"
-                onError={() => setImageFailed(true)}
-              />
+              <>
+                <Image
+                  source={{ uri: imageUrl! }}
+                  style={styles.cardImage}
+                  resizeMode="cover"
+                  onError={() => setImageFailed(true)}
+                />
+                <LinearGradient
+                  colors={["transparent", "rgba(0,0,0,0.35)"]}
+                  style={styles.imageOverlay}
+                />
+              </>
             ) : (
               <LinearGradient
                 colors={catStyle.gradient as [string, string]}
@@ -386,15 +435,9 @@ function SubServiceCard({ item, index, categoryName, onPress }: SubServiceCardPr
             <Text style={styles.cardTitle} numberOfLines={2}>
               {item.name}
             </Text>
-            {item.description ? (
-              <Text style={styles.cardDesc} numberOfLines={2}>
-                {item.description}
-              </Text>
-            ) : item.kind === "line" ? (
-              <Text style={styles.cardDesc} numberOfLines={2}>
-                Normal & Designer stitching
-              </Text>
-            ) : null}
+            <Text style={styles.cardDesc} numberOfLines={1}>
+              {item.description ?? getServiceFallbackDescription(item.name)}
+            </Text>
             <View style={styles.ctaRow}>
               <Text style={styles.ctaLabel}>Book Now</Text>
               <View style={[styles.ctaArrow, { backgroundColor: catStyle.bg }]}>
@@ -499,7 +542,7 @@ export default function SubServicesScreen() {
         if (cancelled) return;
 
         console.log(
-          `[SubServices] catalog tree — categories=${tree.categories.length} ids=[${tree.categories.map((c) => c.id).join(",")}]`,
+          `[SubServices] catalog tree - categories=${tree.categories.length} ids=[${tree.categories.map((c) => c.id).join(",")}]`,
         );
 
         let category = resolveCatalogCategory(
@@ -551,7 +594,7 @@ export default function SubServicesScreen() {
             return {
               key: `line-${line.id}`,
               name: line.name,
-              description: null,
+              description: line.description ?? null,
               price: line.starting_price,
               kind: "line" as const,
               imageUrl,
@@ -573,7 +616,7 @@ export default function SubServicesScreen() {
         ];
 
         console.log(
-          `[SubServices] image mapping — withImage=${mapped.filter((i) => i.imageUrl).length}/${mapped.length}`,
+          `[SubServices] image mapping - withImage=${mapped.filter((i) => i.imageUrl).length}/${mapped.length}`,
         );
         mapped.slice(0, 3).forEach((item) => {
           console.log("[SubServices] Sub Service:", item);
@@ -581,7 +624,7 @@ export default function SubServicesScreen() {
         });
 
         console.log(
-          `[SubServices] resolved category id=${effectiveCategoryId} name="${category?.name ?? "NOT FOUND"}" — lines=${lines.length} direct=${direct.length} mapped=${mapped.length}`,
+          `[SubServices] resolved category id=${effectiveCategoryId} name="${category?.name ?? "NOT FOUND"}" - lines=${lines.length} direct=${direct.length} mapped=${mapped.length}`,
         );
 
         if (!cancelled) setListItems(mapped);
@@ -735,7 +778,7 @@ export default function SubServicesScreen() {
             No services yet
           </Animated.Text>
           <Animated.Text entering={FadeInDown.delay(180).duration(500)} style={styles.emptyDesc}>
-            Check back soon — new services are being added.
+            Check back soon - new services are being added.
           </Animated.Text>
         </View>
       ) : (
@@ -850,6 +893,13 @@ const styles = StyleSheet.create({
   },
   imageContainer: { width: "100%", height: 110, position: "relative" },
   cardImage: { width: "100%", height: "100%" },
+  imageOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 44,
+  },
   iconGradient: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
   iconCircle: {
     width: 60, height: 60, borderRadius: 30,

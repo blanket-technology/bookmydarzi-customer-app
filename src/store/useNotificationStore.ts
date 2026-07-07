@@ -69,7 +69,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       const count = await getUnreadCount();
       set({ unreadCount: count });
     } catch {
-      // Badge count is non-critical — ignore failures
+      // Badge count is non-critical - ignore failures
     }
   },
 

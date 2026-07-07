@@ -1,5 +1,5 @@
 /**
- * Notifications API — /api/v1/notifications/*
+ * Notifications API - /api/v1/notifications/*
  *
  * In-app notification feed plus push device-token registration.
  * The feed endpoints are pure REST; push token registration is best-effort and
@@ -33,7 +33,7 @@ function mapNotification(raw: any): AppNotification {
   };
 }
 
-/** GET /notifications — paginated feed with unread count */
+/** GET /notifications - paginated feed with unread count */
 export async function listNotifications(
   page = 1,
   limit = 20,
@@ -52,7 +52,7 @@ export async function listNotifications(
   };
 }
 
-/** GET /notifications/unread-count — badge count */
+/** GET /notifications/unread-count - badge count */
 export async function getUnreadCount(): Promise<number> {
   const res = await request<any>(`${BASE}/unread-count`);
   const data = unwrap(res);
@@ -66,14 +66,14 @@ export async function markNotificationRead(id: number): Promise<AppNotification 
   return data ? mapNotification(data) : null;
 }
 
-/** POST /notifications/read-all — returns number updated */
+/** POST /notifications/read-all - returns number updated */
 export async function markAllNotificationsRead(): Promise<number> {
   const res = await request<any>(`${BASE}/read-all`, { method: "POST" });
   const data = unwrap(res);
   return Number(data?.updated ?? 0);
 }
 
-/** POST /notifications/device-tokens — register a push token (best-effort) */
+/** POST /notifications/device-tokens - register a push token (best-effort) */
 export async function registerDeviceToken(
   token: string,
   platform: DevicePlatform = "android",
@@ -93,7 +93,7 @@ export async function registerDeviceToken(
   };
 }
 
-/** DELETE /notifications/device-tokens — unregister a push token */
+/** DELETE /notifications/device-tokens - unregister a push token */
 export async function unregisterDeviceToken(token: string): Promise<void> {
   if (!token) return;
   await request(`${BASE}/device-tokens`, {

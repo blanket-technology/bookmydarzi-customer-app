@@ -1,10 +1,45 @@
 /**
- * Payment display helpers — maps API payment/order fields to UI labels.
+ * Payment display helpers - maps API payment/order fields to UI labels.
  */
+
+export type PaymentStatusVisual = {
+  label: string;
+  color: string;
+  bg: string;
+};
+
+export function getPaymentStatusVisual(
+  status: string | null | undefined,
+): PaymentStatusVisual {
+  const norm = (status ?? "").toLowerCase().replace(/[^a-z]/g, "");
+  if (norm === "fullypaid" || norm === "paid" || norm === "success" || norm === "completed") {
+    return { label: "Fully Paid", color: "#065F46", bg: "#D1FAE5" };
+  }
+  if (norm === "advancepaid" || norm === "partiallypaid") {
+    return { label: "Advance Paid", color: "#1E40AF", bg: "#DBEAFE" };
+  }
+  if (norm === "balancepending" || norm === "balancedue") {
+    return { label: "Balance Due", color: "#92400E", bg: "#FEF3C7" };
+  }
+  if (norm === "advancepending" || norm === "initiated" || norm === "pending") {
+    return { label: "Payment Pending", color: "#92400E", bg: "#FEF3C7" };
+  }
+  if (norm === "failed" || norm === "paymentfailed" || norm === "advancefailed") {
+    return { label: "Payment Failed", color: "#B91C1C", bg: "#FEE2E2" };
+  }
+  if (norm === "refunded") {
+    return { label: "Refunded", color: "#4B5563", bg: "#F3F4F6" };
+  }
+  const label = (status ?? "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim() || "Pending";
+  return { label, color: "#92400E", bg: "#FEF3C7" };
+}
 
 export type PaymentDisplayStatus = "paid" | "pending" | "failed" | "cod" | "processing";
 
-const SUCCESS_STATUSES = new Set(["paid", "completed", "success"]);
+const SUCCESS_STATUSES = new Set(["paid", "completed", "success", "advance_paid", "fully_paid"]);
 const FAILED_STATUSES = new Set(["failed", "cancelled", "refunded"]);
 const PROCESSING_STATUSES = new Set([
   "processing",

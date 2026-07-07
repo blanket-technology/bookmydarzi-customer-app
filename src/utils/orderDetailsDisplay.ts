@@ -24,7 +24,7 @@ export function detailsMeasurement(
 
 export function getDetailsStatusHeadline(payload: CustomerOrderDetailsPayload): string {
   const status = payload.order.status ?? "";
-  const label = formatCustomerOrderStatusLabel(status);
+  const label = payload.order.customer_status ?? formatCustomerOrderStatusLabel(status);
   return getBookingHeadline(status, label);
 }
 

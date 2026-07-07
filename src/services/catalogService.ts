@@ -23,9 +23,11 @@ function mapStitchingType(raw: Record<string, unknown>): CatalogStitchingType {
 
 function mapServiceLine(raw: Record<string, unknown>): CatalogServiceLine {
   const stitchingRaw = raw.stitching_types ?? raw.StitchingTypes ?? [];
+  const desc = raw.description ?? raw.Description ?? null;
   return {
     id: Number(raw.id ?? raw.Id ?? 0),
     name: String(raw.name ?? raw.Name ?? ""),
+    description: typeof desc === "string" && desc.trim() ? desc.trim() : null,
     display_order: Number(raw.display_order ?? raw.DisplayOrder ?? 0),
     image_url: extractImageUrlFromRecord(raw),
     starting_price: Number(raw.starting_price ?? raw.StartingPrice ?? 0),
@@ -104,17 +106,28 @@ function mapCategoriesFromRaw(categoriesRaw: unknown[]): CatalogCategory[] {
   return categoriesRaw.map((item) => mapCategory(item as Record<string, unknown>));
 }
 
-/** GET /catalog/categories/tree */
+let _catalogTreeCache: CatalogCategoriesTreeResponse | null = null;
+let _catalogTreePromise: Promise<CatalogCategoriesTreeResponse> | null = null;
+
+/** GET /catalog/categories/tree — in-memory cached (catalog is static per session) */
 export async function fetchCatalogTree(): Promise<CatalogCategoriesTreeResponse> {
-  const res = await request<unknown>("/catalog/categories/tree", { skipAuth: true });
-  const categoriesRaw = extractCategoriesRaw(res);
-  const categories = mapCategoriesFromRaw(categoriesRaw);
+  if (_catalogTreeCache) return _catalogTreeCache;
+  if (_catalogTreePromise) return _catalogTreePromise;
 
-  console.log(
-    `[CatalogService] GET /catalog/categories/tree — rawLength=${categoriesRaw.length} mapped=${categories.length}`,
-  );
+  _catalogTreePromise = request<unknown>("/catalog/categories/tree", { skipAuth: true })
+    .then((res) => {
+      const categoriesRaw = extractCategoriesRaw(res);
+      const categories = mapCategoriesFromRaw(categoriesRaw);
+      _catalogTreeCache = { categories };
+      _catalogTreePromise = null;
+      return _catalogTreeCache;
+    })
+    .catch((err) => {
+      _catalogTreePromise = null;
+      throw err;
+    });
 
-  return { categories };
+  return _catalogTreePromise;
 }
 
 /** GET /catalog/categories/{categoryId}/subcategories (fallback when tree lookup is empty) */
@@ -129,10 +142,6 @@ export async function fetchCatalogSubcategories(
       { skipAuth: true },
     );
     const itemsRaw = extractCategoriesRaw(res);
-    console.log(
-      `[CatalogService] GET /catalog/categories/${categoryId}/subcategories — rawLength=${itemsRaw.length}`,
-    );
-
     if (itemsRaw.length === 0) {
       const single = (res as Record<string, unknown>)?.data ?? res;
       if (single && typeof single === "object" && !Array.isArray(single)) {
@@ -158,11 +167,7 @@ export async function fetchCatalogSubcategories(
       service_lines: itemsRaw.map((item) => mapServiceLine(item as Record<string, unknown>)),
       direct_services: [],
     };
-  } catch (err) {
-    console.warn(
-      `[CatalogService] subcategories fallback failed for categoryId=${categoryId}:`,
-      err instanceof Error ? err.message : err,
-    );
+  } catch {
     return null;
   }
 }
@@ -201,12 +206,7 @@ export function resolveCatalogCategory(
   if (byId) return byId;
 
   const byName = findCatalogCategoryByName(tree, categoryName);
-  if (byName) {
-    console.log(
-      `[CatalogService] category id=${catalogCategoryId} not in tree; matched by name "${categoryName}" → id=${byName.id}`,
-    );
-    return byName;
-  }
+  if (byName) return byName;
 
   return undefined;
 }
