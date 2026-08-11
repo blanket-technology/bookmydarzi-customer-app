@@ -140,6 +140,13 @@ function BookingCompactCard({
   // isCod is still used below to decide the amount label (Order Amount vs
   // Amount Paid). Payment method is no longer displayed on the list card.
 
+  // A cancelled / rejected order must NOT claim "Amount Paid": a COD order
+  // that never reached delivery had no money change hands, so labelling its
+  // total as "Amount Paid" is wrong. Show it as the order's value instead.
+  // (A genuinely prepaid order that was later cancelled is handled by the
+  // refund flow / order details, not this list card.)
+  const isCancelled = RED_STATUSES.has(normalizedStatus);
+
   // For pending/failed online payment we show the TOTAL order amount, not "₹0"
   // paid (Bug Report cycle 1, item 10.1) - the customer needs to see what the
   // order is worth / what they'll owe. COD is likewise the order total (nothing
@@ -149,7 +156,7 @@ function BookingCompactCard({
     orderAmount != null && orderAmount > 0
       ? `₹${Math.round(orderAmount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
       : null;
-  const showsOrderTotal = isCod || isPaymentPending || isPaymentFailed;
+  const showsOrderTotal = isCod || isPaymentPending || isPaymentFailed || isCancelled;
   const amountLabel = showsOrderTotal ? "Order Amount" : "Amount Paid";
   const amount =
     showsOrderTotal

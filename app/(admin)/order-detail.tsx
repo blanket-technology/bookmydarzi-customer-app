@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,21 +21,18 @@ import {
   getOrderDetail,
   updateOrderStatus,
 } from "../../src/services/adminService";
+import {
+  getOrderStatusMeta,
+  normalizeOrderStatus,
+  isOrderStatusTerminal,
+  STATUS_TONE_COLORS,
+} from "../../src/constants/orderStatus";
+import { useAuthStore } from "../../store/useAuthStore";
+
+// Roles permitted to call /admin/* - see the note in (admin)/orders.tsx.
+const ADMIN_ROLES = new Set(["admin", "superadmin", "employee"]);
 
 const TEAL = "#149694";
-
-const STATUS_COLORS: Record<string, string> = {
-  order_placed: "#3B82F6",
-  order_accepted: "#8B5CF6",
-  tailor_assigned: "#F59E0B",
-  cloth_pickup_pending: "#F97316",
-  cloth_picked_up: "#F97316",
-  stitching_in_progress: "#EC4899",
-  stitching_completed: "#10B981",
-  out_for_delivery: "#3B82F6",
-  delivered: "#065F46",
-  cancelled: "#B91C1C",
-};
 
 function Row({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
@@ -59,7 +58,10 @@ function CancelModal({
   const [reason, setReason] = useState("");
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <View style={styles.modal}>
           <Text style={styles.modalTitle}>Cancel Order</Text>
           <Text style={styles.modalSub}>
@@ -91,7 +93,7 @@ function CancelModal({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -100,6 +102,8 @@ export default function AdminOrderDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const role = useAuthStore((s) => s.user?.role);
+  const canLoad = !!role && ADMIN_ROLES.has(role);
 
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -122,7 +126,13 @@ export default function AdminOrderDetail() {
     }
   }, [orderId]);
 
-  useEffect(() => { load(); }, [load]);
+  // Only fetch once the role is known and qualifies - avoids a 403 when a
+  // non-admin briefly mounts this screen during the post-login redirect race.
+  useEffect(() => {
+    if (canLoad) load();
+    else setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canLoad, load]);
 
   const handleCancel = async (reason: string) => {
     try {
@@ -138,9 +148,10 @@ export default function AdminOrderDetail() {
     }
   };
 
-  const status = order?.Status ?? order?.status ?? "";
-  const isTerminal = status === "cancelled" || status === "delivered";
-  const statusColor = STATUS_COLORS[status] ?? COLORS.gray;
+  const status = normalizeOrderStatus(order?.Status ?? order?.status ?? "");
+  const statusMeta = getOrderStatusMeta(status);
+  const isTerminal = isOrderStatusTerminal(status);
+  const statusColor = STATUS_TONE_COLORS[statusMeta.tone].fg;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -171,7 +182,7 @@ export default function AdminOrderDetail() {
             <View style={[styles.statusBanner, { backgroundColor: statusColor + "1A" }]}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
               <Text style={[styles.statusText, { color: statusColor }]}>
-                {status.replace(/_/g, " ").toUpperCase()}
+                {statusMeta.title.toUpperCase()}
               </Text>
             </View>
 

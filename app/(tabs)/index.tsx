@@ -621,7 +621,13 @@ function ServicesCarousel({
         snapToInterval={stride}
         decelerationRate="fast"
         disableIntervalMomentum
-        contentContainerStyle={{ gap: itemGap, paddingHorizontal: 2 }}
+        contentContainerStyle={[
+          { gap: itemGap, paddingHorizontal: 2 },
+          // When the whole set fits on screen (few categories), center the row
+          // so the cards sit as an evenly-spaced cluster in the middle instead
+          // of stretching edge-to-edge or clumping at the left.
+          categories.length <= 4 && carouselStyles.contentCentered,
+        ]}
         keyExtractor={(cat, i) => `carousel-${cat.Id ?? cat.Name}-${i}`}
         renderItem={renderItem}
         onScroll={onScroll}
@@ -720,6 +726,13 @@ const CarouselCategoryItem = React.memo(function CarouselCategoryItem({
 const carouselStyles = StyleSheet.create({
   wrap: {
     position: "relative",
+  },
+  // Center the cards when the whole set fits on screen (<=4). flexGrow makes
+  // the content container fill the FlatList width so justifyContent can center
+  // the (narrower) row of cards within it.
+  contentCentered: {
+    flexGrow: 1,
+    justifyContent: "center",
   },
   edgeFade: {
     position: "absolute",
@@ -1398,17 +1411,15 @@ export default function HomeScreen() {
     const count = Math.max(serviceCategories.length, 1);
     const width = Math.min(screenWidth, contentMaxWidth);
     const available = width - horizontalPad * 2;
-    // A card only needs to fit its avatar circle + a little breathing room -
-    // NOT stretch to fill the whole row. When there are few categories (<=4)
-    // the old "available / count" made each card huge, leaving big empty gaps
-    // between the small centred circles. Cap the width to the content size so
-    // cards sit close together, and show ~4.2 per screen once there are more.
-    const contentWidth = CATEGORY_SIZE + SPACING.md; // circle + label gutter
+    // A card only needs to hug its avatar circle - NOT stretch across the row.
+    // Stretching left big empty gaps between the small centred circles. Pin the
+    // card width tight to the circle (+ a few px so the 2-line label can wrap)
+    // so the circles cluster together, and show ~4.2 per screen once there are
+    // more than fit comfortably. The FlatList is horizontally scrollable, so a
+    // narrow row simply doesn't fill the width - that's the intended look.
+    const contentWidth = CATEGORY_SIZE + 8; // circle + minimal label gutter
     if (count <= 4) {
-      // Fit them evenly across the row but never wider than the content needs,
-      // so the circles cluster naturally instead of drifting apart.
-      const even = (available - CATEGORY_GAP * (count - 1)) / count;
-      return Math.min(even, contentWidth);
+      return contentWidth;
     }
     return Math.max(contentWidth, Math.floor(available / 4.2));
   }, [screenWidth, contentMaxWidth, horizontalPad, serviceCategories.length]);

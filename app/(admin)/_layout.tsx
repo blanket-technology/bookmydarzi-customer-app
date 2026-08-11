@@ -1,9 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS } from "../../constants/theme";
+import { useAuthStore } from "../../store/useAuthStore";
+
+// Roles allowed inside the (admin) group. Staff-only surface.
+const ADMIN_ROLES = new Set(["admin", "superadmin", "employee"]);
+
+// Where each non-admin role belongs, so we bounce them to the right home
+// instead of a generic screen.
+const ROLE_HOME: Record<string, string> = {
+  tailor: "/(tailor)",
+  user: "/(tabs)",
+};
 
 const TEAL = "#149694";
 
@@ -67,6 +78,19 @@ function AdminTabBar({ state, navigation }: any) {
 }
 
 export default function AdminLayout() {
+  const hydrated = useAuthStore((s) => s._hasHydrated);
+  const role = useAuthStore((s) => s.user?.role);
+
+  // Render-time gate for the whole (admin) group: if the role is known and
+  // is NOT a staff role, redirect out BEFORE any admin screen (and its
+  // fetch-on-mount) renders - this is the root-cause fix for a "user" landing
+  // in (admin) and firing 403s. While the role is still resolving (not
+  // hydrated / no role yet) we render nothing rather than bounce a legit admin
+  // mid-hydration; the per-screen fetch gates hold the line until it resolves.
+  if (hydrated && role && !ADMIN_ROLES.has(role)) {
+    return <Redirect href={(ROLE_HOME[role] ?? "/(tabs)") as never} />;
+  }
+
   return (
     <Tabs
       initialRouteName="index"

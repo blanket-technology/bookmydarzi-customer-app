@@ -1,8 +1,8 @@
 /**
- * Customer Orders - Active / Completed tabs
- * GET /customer/orders/active | /completed
+ * Customer Orders - Active / Completed / Cancelled tabs
+ * GET /customer/orders/active | /completed | /cancelled
  */
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   Pressable,
+  ActivityIndicator,
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,16 +20,15 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppLanguage } from "../../src/i18n/useAppLanguage";
 import { useAuthStore } from "../../store/useAuthStore";
-import {
-  fetchActiveCustomerOrders,
-  fetchCompletedCustomerOrders,
-} from "../../src/services/customerOrderService";
+import { useCustomerOrdersStore } from "../../src/store/useCustomerOrdersStore";
 import CustomerOrderCard from "../../src/components/orders/CustomerOrderCard";
 import OrderCardSkeleton from "../../src/components/skeletons/OrderCardSkeleton";
 import { COLORS, RADIUS, SPACING } from "../../constants/theme";
 import type { CustomerOrderListItem } from "../../src/types/customerOrders";
 
-type OrdersTab = "active" | "completed";
+// Two tabs (Swiggy/Zomato/Uber pattern): current vs past. "history" merges
+// completed + cancelled - the card's own status stripe/label distinguishes them.
+type OrdersTab = "active" | "history";
 
 export default function OrdersScreen() {
   const { t } = useAppLanguage();
@@ -39,60 +39,101 @@ export default function OrdersScreen() {
   const contentWidth = Math.min(width, 560);
 
   const [tab, setTab] = useState<OrdersTab>("active");
-  const [activeOrders, setActiveOrders] = useState<CustomerOrderListItem[]>([]);
-  const [completedOrders, setCompletedOrders] = useState<CustomerOrderListItem[]>([]);
-  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loadedTabs, setLoadedTabs] = useState<Record<OrdersTab, boolean>>({
-    active: false,
-    completed: false,
-  });
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const currentOrders = tab === "active" ? activeOrders : completedOrders;
-  const tabCopy =
-    tab === "active"
-      ? {
-          emptyTitle: t("orders.emptyActiveTitle"),
-          emptySub: t("orders.emptyActiveSub"),
-        }
-      : {
-          emptyTitle: t("orders.emptyCompletedTitle"),
-          emptySub: t("orders.emptyCompletedSub"),
-        };
-  const headerCount = currentOrders.length;
+  const activeOrders = useCustomerOrdersStore((s) => s.activeOrders);
+  const completedOrders = useCustomerOrdersStore((s) => s.completedOrders);
+  const cancelledOrders = useCustomerOrdersStore((s) => s.cancelledOrders);
+  const loading = useCustomerOrdersStore((s) => s.loading);
+  const error = useCustomerOrdersStore((s) => s.error);
+  const activeLastFetched = useCustomerOrdersStore((s) => s.activeLastFetched);
+  const completedLastFetched = useCustomerOrdersStore((s) => s.completedLastFetched);
+  const cancelledLastFetched = useCustomerOrdersStore((s) => s.cancelledLastFetched);
+  const activeHasMore = useCustomerOrdersStore((s) => s.activeHasMore);
+  const completedHasMore = useCustomerOrdersStore((s) => s.completedHasMore);
+  const cancelledHasMore = useCustomerOrdersStore((s) => s.cancelledHasMore);
+  const loadActive = useCustomerOrdersStore((s) => s.loadActive);
+  const loadCompleted = useCustomerOrdersStore((s) => s.loadCompleted);
+  const loadCancelled = useCustomerOrdersStore((s) => s.loadCancelled);
+  const loadMoreActive = useCustomerOrdersStore((s) => s.loadMoreActive);
+  const loadMoreCompleted = useCustomerOrdersStore((s) => s.loadMoreCompleted);
+  const loadMoreCancelled = useCustomerOrdersStore((s) => s.loadMoreCancelled);
+
+  const loadedTabs: Record<OrdersTab, boolean> = {
+    active: activeLastFetched !== null,
+    history: completedLastFetched !== null || cancelledLastFetched !== null,
+  };
+
+  // History = completed + cancelled, merged newest-first. Both lists are
+  // already sorted individually; a stable merge on a date key keeps a single
+  // chronological stream a customer can scan like Swiggy/Zomato "past orders".
+  const historyOrders = useMemo(() => {
+    const merged = [...completedOrders, ...cancelledOrders];
+    return merged.sort((a, b) => {
+      const da = new Date(a.scheduledLabel || a.cancelledAt || 0).getTime();
+      const db = new Date(b.scheduledLabel || b.cancelledAt || 0).getTime();
+      return db - da;
+    });
+  }, [completedOrders, cancelledOrders]);
+
+  const currentOrders = tab === "active" ? activeOrders : historyOrders;
+  const currentHasMore =
+    tab === "active" ? activeHasMore : completedHasMore || cancelledHasMore;
+  const tabCopy = useMemo(() => {
+    if (tab === "active") {
+      return { emptyTitle: t("orders.emptyActiveTitle"), emptySub: t("orders.emptyActiveSub") };
+    }
+    return { emptyTitle: t("orders.emptyCompletedTitle"), emptySub: t("orders.emptyCompletedSub") };
+  }, [tab, t]);
 
   const loadTab = useCallback(
-    async (target: OrdersTab, silent = false) => {
+    async (target: OrdersTab, forceRefresh = false) => {
       if (!isAuthenticated) return;
-      if (!silent) setLoading(true);
-      setError(null);
       try {
-        const data =
-          target === "active"
-            ? await fetchActiveCustomerOrders()
-            : await fetchCompletedCustomerOrders();
-        if (target === "active") setActiveOrders(data);
-        else setCompletedOrders(data);
-        setLoadedTabs((prev) => ({ ...prev, [target]: true }));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load orders");
+        if (target === "active") {
+          await loadActive(forceRefresh);
+        } else {
+          // History pulls both completed and cancelled.
+          await Promise.all([loadCompleted(forceRefresh), loadCancelled(forceRefresh)]);
+        }
       } finally {
-        setLoading(false);
         setRefreshing(false);
       }
     },
-    [isAuthenticated],
+    [isAuthenticated, loadActive, loadCompleted, loadCancelled],
   );
 
-  // Track whether each tab has been loaded at least once (ref avoids re-triggering effect)
-  const everLoaded = React.useRef<Record<OrdersTab, boolean>>({ active: false, completed: false });
+  const handleLoadMore = useCallback(async () => {
+    // Don't gate on the store's `loading` (initial-load/skeleton flag) - only
+    // our own loadingMore prevents concurrent load-more calls. Gating on
+    // `loading` could permanently block pagination if that flag is ever stuck.
+    if (!currentHasMore || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      if (tab === "active") {
+        await loadMoreActive();
+      } else {
+        // History: page whichever of completed/cancelled still has more.
+        const jobs: Promise<void>[] = [];
+        if (completedHasMore) jobs.push(loadMoreCompleted());
+        if (cancelledHasMore) jobs.push(loadMoreCancelled());
+        await Promise.all(jobs);
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [tab, currentHasMore, loadingMore, completedHasMore, cancelledHasMore, loadMoreActive, loadMoreCompleted, loadMoreCancelled]);
 
+  // The store's own TTL cache decides whether this actually hits the
+  // network - revisiting the tab within the cache window renders the
+  // already-loaded data instantly instead of refetching + showing a
+  // skeleton every time (previously this screen kept its lists in local
+  // state, which was wiped on every unmount, e.g. navigating to Order
+  // Details and back).
   useFocusEffect(
     useCallback(() => {
-      const silent = everLoaded.current[tab]; // silent refresh if we already have data
-      loadTab(tab, silent);
-      everLoaded.current[tab] = true;
+      loadTab(tab);
     }, [tab, loadTab]),
   );
 
@@ -104,7 +145,7 @@ export default function OrdersScreen() {
   const handleSummaryPress = useCallback(
     (orderId: number) => {
       router.push({
-        pathname: "/order-summary" as never,
+        pathname: "/order-details" as never,
         params: { orderId: String(orderId) },
       });
     },
@@ -114,7 +155,7 @@ export default function OrdersScreen() {
   const handlePayNow = useCallback(
     (orderId: number) => {
       router.push({
-        pathname: "/order-summary" as never,
+        pathname: "/order-details" as never,
         params: { orderId: String(orderId) },
       });
     },
@@ -160,13 +201,9 @@ export default function OrdersScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={[styles.header, { maxWidth: contentWidth, alignSelf: "center", width: "100%" }]}>
         <Text style={styles.headerTitle}>{t("orders.myBookings")}</Text>
-        {loadedTabs[tab] && headerCount > 0 ? (
-          <View style={styles.headerBadge}>
-            <Text style={styles.headerBadgeText}>{headerCount}</Text>
-          </View>
-        ) : (
-          <View style={styles.headerSpacer} />
-        )}
+        {/* Top-right counter removed (Bug Report cycle 1, item 11.1). Keep the
+            spacer so the title stays balanced in the header row. */}
+        <View style={styles.headerSpacer} />
       </View>
 
       <View
@@ -175,9 +212,9 @@ export default function OrdersScreen() {
           { maxWidth: contentWidth - SPACING.lg * 2, alignSelf: "center" },
         ]}
       >
-        {(["active", "completed"] as OrdersTab[]).map((key) => {
+        {(["active", "history"] as OrdersTab[]).map((key) => {
           const selected = tab === key;
-          const count = key === "active" ? activeOrders.length : completedOrders.length;
+          const label = key === "active" ? t("orders.active") : "History";
           return (
             <Pressable
               key={key}
@@ -189,16 +226,8 @@ export default function OrdersScreen() {
                   : { color: "rgba(0,0,0,0.06)" }
               }
             >
-              <Text style={[styles.tabText, selected && styles.tabTextActive]}>
-                {key === "active" ? t("orders.active") : t("orders.completed")}
-              </Text>
-              {loadedTabs[key] && count > 0 ? (
-                <View style={[styles.tabCount, selected && styles.tabCountActive]}>
-                  <Text style={[styles.tabCountText, selected && styles.tabCountTextActive]}>
-                    {count}
-                  </Text>
-                </View>
-              ) : null}
+              {/* Count badge removed - the number (e.g. "Active 53") was noise. */}
+              <Text style={[styles.tabText, selected && styles.tabTextActive]}>{label}</Text>
             </Pressable>
           );
         })}
@@ -263,9 +292,25 @@ export default function OrdersScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
-          initialNumToRender={5}
+          initialNumToRender={6}
           maxToRenderPerBatch={6}
           windowSize={7}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.loadMoreFooter}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              </View>
+            ) : currentHasMore && currentOrders.length > 0 ? (
+              <TouchableOpacity
+                style={styles.loadMoreBtn}
+                onPress={handleLoadMore}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.loadMoreBtnText}>{t("orders.loadMore")}</Text>
+                <Ionicons name="chevron-down" size={16} color={COLORS.primaryDark} />
+              </TouchableOpacity>
+            ) : null
+          }
         />
       )}
     </View>
@@ -281,16 +326,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.md,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.sm,
     backgroundColor: "#F5F7FA",
   },
   headerTitle: {
-    fontSize: 26,
+    fontSize: 19,
     fontWeight: "800",
     color: "#1F2937",
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   headerBadge: {
     minWidth: 32,
@@ -311,11 +356,13 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: "row",
-    marginHorizontal: SPACING.lg,
+    gap: 6,
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.xs,
     marginBottom: SPACING.md,
     backgroundColor: "#E9ECF0",
-    borderRadius: 12,
-    padding: 4,
+    borderRadius: 14,
+    padding: 5,
     width: "100%",
   },
   tabBtn: {
@@ -324,7 +371,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: 10,
   },
   tabBtnInactive: {
@@ -364,31 +411,53 @@ const styles = StyleSheet.create({
   tabCountTextActive: {
     color: COLORS.primaryDark,
   },
+  loadMoreFooter: {
+    paddingVertical: SPACING.md,
+    alignItems: "center",
+  },
+  loadMoreBtn: {
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.sm,
+    paddingHorizontal: 22,
+    paddingVertical: 11,
+    borderRadius: RADIUS.full,
+    borderWidth: 1.5,
+    borderColor: COLORS.primaryDark,
+    backgroundColor: "#F0FDFC",
+  },
+  loadMoreBtnText: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+  },
   listPad: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.md,
     paddingTop: 4,
-    paddingBottom: SPACING.xl + 8,
+    paddingBottom: SPACING.lg,
   },
   listEmpty: { flexGrow: 1 },
   centerState: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: SPACING.xl,
+    padding: SPACING.lg,
     gap: SPACING.sm,
-    minHeight: 340,
   },
   emptyIcon: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: COLORS.primaryLight,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: SPACING.sm,
   },
   stateTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     color: COLORS.black,
     textAlign: "center",
@@ -403,8 +472,8 @@ const styles = StyleSheet.create({
   primaryBtn: {
     backgroundColor: COLORS.primaryDark,
     borderRadius: RADIUS.full,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
+    paddingHorizontal: 22,
+    paddingVertical: 11,
     marginTop: SPACING.md,
   },
   primaryBtnText: { fontSize: 15, fontWeight: "700", color: COLORS.white },
@@ -412,9 +481,9 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: SPACING.xl,
+    padding: SPACING.lg,
     gap: SPACING.sm,
   },
-  guestTitle: { fontSize: 18, fontWeight: "700", color: COLORS.black },
+  guestTitle: { fontSize: 16, fontWeight: "700", color: COLORS.black },
   guestSub: { fontSize: 13, color: COLORS.gray, textAlign: "center" },
 });

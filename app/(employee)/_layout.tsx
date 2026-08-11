@@ -1,11 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import { useEffect, useState } from "react";
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS } from "../../constants/theme";
 import { wsService } from "../../src/services/wsService";
+import { useAuthStore } from "../../store/useAuthStore";
+
+// The (employee) group is for employees (and admins/superadmins, who can view
+// staff surfaces). Anyone else is bounced to their own home before any
+// employee screen renders / fetches - see (admin)/_layout.tsx for the rationale.
+const EMPLOYEE_ROLES = new Set(["employee", "admin", "superadmin"]);
+const ROLE_HOME: Record<string, string> = {
+  tailor: "/(tailor)",
+  user: "/(tabs)",
+};
 
 const TEAL = "#149694";
 
@@ -96,6 +106,13 @@ function EmployeeTabBar({ state, navigation }: any) {
 }
 
 export default function EmployeeLayout() {
+  const hydrated = useAuthStore((s) => s._hasHydrated);
+  const role = useAuthStore((s) => s.user?.role);
+
+  if (hydrated && role && !EMPLOYEE_ROLES.has(role)) {
+    return <Redirect href={(ROLE_HOME[role] ?? "/(tabs)") as never} />;
+  }
+
   return (
     <Tabs
       initialRouteName="index"
