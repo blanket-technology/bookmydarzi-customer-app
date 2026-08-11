@@ -1,20 +1,19 @@
 import * as SecureStore from "expo-secure-store";
 
 import {
-  API_BASE_URL,
-  API_V1_PATH,
-  resolveApiOrigin,
-  getApiV1BaseUrl,
+    API_BASE_URL,
+    API_V1_PATH,
+    getApiV1BaseUrl,
+    resolveApiOrigin,
 } from "../src/config/api";
+import { getLanguage } from "../src/i18n";
 import { useToastStore } from "../src/store/useToastStore";
 
-// Re-export config — single source of truth for API origin
+// Re-export config - single source of truth for API origin
 export {
-  API_BASE_URL,
-  API_V1_PATH,
-  resolveApiOrigin,
-  buildApiV1Url,
-  getApiV1BaseUrl,
+    API_BASE_URL,
+    API_V1_PATH, buildApiV1Url,
+    getApiV1BaseUrl, resolveApiOrigin
 } from "../src/config/api";
 
 // ---------------------------------------------------------------------------
@@ -32,10 +31,36 @@ console.log("API resolved origin:", API_HOST);
 /** Request timeout in milliseconds */
 const TIMEOUT_MS = 40_000;
 
-/** Max automatic retries on transient network/timeout errors */
-const MAX_RETRIES = 2;
+/**
+ * Max automatic retries on transient network/timeout errors. Backend response
+ * times are consistently fast (verified directly against production), so
+ * this now covers ordinary client-side network blips (weak signal, carrier
+ * handoff, brief Wi-Fi drop) rather than a backend cold-start.
+ */
+const MAX_RETRIES = 3;
 
-/** Runtime connectivity snapshot — for audits and dev logs */
+/** Backoff delay (ms) before each retry attempt, indexed by retry count. */
+const RETRY_DELAYS_MS = [3000, 6000, 10000];
+
+/**
+ * A screen can fire several concurrent requests on mount (e.g. the
+ * measurement screen's template fetch + saved-measurements fetch). If more
+ * than one blips around the same moment, only one "Connecting..." toast
+ * should show - not one per request. Also, a screen may briefly connect
+ * fine, so we don't want a toast that flashes for one that self corrects
+ * within the same event loop tick before it's ever necessary.
+ */
+const CONNECTING_TOAST_COOLDOWN_MS = 4000;
+let lastConnectingToastAt = 0;
+
+function showConnectingToastOnce() {
+  const now = Date.now();
+  if (now - lastConnectingToastAt < CONNECTING_TOAST_COOLDOWN_MS) return;
+  lastConnectingToastAt = now;
+  useToastStore.getState().show("Connecting to server… please wait", "info");
+}
+
+/** Runtime connectivity snapshot - for audits and dev logs */
 export function getApiConnectivityConfig() {
   return {
     apiHost: API_HOST,
@@ -89,7 +114,7 @@ export function normalizeApiBaseUrl(url: string): string {
 }
 
 /**
- * Endpoint relative to `/api/v1` — strips accidental `/api/v1` from the path segment.
+ * Endpoint relative to `/api/v1` - strips accidental `/api/v1` from the path segment.
  */
 export function resolveApiEndpoint(endpoint: string): string {
   let ep = endpoint.trim().replace(/\/+/g, "/");
@@ -163,7 +188,7 @@ export function setLoggingOut(value: boolean): void {
   _isLoggingOut = value;
 }
 
-/** Mask token for dev logs — never log full JWT */
+/** Mask token for dev logs - never log full JWT */
 export function maskToken(token: string | null | undefined): string {
   if (!token) return "(none)";
   if (token.length <= 12) return "***";
@@ -186,16 +211,51 @@ async function forceLogout(): Promise<void> {
 
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  body?: Record<string, unknown>;
+  /**
+   * Pass a FormData instance for multipart requests (e.g. photo upload) -
+   * it is sent as-is, with no Content-Type header set (fetch derives the
+   * correct multipart boundary automatically). Plain objects are JSON-
+   * encoded as before.
+   */
+  body?: Record<string, unknown> | FormData;
   /** Skip attaching the Authorization header (e.g. login, register) */
   skipAuth?: boolean;
-  /** Internal flag — marks a request as already retried after a 401 */
+  /** Internal flag - marks a request as already retried after a 401 */
   _retry?: boolean;
   /**
    * When true, HTTP 404 returns `null` instead of throwing.
    * Use for lookups where "not found" is normal (e.g. no payment row for an order yet).
    */
   allowNotFound?: boolean;
+  /**
+   * Sent as the `Idempotency-Key` header. Required for any request that
+   * creates state (order/checkout creation) so the built-in network-failure
+   * retry below - and a user's own accidental double-tap - is safe: the
+   * backend returns the original result instead of creating a duplicate.
+   * Without this, a request that actually succeeds server-side but whose
+   * response is lost to a network blip gets silently retried and can either
+   * 404 ("No cart found", since the first attempt already converted it) or,
+   * in other timing, create a second order.
+   */
+  idempotencyKey?: string;
+  /**
+   * Skip the network-failure retry loop entirely - fail fast on the first
+   * attempt instead of waiting through the full 3s/6s/10s backoff. Use for
+   * best-effort calls the caller already treats as fire-and-forget - retrying
+   * only delays the UI and shows the "Connecting to server…" toast for
+   * something the user is already waiting to complete instantly.
+   */
+  skipRetry?: boolean;
+  /**
+   * Override the number of network-failure retries and their delay (ms).
+   * Use for best-effort calls that still want one fast safety-net retry
+   * against a Railway cold-start (the container sleeps when idle and the
+   * very first request after idle fails instantly with "Network request
+   * failed" rather than a slow timeout - a short single retry almost always
+   * lands once the container finishes waking) without paying the full
+   * 3s/6s/10s backoff of a normal request. Ignored if skipRetry is true.
+   */
+  retryOverride?: { maxRetries: number; delayMs: number };
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +286,7 @@ export async function saveTokens(
   refreshToken: string,
 ): Promise<void> {
   if (!accessToken) {
-    console.warn("[API] saveTokens called with empty accessToken — skipping");
+    console.warn("[API] saveTokens called with empty accessToken - skipping");
     return;
   }
   const refresh = refreshToken || accessToken;
@@ -239,7 +299,7 @@ export async function saveTokens(
     try {
       _onTokenUpdate(accessToken, refresh);
     } catch {
-      // best-effort — keep SecureStore as source of truth for requests
+      // best-effort - keep SecureStore as source of truth for requests
     }
   }
 
@@ -369,7 +429,7 @@ async function doRefresh(): Promise<string> {
     throw new Error("Session expired. Please log in again.");
   }
 
-  // Extract new tokens — handle all common response shapes
+  // Extract new tokens - handle all common response shapes
   const newAccessToken: string =
     data?.access_token ??
     data?.token ??
@@ -426,7 +486,7 @@ function fetchWithTimeout(
 }
 
 // ---------------------------------------------------------------------------
-// Core request() function — uses API_V1_BASE_URL (`${API_BASE_URL}/api/v1`)
+// Core request() function - uses API_V1_BASE_URL (`${API_BASE_URL}/api/v1`)
 // ---------------------------------------------------------------------------
 
 /**
@@ -451,7 +511,7 @@ export async function authRequest<T = unknown>(
 }
 
 // ---------------------------------------------------------------------------
-// Internal _fetch() — shared by both request() and authRequest()
+// Internal _fetch() - shared by both request() and authRequest()
 // ---------------------------------------------------------------------------
 async function _fetch<T = unknown>(
   baseUrl: string,
@@ -465,6 +525,9 @@ async function _fetch<T = unknown>(
     skipAuth = false,
     _retry = false,
     allowNotFound = false,
+    idempotencyKey,
+    skipRetry = false,
+    retryOverride,
   } = options;
   const resolvedPath = resolveApiEndpoint(endpoint);
   const apiPath = formatApiV1Path(resolvedPath);
@@ -473,10 +536,18 @@ async function _fetch<T = unknown>(
   logApiConfigOnce();
 
   // ── Build headers ──────────────────────────────────────────────────────
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  };
+  // FormData bodies (multipart uploads, e.g. progress photos) must NOT get
+  // Content-Type: application/json - fetch sets its own multipart boundary
+  // header automatically when it sees a FormData body, but only if we don't
+  // override Content-Type ourselves.
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  const headers: Record<string, string> = isFormData
+    ? { Accept: "application/json", "Accept-Language": getLanguage() }
+    : {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "Accept-Language": getLanguage(),
+      };
 
   if (!skipAuth) {
     const token = await getAccessToken();
@@ -485,11 +556,15 @@ async function _fetch<T = unknown>(
     }
   }
 
+  if (idempotencyKey) {
+    headers["Idempotency-Key"] = idempotencyKey;
+  }
+
   console.log(
     `[API:req:start] ${method} ${apiPath}\n` +
       `  url: ${url}\n` +
       `  headers: ${JSON.stringify(headersForLog(headers))}\n` +
-      `  body: ${body ? truncateForLog(body, 300) : "(none)"}`,
+      `  body: ${isFormData ? "(multipart FormData)" : body ? truncateForLog(body, 300) : "(none)"}`,
   );
 
   // ── Fire the request ───────────────────────────────────────────────────
@@ -498,7 +573,7 @@ async function _fetch<T = unknown>(
     response = await fetchWithTimeout(url, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined,
+      body: isFormData ? (body as FormData) : body ? JSON.stringify(body) : undefined,
     });
   } catch (networkError: unknown) {
     const elapsedMs = Date.now() - startedAt;
@@ -513,22 +588,34 @@ async function _fetch<T = unknown>(
       raw.includes("Network Error") ||
       raw.includes("Cannot reach");
     const isRetryable = isTimeout || isNetworkFail;
+    const effectiveMaxRetries = retryOverride ? retryOverride.maxRetries : MAX_RETRIES;
+    // A retryable failure with attempts remaining is expected transient
+    // noise (the retry below usually succeeds) - only log it as a real
+    // error once retries are exhausted, so the console isn't flooded with
+    // alarming [API:req:error] lines for requests that end up succeeding.
+    // Callers that pass retryOverride are explicitly marking the request as
+    // best-effort/non-critical (e.g. logout's server-side revoke, which the
+    // caller already tolerates failing and handles locally regardless) -
+    // even final exhaustion for those stays a warning, not a red error, so
+    // the console doesn't look broken for a failure that was never fatal.
+    const willRetry = isRetryable && !skipRetry && _retryCount < effectiveMaxRetries;
+    const logFn = willRetry || retryOverride ? console.warn : console.error;
 
-    console.error(
-      `[API:req:error] ${method} ${apiPath} after ${elapsedMs}ms ` +
-        `(attempt ${_retryCount + 1}/${MAX_RETRIES + 1})\n` +
+    logFn(
+      `[API:req:${willRetry ? "retry" : "error"}] ${method} ${apiPath} after ${elapsedMs}ms ` +
+        `(attempt ${_retryCount + 1}/${effectiveMaxRetries + 1})\n` +
         `  url: ${url}\n` +
         `  type: ${isTimeout ? "timeout" : "network"}\n` +
         `  message: ${raw}`,
     );
 
-    if (isRetryable && _retryCount < MAX_RETRIES) {
-      if (_retryCount === 0) {
-        useToastStore
-          .getState()
-          .show("Connecting to server… please wait", "info");
+    if (willRetry) {
+      if (!retryOverride) {
+        showConnectingToastOnce();
       }
-      const delay = _retryCount === 0 ? 2500 : 5000;
+      const delay = retryOverride
+        ? retryOverride.delayMs
+        : (RETRY_DELAYS_MS[_retryCount] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]);
       await new Promise((r) => setTimeout(r, delay));
       return _fetch<T>(baseUrl, endpoint, options, _retryCount + 1);
     }
@@ -545,11 +632,11 @@ async function _fetch<T = unknown>(
       `  url: ${url}`,
   );
 
-  // ── 401 — attempt silent token refresh ────────────────────────────────
+  // ── 401 - attempt silent token refresh ────────────────────────────────
   if (response.status === 401 && !_retry && !skipAuth && !_isLoggingOut) {
     const existingToken = await getAccessToken();
     if (!existingToken) {
-      // No token at all — user is not logged in, don't force-logout
+      // No token at all - user is not logged in, don't force-logout
       throw new Error("Authentication required. Please log in.");
     }
 
@@ -579,12 +666,12 @@ async function _fetch<T = unknown>(
       if (isAuthFailure) {
         await clearTokens();
         console.error(
-          `[API] Token refresh failed — forcing logout (${errMsg})`,
+          `[API] Token refresh failed - forcing logout (${errMsg})`,
         );
         await forceLogout();
         throw new Error("Session expired. Please log in again.");
       } else {
-        // Network error or config error — don't logout, just propagate
+        // Network error or config error - don't logout, just propagate
         console.warn("[API] Token refresh failed (non-auth reason):", errMsg);
         throw refreshError;
       }
@@ -615,7 +702,7 @@ async function _fetch<T = unknown>(
     const detail = (data as any)?.detail;
 
     if (Array.isArray(detail)) {
-      // 422 Unprocessable Entity — log full detail for debugging
+      // 422 Unprocessable Entity - log full detail for debugging
       if (__DEV__) {
         console.error(
           `[API] 422 Validation Error on ${method} ${apiPath}:\n` +
@@ -638,6 +725,19 @@ async function _fetch<T = unknown>(
         `Request failed (${response.status})`;
     }
 
+    // 429 Too Many Requests - the backend rate limiter kicked in. Surface a
+    // friendly, actionable message instead of the raw limiter string, and
+    // respect Retry-After when the server sends it so the copy is specific.
+    if (response.status === 429) {
+      const retryAfter = Number(response.headers.get("Retry-After"));
+      const waitHint =
+        Number.isFinite(retryAfter) && retryAfter > 0
+          ? ` Please try again in ${retryAfter} second${retryAfter === 1 ? "" : "s"}.`
+          : " Please wait a moment and try again.";
+      console.warn(`[API] 429 Rate limited: ${method} ${apiPath}`);
+      throw new Error(`You're doing that a bit too fast.${waitHint}`);
+    }
+
     // Log specific status codes with full response body
     if (response.status === 422) {
       // Already logged above
@@ -645,7 +745,7 @@ async function _fetch<T = unknown>(
       console.error(`[API] 403 Forbidden: ${method} ${apiPath}`);
     } else if (response.status === 404) {
       console.error(
-        `[API] 404 Not Found: ${method} ${apiPath} — check your API routes`,
+        `[API] 404 Not Found: ${method} ${apiPath} - check your API routes`,
       );
     } else if (response.status >= 500) {
       console.error(
