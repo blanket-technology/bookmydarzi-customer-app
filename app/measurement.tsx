@@ -6,22 +6,22 @@
  *   2. Use Saved Measurements - pick from previously saved profiles
  */
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,26 +32,29 @@ import {
   getMeasurementFormDefaults,
 } from "../src/services/measurementService";
 import { fetchMeasurementTemplate } from "../src/services/measurementTemplateService";
+import MeasurementGuideModal from "../src/components/measurement/MeasurementGuideModal";
 import { useCartStore } from "../src/store/useCartStore";
 import { useMeasurementStore } from "../src/store/useMeasurementStore";
 import { useToastStore } from "../src/store/useToastStore";
 import type { ApiMeasurement } from "../src/types/api";
 import type { MeasurementTemplate } from "../src/types/measurementTemplate";
 import { buildSelectedMeasurements } from "../src/utils/cartMeasurement";
+import { inferGenderFromCategoryName, measurementGenderMatches } from "../src/utils/categoryGender";
+import { capitalize, formatMeasurementEntries } from "../src/utils/measurementDisplay";
 import { returnToPendingRouteAfterMeasurement } from "../src/utils/measurementReturnNavigation";
-import { safeRouterPush, safeRouterReplace } from "../src/utils/safeNavigation";
-import { formatMeasurementDetailLines } from "../src/utils/measurementDisplay";
 import {
+  augmentTemplateWithStandardSizes,
   buildLegacyMeasurementTemplate,
   buildSavePayload,
   getOrderedTemplateFields,
   hasAtLeastOneTemplateMeasurement,
   validateTemplateFieldValues,
 } from "../src/utils/measurementSize";
+import { safeRouterPush, safeRouterReplace } from "../src/utils/safeNavigation";
 import { useAuthStore } from "../store/useAuthStore";
 
 const FIT_OPTIONS = ["slim", "regular", "relaxed", "oversized"];
-const GENDER_OPTIONS = ["male", "female", "other"];
+const GENDER_OPTIONS = ["male", "female", "kids", "other"];
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -59,8 +62,19 @@ const GENDER_OPTIONS = ["male", "female", "other"];
 export default function MeasurementScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { mode: modeParam, bookableServiceId: bookableServiceIdParam } =
-    useLocalSearchParams<{ mode?: string; bookableServiceId?: string }>();
+  const {
+    mode: modeParam,
+    bookableServiceId: bookableServiceIdParam,
+    editId: editIdParam,
+    presetSize: presetSizeParam,
+  } = useLocalSearchParams<{
+    mode?: string;
+    bookableServiceId?: string;
+    /** Deep-link from the Measurement Guide modal's "Edit" action. */
+    editId?: string;
+    /** Deep-link from the Measurement Guide modal's "Select this size" action. */
+    presetSize?: string;
+  }>();
 
   const {
     saveMeasurement,
@@ -75,6 +89,8 @@ export default function MeasurementScreen() {
   const { pendingService, addServiceEntry, clearPendingService } = useCartStore();
   const pendingRoute = useCartStore((s) => s.pendingRoute);
   const bookingFlowActive = useCartStore((s) => s.bookingFlowActive);
+  const buyNowMode = useCartStore((s) => s.buyNowMode);
+  const clearBuyNowMode = useCartStore((s) => s.clearBuyNowMode);
   const pendingBookingMeasurement = useCartStore((s) => s.pendingBookingMeasurement);
   const setPendingBookingMeasurement = useCartStore(
     (s) => s.setPendingBookingMeasurement,
@@ -84,6 +100,7 @@ export default function MeasurementScreen() {
 
   // "choose" = pick an option | "add" = fill new form | "saved" = pick from list
   const [mode, setMode] = useState<"choose" | "add" | "saved">("choose");
+  const [measurementGuideVisible, setMeasurementGuideVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [cartSyncing, setCartSyncing] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -115,7 +132,7 @@ export default function MeasurementScreen() {
   const [pendingEditMeasurement, setPendingEditMeasurement] =
     useState<ApiMeasurement | null>(null);
 
-  const legacyTemplate = useMemo(() => buildLegacyMeasurementTemplate(), []);
+  const legacyTemplate = useMemo(() => buildLegacyMeasurementTemplate(gender), [gender]);
 
   const bookableServiceId = useMemo(() => {
     const fromParam = parseInt(String(bookableServiceIdParam ?? ""), 10);
@@ -123,7 +140,41 @@ export default function MeasurementScreen() {
     return pendingService?.bookableServiceId ?? 0;
   }, [bookableServiceIdParam, pendingService?.bookableServiceId]);
 
-  const activeTemplate = fetchedTemplate ?? legacyTemplate;
+  // If the backend template has no fields (service not seeded), fall back to legacy fields.
+  // fetchedTemplate?.service_name is still used directly for the header subtitle.
+  const activeTemplate = (fetchedTemplate?.fields?.length ?? 0) > 0 ? fetchedTemplate! : legacyTemplate;
+
+  // Which gender this booking's category is for, inferred from the category
+  // name (e.g. "Women's Clothing" -> female) - null for non-gender-specific
+  // categories (Kids, Alterations, etc), and also null outside an active
+  // booking flow. Drives both the saved-measurement list filter and the "Add
+  // New" gender chip below, so a customer booking a women's-only garment can
+  // never attach/create a male profile for it. Gated on `bookingFlowActive`
+  // rather than `pendingService` alone - pendingService is global cart state
+  // that can still be populated from an abandoned booking flow (e.g. the user
+  // started booking a women's category, backed out, then opened "Add
+  // Measurement" from Profile), which previously locked the gender chip even
+  // though there's no category context on that path.
+  const targetGender = useMemo(
+    () =>
+      bookingFlowActive
+        ? inferGenderFromCategoryName(fetchedTemplate?.category_name ?? pendingService?.categoryName)
+        : null,
+    [bookingFlowActive, fetchedTemplate?.category_name, pendingService?.categoryName],
+  );
+
+  // Saved-profile list, filtered to the booked category's gender (unisex/
+  // "other"-tagged profiles always shown). Unfiltered (identical to
+  // `measurements`) for non-gender-specific categories.
+  const visibleMeasurements = useMemo(
+    () => measurements.filter((m) => measurementGenderMatches(targetGender, m.gender)),
+    [measurements, targetGender],
+  );
+
+  const augmentedTemplate = useMemo(
+    () => augmentTemplateWithStandardSizes(activeTemplate, gender),
+    [activeTemplate, gender],
+  );
 
   const {
     selectedSize,
@@ -134,7 +185,7 @@ export default function MeasurementScreen() {
     updateField,
     resetFormFields,
     loadFromMeasurement,
-  } = useMeasurementSizeSelection(activeTemplate);
+  } = useMeasurementSizeSelection(augmentedTemplate);
 
   useEffect(() => {
     if (bookableServiceId <= 0) {
@@ -167,10 +218,23 @@ export default function MeasurementScreen() {
   }, [
     mode,
     pendingEditMeasurement,
-    activeTemplate.service_id,
+    augmentedTemplate.service_id,
     fetchedTemplate,
     loadFromMeasurement,
   ]);
+
+  // Reset measurement fields when gender changes so male-only fields (e.g. neck)
+  // don't carry stale values into the female template (and vice-versa).
+  // Only applies to the legacy template; service-specific templates are unchanged.
+  const prevGenderRef = useRef(gender);
+  useEffect(() => {
+    if (prevGenderRef.current === gender) return;
+    prevGenderRef.current = gender;
+    if (!fetchedTemplate && mode === "add") {
+      resetFormFields();
+      setFieldErrors({});
+    }
+  }, [gender, fetchedTemplate, mode, resetFormFields]);
 
   useFocusEffect(
     useCallback(() => {
@@ -195,10 +259,14 @@ export default function MeasurementScreen() {
     resetFormFields();
     setFieldErrors({});
 
+    // A gender-specific category (e.g. Women's Clothing) always wins over
+    // the customer's last-used default - a new profile created while
+    // booking a women's-only garment must be tagged female, not whatever
+    // gender they happened to pick last time.
     try {
       const defaults = await getMeasurementFormDefaults();
       setProfileName(defaults.profile_name || getDefaultProfileLabel());
-      setGender(defaults.gender || "male");
+      setGender(targetGender ?? defaults.gender ?? "male");
       setFitPreference(defaults.fit_preference || "regular");
       setNotes("");
       setIsDefault(
@@ -208,12 +276,12 @@ export default function MeasurementScreen() {
       );
     } catch {
       setProfileName(getDefaultProfileLabel());
-      setGender("male");
+      setGender(targetGender ?? "male");
       setFitPreference("regular");
       setNotes("");
       setIsDefault(measurements.length === 0);
     }
-  }, [getDefaultProfileLabel, measurements.length, resetFormFields]);
+  }, [getDefaultProfileLabel, measurements.length, resetFormFields, targetGender]);
 
   const openAddMeasurementForm = useCallback(async () => {
     setSaveSuccess(false);
@@ -244,6 +312,34 @@ export default function MeasurementScreen() {
     }
   };
 
+  // Deep-link handling from the Measurement Guide modal (opened from
+  // Service Details): editId jumps straight into editing that saved
+  // profile; presetSize opens the add form pre-filled with that size's
+  // template values. Guarded to run once per param combination so it
+  // doesn't re-fire on every re-render or refetch.
+  const handledDeepLinkRef = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${editIdParam ?? ""}|${presetSizeParam ?? ""}`;
+    if (key === "|") return;
+    if (handledDeepLinkRef.current === key) return;
+    if (loadingMeasurements) return;
+
+    if (editIdParam) {
+      const id = parseInt(String(editIdParam), 10);
+      const target = measurements.find((m) => m.id === id);
+      if (target) {
+        handledDeepLinkRef.current = key;
+        void loadMeasurementIntoForm(target);
+      }
+      return;
+    }
+
+    if (presetSizeParam) {
+      handledDeepLinkRef.current = key;
+      void openAddMeasurementForm().then(() => selectSize(String(presetSizeParam)));
+    }
+  }, [editIdParam, presetSizeParam, measurements, loadingMeasurements, openAddMeasurementForm, selectSize]);
+
   const handleDeleteMeasurement = (m: ApiMeasurement) => {
     Alert.alert("Delete measurement", `Remove "${m.profile_name}"?`, [
       { text: "Cancel", style: "cancel" },
@@ -256,8 +352,11 @@ export default function MeasurementScreen() {
             await fetchMeasurements();
             useToastStore.getState().show("Measurement Deleted Successfully");
             scrollToTop();
-          } catch {
-            Alert.alert("Error", error ?? "Failed to delete measurement.");
+          } catch (err) {
+            Alert.alert(
+              "Error",
+              err instanceof Error ? err.message : "Failed to delete measurement.",
+            );
           }
         },
       },
@@ -268,7 +367,22 @@ export default function MeasurementScreen() {
     measurement: ApiMeasurement,
     sizeCode?: string,
   ) => {
-    if (!pendingService || measurement.id <= 0) return;
+    if (!pendingService) return;
+
+    if (buyNowMode) {
+      clearBuyNowMode();
+      safeRouterReplace(router, {
+        pathname: "/address",
+        params: {
+          mode: "buy-now",
+          measurementProfileId: String(measurement.id > 0 ? measurement.id : 0),
+          selectedSize: sizeCode || selectedSize || "",
+        },
+      } as never);
+      return;
+    }
+
+    if (measurement.id <= 0) return;
 
     setCartSyncing(true);
     try {
@@ -279,9 +393,11 @@ export default function MeasurementScreen() {
         selected_size: sizeCode || selectedSize || undefined,
         selected_measurements: buildSelectedMeasurements(measurement),
         tailor_id: pendingService.tailorId,
+        stitching_preferences: pendingService.stitchingPreferences,
       });
       clearPendingService();
-      safeRouterReplace(router, "/(tabs)/cart");
+      useToastStore.getState().show("Added to Cart");
+      router.back();
     } catch (err) {
       Alert.alert(
         "Unable to add to cart",
@@ -332,6 +448,36 @@ export default function MeasurementScreen() {
     safeRouterPush(router, "/address");
   };
 
+  const handleSkipPendingService = async () => {
+    if (!pendingService) return;
+    if (buyNowMode) {
+      clearBuyNowMode();
+      safeRouterReplace(router, {
+        pathname: "/address",
+        params: { mode: "buy-now", measurementProfileId: "0", selectedSize: selectedSize || "" },
+      } as never);
+      return;
+    }
+    setCartSyncing(true);
+    try {
+      await addServiceEntry({
+        service_id: pendingService.bookableServiceId,
+        quantity: pendingService.quantity ?? 1,
+        stitching_preferences: pendingService.stitchingPreferences,
+      });
+      clearPendingService();
+      useToastStore.getState().show("Added to Cart");
+      router.back();
+    } catch (err) {
+      Alert.alert(
+        "Unable to add to cart",
+        err instanceof Error ? err.message : "Could not add this service to cart. Please try again.",
+      );
+    } finally {
+      setCartSyncing(false);
+    }
+  };
+
   const canContinueBooking = useMemo(() => {
     if (!bookingFlowActive) return false;
     if (pendingBookingMeasurement?.skipped) return true;
@@ -368,11 +514,11 @@ export default function MeasurementScreen() {
       }
     }
 
-    if (!hasAtLeastOneTemplateMeasurement(activeTemplate, formByFieldKey)) {
+    if (!hasAtLeastOneTemplateMeasurement(augmentedTemplate, formByFieldKey)) {
       errs._form = "Enter at least one body measurement";
     }
 
-    Object.assign(errs, validateTemplateFieldValues(activeTemplate, formByFieldKey));
+    Object.assign(errs, validateTemplateFieldValues(augmentedTemplate, formByFieldKey));
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -381,7 +527,7 @@ export default function MeasurementScreen() {
   const handleSave = async () => {
     if (!validate()) return;
 
-    const payload = buildSavePayload(activeTemplate, formByFieldKey, {
+    const payload = buildSavePayload(augmentedTemplate, formByFieldKey, {
       profile_name: profileName.trim(),
       gender,
       fit_preference: fitPreference,
@@ -472,10 +618,12 @@ export default function MeasurementScreen() {
           <TouchableOpacity
             style={styles.backBtn}
             onPress={() => {
-              if (mode === "choose") {
+              if (mode === "saved" && modeParam === "saved") {
                 router.back();
-              } else if (modeParam === "saved") {
+              } else if (mode === "add" && modeParam === "saved") {
                 setMode("saved");
+              } else if (mode === "choose") {
+                router.back();
               } else {
                 setMode("choose");
               }
@@ -532,6 +680,18 @@ export default function MeasurementScreen() {
               <Text style={styles.chooseTitle}>
                 How would you like to proceed?
               </Text>
+
+              {bookableServiceId > 0 && (
+                <TouchableOpacity
+                  style={styles.sizeGuideLink}
+                  onPress={() => setMeasurementGuideVisible(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="View size guide"
+                >
+                  <Ionicons name="resize-outline" size={14} color={COLORS.primaryDark} />
+                  <Text style={styles.sizeGuideLinkText}>View Size Guide</Text>
+                </TouchableOpacity>
+              )}
 
               {/* Option 1 - Add new */}
               <TouchableOpacity
@@ -637,7 +797,46 @@ export default function MeasurementScreen() {
                     />
                   </View>
                 </TouchableOpacity>
-              ) : !pendingService ? (
+              ) : pendingService ? (
+                <TouchableOpacity
+                  style={[styles.optionCard, styles.optionCardOutline]}
+                  onPress={handleSkipPendingService}
+                  activeOpacity={0.85}
+                  disabled={cartSyncing}
+                >
+                  <View style={styles.optionInner}>
+                    <View
+                      style={[
+                        styles.optionIconBox,
+                        { backgroundColor: COLORS.grayLight },
+                      ]}
+                    >
+                      {cartSyncing ? (
+                        <ActivityIndicator size="small" color={COLORS.gray} />
+                      ) : (
+                        <Ionicons
+                          name="play-skip-forward-outline"
+                          size={24}
+                          color={COLORS.gray}
+                        />
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.optionTitle, { color: COLORS.black }]}>
+                        Skip Measurement
+                      </Text>
+                      <Text style={[styles.optionDesc, { color: COLORS.gray }]}>
+                        Continue without adding measurements for now
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={18}
+                      color={COLORS.gray}
+                    />
+                  </View>
+                </TouchableOpacity>
+              ) : (
               <TouchableOpacity
                 style={styles.skipOptionBtn}
                 onPress={() => setMode("saved")}
@@ -660,7 +859,7 @@ export default function MeasurementScreen() {
                     Skip for Now
                   </Text>
                   <Text style={[styles.optionDesc, { color: COLORS.gray }]}>
-                    Manage measurements later from profile
+                    Our Experts will come to you for measurement.
                   </Text>
                 </View>
                 <Ionicons
@@ -669,7 +868,7 @@ export default function MeasurementScreen() {
                   color={COLORS.gray}
                 />
               </TouchableOpacity>
-              ) : null}
+              )}
             </Animated.View>
           )}
 
@@ -691,16 +890,22 @@ export default function MeasurementScreen() {
                     Loading saved measurements...
                   </Text>
                 </View>
-              ) : measurements.length === 0 ? (
+              ) : visibleMeasurements.length === 0 ? (
                 <View style={styles.emptyWrap}>
                   <Ionicons
                     name="body-outline"
                     size={48}
                     color={COLORS.grayBorder}
                   />
-                  <Text style={styles.emptyTitle}>No saved measurements</Text>
+                  <Text style={styles.emptyTitle}>
+                    {measurements.length === 0
+                      ? "No saved measurements"
+                      : `No ${targetGender} measurement profiles yet`}
+                  </Text>
                   <Text style={styles.emptyDesc}>
-                    Add your measurements to get a perfect fit
+                    {measurements.length === 0
+                      ? "Add your measurements to get a perfect fit"
+                      : "This service needs a matching profile - add one to continue."}
                   </Text>
                   <TouchableOpacity
                     style={styles.addNewFromEmpty}
@@ -712,7 +917,8 @@ export default function MeasurementScreen() {
                   </TouchableOpacity>
                 </View>
               ) : (
-                measurements.map((m) => {
+                <>
+                {visibleMeasurements.map((m) => {
                   const isSelected =
                     pendingBookingMeasurement?.profileId === m.id;
                   const isSelectable = Boolean(
@@ -721,6 +927,7 @@ export default function MeasurementScreen() {
                       bookingFlowActive,
                   );
 
+                  const measureEntries = formatMeasurementEntries(m);
                   const cardInner = (
                     <>
                       <View style={styles.savedCardMain}>
@@ -733,10 +940,21 @@ export default function MeasurementScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.savedCardName}>{m.profile_name}</Text>
-                          <Text style={styles.savedCardMeta}>
-                            {m.gender} · {m.fit_preference} fit
-                            {m.is_default ? " · Default" : ""}
-                          </Text>
+                          <View style={styles.savedCardMetaRow}>
+                            <Text style={styles.savedCardMetaBadge}>
+                              {capitalize(m.gender || "male")}
+                            </Text>
+                            <Text style={styles.savedCardMetaDot}>·</Text>
+                            <Text style={styles.savedCardMetaBadge}>
+                              {capitalize(m.fit_preference || "regular")} Fit
+                            </Text>
+                            {m.is_default ? (
+                              <>
+                                <Text style={styles.savedCardMetaDot}>·</Text>
+                                <Text style={styles.savedCardMetaDefault}>Default</Text>
+                              </>
+                            ) : null}
+                          </View>
                         </View>
                         {isSelectable ? (
                           <Ionicons
@@ -750,14 +968,22 @@ export default function MeasurementScreen() {
                           />
                         ) : null}
                       </View>
-                      {formatMeasurementDetailLines(m).map((line) => (
-                        <Text
-                          key={`${m.id}-${line}`}
-                          style={styles.savedCardDetail}
-                        >
-                          {line}
-                        </Text>
-                      ))}
+                      {measureEntries.length > 0 ? (
+                        <View style={styles.savedCardChips}>
+                          {measureEntries.map((entry) => (
+                            <View key={entry.key} style={styles.savedCardChip}>
+                              <Text style={styles.savedCardChipLabel}>{entry.label}</Text>
+                              <Text style={styles.savedCardChipValue}>{entry.value}</Text>
+                            </View>
+                          ))}
+                          {m.notes?.trim() ? (
+                            <View style={[styles.savedCardChip, styles.savedCardChipNote]}>
+                              <Text style={styles.savedCardChipLabel}>Note:</Text>
+                              <Text style={styles.savedCardChipValue} numberOfLines={1}>{m.notes.trim()}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
                     </>
                   );
 
@@ -823,7 +1049,16 @@ export default function MeasurementScreen() {
                       </View>
                     </View>
                   );
-                })
+                })}
+                <TouchableOpacity
+                  style={styles.addNewInListBtn}
+                  onPress={() => void openAddMeasurementForm()}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color={COLORS.primaryDark} />
+                  <Text style={styles.addNewInListBtnText}>Add New Measurement</Text>
+                </TouchableOpacity>
+                </>
               )}
             </Animated.View>
           )}
@@ -883,23 +1118,43 @@ export default function MeasurementScreen() {
 
                 <Text style={styles.fieldLabel}>Gender</Text>
                 <View style={styles.chipRow}>
-                  {GENDER_OPTIONS.map((g) => (
-                    <TouchableOpacity
-                      key={g}
-                      style={[styles.chip, gender === g && styles.chipActive]}
-                      onPress={() => setGender(g)}
-                    >
-                      <Text
+                  {GENDER_OPTIONS.map((g) => {
+                    // Locked to the category's gender for a gender-specific
+                    // service (e.g. Women's Clothing) - the customer can't
+                    // create a mismatched profile for it. Unaffected for
+                    // non-gender-specific categories (targetGender is null).
+                    const locked = targetGender != null && g !== targetGender;
+                    return (
+                      <TouchableOpacity
+                        key={g}
                         style={[
-                          styles.chipText,
-                          gender === g && styles.chipTextActive,
+                          styles.chip,
+                          gender === g && styles.chipActive,
+                          locked && styles.chipDisabled,
                         ]}
+                        onPress={() => {
+                          if (!locked) setGender(g);
+                        }}
+                        disabled={locked}
                       >
-                        {g.charAt(0).toUpperCase() + g.slice(1)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text
+                          style={[
+                            styles.chipText,
+                            gender === g && styles.chipTextActive,
+                            locked && styles.chipTextDisabled,
+                          ]}
+                        >
+                          {g.charAt(0).toUpperCase() + g.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
+                {targetGender ? (
+                  <Text style={styles.genderLockNote}>
+                    This service is for {targetGender} customers, so gender is set automatically.
+                  </Text>
+                ) : null}
               </Animated.View>
 
               {/* Measurement fields */}
@@ -907,9 +1162,22 @@ export default function MeasurementScreen() {
                 entering={FadeInDown.delay(140).duration(400)}
                 style={styles.premiumCard}
               >
-                <Text style={styles.cardTitle}>Body Measurements</Text>
+                <View style={styles.cardTitleRow}>
+                  <Text style={styles.cardTitle}>Body Measurements</Text>
+                  {bookableServiceId > 0 && (
+                    <TouchableOpacity
+                      style={styles.sizeGuideLinkInline}
+                      onPress={() => setMeasurementGuideVisible(true)}
+                      accessibilityRole="button"
+                      accessibilityLabel="View size guide"
+                    >
+                      <Ionicons name="resize-outline" size={13} color={COLORS.primaryDark} />
+                      <Text style={styles.sizeGuideLinkText}>Size Guide</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
                 <Text style={styles.cardSubtitle}>
-                  Choose a standard size or enter custom measurements below
+                  Choose a standard size to pre-fill or enter custom measurements below
                 </Text>
 
                 {sizeDisplayOrder.length > 0 ? (
@@ -959,7 +1227,7 @@ export default function MeasurementScreen() {
                 ) : null}
 
                 <View style={styles.fieldsGrid}>
-                  {getOrderedTemplateFields(activeTemplate).map((field) => (
+                  {getOrderedTemplateFields(augmentedTemplate).map((field) => (
                     <View key={field.field_key} style={styles.fieldHalf}>
                       <Text style={styles.fieldLabel}>
                         {field.label}
@@ -1119,10 +1387,10 @@ export default function MeasurementScreen() {
             <TouchableOpacity
               style={[
                 styles.stickyContinueBtn,
-                !canContinueBooking && styles.saveBtnDisabled,
+                (!canContinueBooking || cartSyncing) && styles.saveBtnDisabled,
               ]}
               onPress={handleBookingContinue}
-              disabled={!canContinueBooking}
+              disabled={!canContinueBooking || cartSyncing}
               activeOpacity={0.88}
             >
               <Text style={styles.stickyContinueBtnText}>Continue</Text>
@@ -1131,6 +1399,20 @@ export default function MeasurementScreen() {
           </View>
         ) : null}
       </View>
+
+      <MeasurementGuideModal
+        visible={measurementGuideVisible}
+        onClose={() => setMeasurementGuideVisible(false)}
+        bookableServiceId={bookableServiceId}
+        gender={targetGender}
+        onBookHomeMeasurement={
+          bookingFlowActive
+            ? handleSkipMeasurement
+            : pendingService
+              ? () => void handleSkipPendingService()
+              : undefined
+        }
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -1240,6 +1522,35 @@ const styles = StyleSheet.create({
     color: COLORS.black,
     marginBottom: SPACING.md,
   },
+  sizeGuideLink: {
+    flexDirection: "row",
+    alignSelf: "flex-start",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primaryLight,
+    marginBottom: SPACING.md,
+  },
+  // Same pill, but sitting inside the "Body Measurements" title row (a
+  // space-between flex row) - it must NOT carry the standalone variant's
+  // marginBottom/alignSelf, which pushed it out of vertical alignment with
+  // the title next to it.
+  sizeGuideLinkInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primaryLight,
+  },
+  sizeGuideLinkText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+  },
   optionCard: {
     borderRadius: RADIUS.lg,
     marginBottom: SPACING.sm,
@@ -1317,6 +1628,20 @@ const styles = StyleSheet.create({
   },
   addNewFromEmptyText: { fontSize: 14, fontWeight: "700", color: COLORS.white },
 
+  addNewInListBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: COLORS.primaryDark,
+    borderStyle: "dashed",
+    borderRadius: RADIUS.lg,
+    paddingVertical: 14,
+    marginTop: SPACING.sm,
+  },
+  addNewInListBtnText: { fontSize: 14, fontWeight: "600", color: COLORS.primaryDark },
+
   savedCard: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,
@@ -1348,11 +1673,60 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: SPACING.md,
   },
-  savedCardDetail: {
+  savedCardMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 3,
+  },
+  savedCardMetaBadge: {
+    fontSize: 12,
+    color: COLORS.gray,
+    fontWeight: "500",
+  },
+  savedCardMetaDot: {
+    fontSize: 12,
+    color: COLORS.grayBorder,
+  },
+  savedCardMetaDefault: {
+    fontSize: 11,
+    color: COLORS.primaryDark,
+    fontWeight: "600",
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  savedCardChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 10,
+    paddingLeft: 52,
+  },
+  savedCardChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: COLORS.grayLight,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  savedCardChipNote: {
+    flexShrink: 1,
+    maxWidth: "100%",
+  },
+  savedCardChipLabel: {
     fontSize: 11,
     color: COLORS.gray,
-    marginTop: 2,
-    paddingLeft: 52,
+    fontWeight: "500",
+  },
+  savedCardChipValue: {
+    fontSize: 11,
+    color: COLORS.black,
+    fontWeight: "700",
   },
   savedCardActions: {
     flexDirection: "row",
@@ -1369,12 +1743,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   savedCardName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
     color: COLORS.black,
-    marginBottom: 2,
   },
-  savedCardMeta: { fontSize: 12, color: COLORS.gray },
 
   // ── Add mode (form) ──────────────────────────────────────────────────────
   addScreenHeader: {
@@ -1418,11 +1790,17 @@ const styles = StyleSheet.create({
       android: { elevation: 4 },
     }),
   },
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: SPACING.sm,
+    marginBottom: 4,
+  },
   cardTitle: {
     fontSize: 16,
     fontWeight: "800",
     color: COLORS.black,
-    marginBottom: 4,
     letterSpacing: -0.2,
   },
   cardSubtitle: {
@@ -1555,6 +1933,14 @@ const styles = StyleSheet.create({
   },
   chipText: { fontSize: 13, fontWeight: "600", color: COLORS.gray },
   chipTextActive: { color: COLORS.white },
+  chipDisabled: { opacity: 0.4 },
+  chipTextDisabled: { color: COLORS.grayBorder },
+  genderLockNote: {
+    fontSize: 11.5,
+    color: COLORS.gray,
+    marginTop: SPACING.xs,
+    fontStyle: "italic",
+  },
 
   toggleRow: {
     flexDirection: "row",

@@ -1,5 +1,5 @@
 // ============================================================================
-// Customer orders API — GET /customer/orders/*
+// Customer orders API - GET /customer/orders/*
 // ============================================================================
 
 export interface CustomerOrderListItem {
@@ -11,8 +11,35 @@ export interface CustomerOrderListItem {
   amountPaidDisplay: string;
   serviceTitle: string;
   serviceSubtitle: string;
+  /** Absolute service image URL for the card thumbnail (backend `thumbnail`). */
+  thumbnail?: string | null;
+  /** Backend `expected_delivery_date` (ISO YYYY-MM-DD) - when the order is
+   * expected to be delivered. Absent on cancelled/legacy orders. */
+  expectedDeliveryDate?: string | null;
   canPayNow?: boolean;
   paymentStatusLabel?: string;
+  /** Raw backend payment_status (fully_paid | advance_paid | balance_due | payment_pending | cod_pending | payment_failed | refunded | paid). */
+  paymentStatus?: string;
+  /** Raw backend payment_method ("online" | "cod") - the actual gateway used, straight from the Payment row. Null only when no payment attempt exists yet. */
+  paymentMethod?: string | null;
+  /** Order total in rupees - always present regardless of payment state (backend's `price`/FinalAmount). */
+  orderAmount?: number;
+  pickupType?: string | null;
+  pickupTimeSlot?: string | null;
+  scheduledPickupAt?: string | null;
+  /** Present only on cancelled-order list items (GET /customer/orders/cancelled). */
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
+  penaltyAmount?: number;
+  refundAmount?: number;
+}
+
+/** GET /customer/orders/active|completed|cancelled - paginated envelope. */
+export interface PaginatedCustomerOrders {
+  items: CustomerOrderListItem[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 export interface CustomerOrderKeyValue {
@@ -66,7 +93,7 @@ export interface CustomerOrderDetails extends CustomerOrderSummary {
   updatedAtLabel?: string;
 }
 
-/** GET /customer/orders/{id}/summary — nested API payload */
+/** GET /customer/orders/{id}/summary - nested API payload */
 export interface OrderSummaryOrderBlock {
   order_code: string | null;
   status: string | null;
@@ -93,6 +120,8 @@ export interface OrderSummaryBillingBlock {
   service_fee: number | string | null;
   discount: number | string | null;
   total_amount: number | string | null;
+  advance_amount: number | null;
+  remaining_amount: number | null;
 }
 
 export interface OrderSummaryPaymentBlock {
@@ -117,7 +146,7 @@ export interface CustomerOrderSummaryPayload {
   delivery_address: OrderSummaryDeliveryAddressBlock;
 }
 
-/** GET /customer/orders/{id}/details — nested API payload */
+/** GET /customer/orders/{id}/details - nested API payload */
 export interface OrderDetailsOrderBlock {
   order_code: string | null;
   order_id: number | null;
@@ -127,6 +156,10 @@ export interface OrderDetailsOrderBlock {
   pickup_type: string | null;
   pickup_time_slot: string | null;
   scheduled_pickup_at: string | null;
+  /** Reference style images the customer attached at order time. */
+  image_references?: string[] | null;
+  /** Free-text order notes entered at checkout. */
+  customization_notes?: string | null;
 }
 
 export interface OrderDetailsServiceBlock {
@@ -142,7 +175,11 @@ export interface OrderDetailsPricingBlock {
   cgst_amount: number | string | null;
   sgst_amount: number | string | null;
   service_fee: number | string | null;
+  /** Any cancellation penalty folded into final_amount (0/null if none). */
+  penalty_amount?: number | string | null;
   final_amount: number | string | null;
+  advance_amount: number | null;
+  remaining_amount: number | null;
 }
 
 export interface OrderDetailsPaymentBlock {
@@ -165,8 +202,15 @@ export interface OrderDetailsMeasurementBlock {
   profile_name: string | null;
   gender: string | null;
   fit: string | null;
+  neck: number | string | null;
   chest: number | string | null;
   waist: number | string | null;
+  hips: number | string | null;
+  shoulder: number | string | null;
+  sleeve_length: number | string | null;
+  inseam: number | string | null;
+  height: number | string | null;
+  notes: string | null;
 }
 
 export interface OrderDetailsTimelineItem {
@@ -174,13 +218,49 @@ export interface OrderDetailsTimelineItem {
   timestamp: string | null;
 }
 
+/** One booked service within an order (GET /customer/orders/{id}/details
+ * line_items[]). A direct/buy-now order always has exactly one; a
+ * cart-checkout order can have several (e.g. Men's Shirt + Kids Clothing +
+ * Alteration in the same booking), each with its own measurement. */
+export interface OrderDetailsLineItem {
+  order_item_id: number | null;
+  person_name: string | null;
+  service_id: number | null;
+  service_name: string | null;
+  category_name: string | null;
+  quantity: number;
+  unit_price: number | string | null;
+  line_total: number | string | null;
+  measurement: OrderDetailsMeasurementBlock | null;
+  /** Designer design brief for this item, if any - reflects back what the
+   * customer submitted at booking (design style, embellishment, notes). */
+  stitching_preferences?: {
+    design_style?: string;
+    embellishment_level?: string;
+    design_notes?: string;
+    reference_photo_url?: string;
+  } | null;
+}
+
 export interface CustomerOrderDetailsPayload {
   orderId: number;
   order: OrderDetailsOrderBlock;
+  /** First/primary booked service - kept for backward compatibility.
+   * Prefer `line_items` to render every service on a multi-item order. */
   service: OrderDetailsServiceBlock;
   pricing: OrderDetailsPricingBlock;
   payment: OrderDetailsPaymentBlock;
   delivery_address: OrderDetailsDeliveryAddressBlock;
+  /** First/primary measurement - kept for backward compatibility. Prefer
+   * `line_items[].measurement` for a multi-item order. */
   measurement: OrderDetailsMeasurementBlock;
+  line_items: OrderDetailsLineItem[];
   tracking_timeline: OrderDetailsTimelineItem[];
+  /** Set only when this order was cancelled postpaid (COD) with a nonzero
+   * penalty still owed - that penalty is deferred to whatever order the
+   * customer places next, not charged now (nothing was paid upfront on a
+   * COD order). Null/undefined for every other order, including prepaid
+   * cancellations (that penalty is already reflected in pricing.penalty_amount
+   * / the refund, not deferred). */
+  pendingPenaltyAmount?: number | null;
 }

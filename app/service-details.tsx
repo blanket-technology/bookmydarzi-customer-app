@@ -1,43 +1,51 @@
 /**
- * Service Details - configure stitching type, options, and quantity before add-to-cart.
+ * Service Details - configure stitching type, options, and quantity.
+ * Bottom CTA: Add to Cart (cart flow) + Book Now (direct checkout flow).
  */
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
-import { useAuthStore } from "../store/useAuthStore";
-import { useCartStore } from "../src/store/useCartStore";
-import { useWishlistStore } from "../src/store/useWishlistStore";
-import { useToastStore } from "../src/store/useToastStore";
+import ErrorState from "../src/components/common/ErrorState";
+import { useAppLanguage } from "../src/i18n/useAppLanguage";
 import {
-  fetchCatalogTree,
-  findDirectServiceByName,
-  findServiceLine,
-  findServiceLineByName,
-  resolveCatalogCategory,
+    fetchCatalogTree,
+    fetchServiceRatings,
+    findDirectServiceByName,
+    findServiceLine,
+    findServiceLineByName,
+    resolveCatalogCategory,
+    type ServiceRatings,
 } from "../src/services/catalogService";
+import { useCartStore } from "../src/store/useCartStore";
+import { useToastStore } from "../src/store/useToastStore";
 import type {
-  CatalogDirectService,
-  CatalogServiceLine,
-  CatalogStitchingType,
+    CatalogDirectService,
+    CatalogServiceLine,
+    CatalogStitchingType,
 } from "../src/types/catalogApi";
 import { safeRouterPush } from "../src/utils/safeNavigation";
+import { normalizeServiceImageUrl } from "../src/utils/serviceImage";
+import { useAuthStore } from "../store/useAuthStore";
+import type { StitchingPreferences } from "../src/types/cart";
 
 const CATEGORY_ICONS: Record<string, { icon: string; color: string; bg: string }> = {
   mens: { icon: "shirt-outline", color: "#0c6c75", bg: "#e0f7f8" },
@@ -59,24 +67,30 @@ function getCategoryStyle(name: string) {
   );
 }
 
-function isValidImageUrl(url: string | null | undefined): boolean {
-  if (!url?.trim()) return false;
-  return /^https?:\/\//i.test(url.trim());
-}
 
 function formatMoney(amount: number): string {
   return `₹${amount.toLocaleString("en-IN")}`;
 }
 
+function getServiceBaseName(name: string): string {
+  const t = name.trim();
+  const l = t.toLowerCase();
+  if (l.startsWith("normal ")) return t.slice("normal ".length).trim();
+  if (l.startsWith("designer ")) return t.slice("designer ".length).trim();
+  return t;
+}
+
 export default function ServiceDetailsScreen() {
   const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
+  const heroHeight = Math.min(190, Math.max(150, screenHeight * 0.24));
   const router = useRouter();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const {
     setPendingService,
     setPendingRoute,
-    setBookingFlowActive,
     clearPendingBookingMeasurement,
+    setBuyNowMode,
   } = useCartStore();
 
   const params = useLocalSearchParams<{
@@ -91,6 +105,7 @@ export default function ServiceDetailsScreen() {
     serviceLineId?: string;
     selectedStitchingId?: string;
     quantity?: string;
+    filterBaseName?: string;
   }>();
 
   const catalogCategoryId = Number(params.catalogCategoryId ?? 0);
@@ -103,53 +118,28 @@ export default function ServiceDetailsScreen() {
   const paramServiceLineId = Number(params.serviceLineId ?? 0);
   const paramSelectedStitchingId = Number(params.selectedStitchingId ?? 0);
   const paramQuantity = Number(params.quantity ?? 1);
+  const filterBaseName = params.filterBaseName?.trim() || null;
 
   const catStyle = getCategoryStyle(categoryName);
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [serviceLine, setServiceLine] = useState<CatalogServiceLine | null>(null);
   const [directService, setDirectService] = useState<CatalogDirectService | null>(null);
   const [relatedLines, setRelatedLines] = useState<CatalogServiceLine[]>([]);
   const [stitchingTypes, setStitchingTypes] = useState<CatalogStitchingType[]>([]);
   const [selectedStitchingId, setSelectedStitchingId] = useState<number | null>(null);
+  const [designStyle, setDesignStyle] = useState<StitchingPreferences["design_style"] | undefined>(undefined);
+  const [embellishmentLevel, setEmbellishmentLevel] = useState<StitchingPreferences["embellishment_level"] | undefined>(undefined);
+  const [designNotes, setDesignNotes] = useState("");
+  const [categoryImageUrl, setCategoryImageUrl] = useState<string | null>(null);
   const [quantitiesByStitching, setQuantitiesByStitching] = useState<
     Record<number, number>
   >({});
+  const [serviceRatings, setServiceRatings] = useState<ServiceRatings | null>(null);
 
+  const { t } = useAppLanguage();
   const showToast = useToastStore((s) => s.show);
-  const {
-    fetchWishlist,
-    toggle: toggleWishlist,
-    isWishlisted,
-  } = useWishlistStore();
-  const wishlistServiceId =
-    selectedStitchingId ??
-    (paramBookableId > 0 ? paramBookableId : paramServiceLineId);
-  const wishlisted =
-    wishlistServiceId > 0
-      ? Boolean(isWishlisted("service", wishlistServiceId))
-      : false;
-
-  useEffect(() => {
-    if (isAuthenticated) fetchWishlist();
-  }, [isAuthenticated, fetchWishlist]);
-
-  const handleToggleWishlist = useCallback(async () => {
-    if (!isAuthenticated) {
-      showToast("Please log in to save favourites");
-      return;
-    }
-    if (!wishlistServiceId || wishlistServiceId <= 0) return;
-    try {
-      const nowWishlisted = await toggleWishlist({
-        item_type: "service",
-        service_id: wishlistServiceId,
-      });
-      showToast(nowWishlisted ? "Added to wishlist" : "Removed from wishlist");
-    } catch {
-      showToast("Could not update wishlist");
-    }
-  }, [isAuthenticated, showToast, toggleWishlist, wishlistServiceId]);
 
   const getQuantityForStitching = useCallback(
     (stitchingId: number) => {
@@ -207,6 +197,7 @@ export default function ServiceDetailsScreen() {
   const loadServiceData = useCallback(
     async (lineId?: number, lineName?: string) => {
       setLoading(true);
+      setLoadError(false);
       try {
         const tree = await fetchCatalogTree();
         const category = resolveCatalogCategory(
@@ -223,6 +214,8 @@ export default function ServiceDetailsScreen() {
           return;
         }
 
+        setCategoryImageUrl(normalizeServiceImageUrl(category.image_url) ?? null);
+
         let line: CatalogServiceLine | undefined;
         if (lineId && lineId > 0) {
           line = findServiceLine(category, lineId);
@@ -238,9 +231,12 @@ export default function ServiceDetailsScreen() {
         if (line) {
           setServiceLine(line);
           setDirectService(null);
-          const types = [...(line.stitching_types ?? [])].sort(
+          const allTypes = [...(line.stitching_types ?? [])].sort(
             (a, b) => a.display_order - b.display_order,
           );
+          const types = filterBaseName
+            ? allTypes.filter((t) => getServiceBaseName(t.name) === filterBaseName)
+            : allTypes;
           setStitchingTypes(types);
           const preferredId =
             paramSelectedStitchingId > 0 &&
@@ -260,8 +256,14 @@ export default function ServiceDetailsScreen() {
             {
               service_id: direct.service_id,
               name: direct.name,
+              description: direct.description,
               base_price: direct.base_price,
+              estimated_delivery_days: direct.estimated_delivery_days ?? 7,
               display_order: 0,
+              is_premium: direct.is_premium ?? false,
+              is_active: direct.is_active ?? true,
+              image_url: direct.image_url,
+              highlights: direct.highlights ?? [],
               service_line_id: direct.service_line_id ?? 0,
               service_line_name: direct.service_line_name ?? direct.name,
               category_id: direct.category_id,
@@ -285,6 +287,7 @@ export default function ServiceDetailsScreen() {
         setDirectService(null);
         setStitchingTypes([]);
         setRelatedLines([]);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -296,6 +299,7 @@ export default function ServiceDetailsScreen() {
       paramBookableId,
       paramSelectedStitchingId,
       serviceName,
+      filterBaseName,
     ],
   );
 
@@ -305,6 +309,14 @@ export default function ServiceDetailsScreen() {
       serviceName,
     );
   }, [loadServiceData, paramServiceLineId, serviceName]);
+
+  useEffect(() => {
+    const ratingServiceId =
+      paramBookableId > 0 ? paramBookableId : paramServiceLineId;
+    if (ratingServiceId > 0) {
+      void fetchServiceRatings(ratingServiceId).then(setServiceRatings);
+    }
+  }, [paramBookableId, paramServiceLineId]);
 
   useEffect(() => {
     if (paramQuantity >= 1 && paramQuantity <= 99 && paramSelectedStitchingId > 0) {
@@ -320,79 +332,106 @@ export default function ServiceDetailsScreen() {
     [selectedStitchingId, stitchingTypes],
   );
 
+  // Selected variant's own photo (e.g. Designer Kurti's actual photo) wins
+  // over the shared line image, so the hero updates when the customer
+  // switches quality - falls back to the line/param/category image only
+  // when that specific variant has no photo of its own.
   const displayImage = useMemo(() => {
-    if (isValidImageUrl(serviceLine?.image_url)) return serviceLine!.image_url!;
-    if (isValidImageUrl(paramImageUrl)) return paramImageUrl!;
-    return null;
-  }, [paramImageUrl, serviceLine]);
+    const fromVariant = normalizeServiceImageUrl(selectedStitching?.image_url);
+    if (fromVariant) return fromVariant;
+    const fromLine = normalizeServiceImageUrl(serviceLine?.image_url);
+    if (fromLine) return fromLine;
+    const fromParam = normalizeServiceImageUrl(paramImageUrl);
+    if (fromParam) return fromParam;
+    return categoryImageUrl ?? null;
+  }, [selectedStitching, paramImageUrl, serviceLine, categoryImageUrl]);
 
+  // Selected variant's own description wins, same as displayImage above -
+  // falls back to the static nav param / line / direct-service description
+  // only when that specific variant has none of its own.
   const displayDescription = useMemo(() => {
     return (
+      (selectedStitching?.description ?? "").trim() ||
       paramDescription.trim() ||
       (serviceLine?.description ?? "").trim() ||
       (directService?.description ?? "").trim() ||
       ""
     );
-  }, [paramDescription, serviceLine, directService]);
+  }, [selectedStitching, paramDescription, serviceLine, directService]);
 
   const unitPrice = selectedStitching?.base_price ?? paramBasePrice;
 
+  const lowestPrice = useMemo(
+    () =>
+      stitchingTypes.length > 0
+        ? Math.min(...stitchingTypes.map((s) => s.base_price))
+        : paramBasePrice,
+    [stitchingTypes, paramBasePrice],
+  );
+
   const canContinue = selectedStitching != null && selectedStitching.service_id > 0;
 
-  const handleContinue = useCallback(() => {
-    if (!selectedStitching) {
-      Alert.alert(
-        "Select stitching type",
-        "Please choose a stitching type to continue.",
-      );
-      return;
-    }
-
-    const qty = getQuantityForStitching(selectedStitching.service_id);
-    const pendingItem = {
-      bookableServiceId: selectedStitching.service_id,
-      serviceLineId: serviceLine?.id,
-      serviceLineName: serviceLine?.name ?? directService?.name ?? serviceName,
-      stitchingType: selectedStitching.name,
-      categoryId: catalogCategoryId,
-      categoryName,
-      basePrice: selectedStitching.base_price,
-      displayName: `${serviceLine?.name ?? serviceName} · ${selectedStitching.name}`,
-      quantity: qty,
-    };
-
-    if (!isAuthenticated) {
+  const _buildPendingAndNavigate = useCallback(
+    (bookNow: boolean) => {
+      if (!selectedStitching) {
+        Alert.alert("Select stitching type", "Please choose a stitching type to continue.");
+        return;
+      }
+      const qty = getQuantityForStitching(selectedStitching.service_id);
+      const isPremiumSelected = selectedStitching.is_premium ?? false;
+      const pendingItem = {
+        bookableServiceId: selectedStitching.service_id,
+        serviceLineId: serviceLine?.id,
+        serviceLineName: serviceLine?.name ?? directService?.name ?? serviceName,
+        stitchingType: selectedStitching.name,
+        categoryId: catalogCategoryId,
+        categoryName,
+        basePrice: selectedStitching.base_price,
+        displayName: `${serviceLine?.name ?? serviceName} · ${selectedStitching.name}`,
+        imageUrl: displayImage,
+        quantity: qty,
+        stitchingPreferences: isPremiumSelected
+          ? {
+              design_style: designStyle,
+              embellishment_level: embellishmentLevel,
+              design_notes: designNotes.trim() || undefined,
+            }
+          : undefined,
+      };
+      if (!isAuthenticated) {
+        setPendingService(pendingItem);
+        setBuyNowMode(bookNow);
+        clearPendingBookingMeasurement();
+        setPendingRoute("/service-details", buildReturnParams());
+        safeRouterPush(router, "/(auth)/login");
+        return;
+      }
       setPendingService(pendingItem);
-      setBookingFlowActive(true);
+      setBuyNowMode(bookNow);
       clearPendingBookingMeasurement();
-      setPendingRoute("/service-details", buildReturnParams());
-      safeRouterPush(router, "/(auth)/login");
-      return;
-    }
+      safeRouterPush(router, {
+        pathname: "/measurement",
+        params: { bookableServiceId: String(selectedStitching.service_id) },
+      } as never);
+    },
+    [
+      buildReturnParams, catalogCategoryId, categoryName, clearPendingBookingMeasurement,
+      directService?.name, getQuantityForStitching, isAuthenticated, router,
+      selectedStitching, serviceLine, serviceName,
+      setBuyNowMode, setPendingRoute, setPendingService,
+      designStyle, embellishmentLevel, designNotes,
+    ],
+  );
 
-    setPendingService(pendingItem);
-    setBookingFlowActive(true);
-    clearPendingBookingMeasurement();
-    safeRouterPush(router, {
-      pathname: "/measurement",
-      params: { bookableServiceId: String(selectedStitching.service_id) },
-    } as never);
-  }, [
-    buildReturnParams,
-    catalogCategoryId,
-    categoryName,
-    clearPendingBookingMeasurement,
-    directService?.name,
-    getQuantityForStitching,
-    isAuthenticated,
-    router,
-    selectedStitching,
-    serviceLine,
-    serviceName,
-    setBookingFlowActive,
-    setPendingRoute,
-    setPendingService,
-  ]);
+  const handleContinue = useCallback(
+    () => _buildPendingAndNavigate(false),
+    [_buildPendingAndNavigate],
+  );
+
+  const handleBookNow = useCallback(
+    () => _buildPendingAndNavigate(true),
+    [_buildPendingAndNavigate],
+  );
 
   return (
     <View style={styles.root}>
@@ -411,25 +450,18 @@ export default function ServiceDetailsScreen() {
           >
             <Ionicons name="arrow-back" size={22} color={COLORS.black} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Service Details</Text>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={handleToggleWishlist}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityRole="button"
-            accessibilityLabel={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
-          >
-            <Ionicons
-              name={wishlisted ? "heart" : "heart-outline"}
-              size={22}
-              color={wishlisted ? COLORS.error : COLORS.black}
-            />
-          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {filterBaseName ?? serviceLine?.name ?? serviceName}
+          </Text>
+          {/* Wishlist heart removed. Transparent spacer (NOT styles.backBtn -
+              that draws a white circle) balances the back button so the title
+              stays centered in the 3-column header row. */}
+          <View style={styles.headerSpacer} />
         </View>
 
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.heroCard}>
+        <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, { height: heroHeight }]}>
           {displayImage ? (
-            <Image source={{ uri: displayImage }} style={styles.heroImage} resizeMode="cover" />
+            <Image source={{ uri: displayImage }} style={styles.heroImage} contentFit="cover" cachePolicy="memory-disk" transition={150} />
           ) : (
             <LinearGradient
               colors={["#0c6c75", "#1aa3b0"]}
@@ -448,33 +480,44 @@ export default function ServiceDetailsScreen() {
             colors={["transparent", "rgba(0,0,0,0.25)", "rgba(0,0,0,0.78)"]}
             style={styles.heroOverlay}
           >
-            <View style={styles.heroTopRow}>
-              <View style={styles.categoryBadge}>
-                <Ionicons
-                  name={catStyle.icon as keyof typeof Ionicons.glyphMap}
-                  size={12}
-                  color={COLORS.white}
-                />
-                <Text style={styles.categoryBadgeText}>{categoryName}</Text>
-              </View>
-              <LinearGradient
-                colors={["#0c6c75", "#1aa3b0"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.heroPriceBadge}
-              >
-                <Text style={styles.heroPriceBadgeLabel}>From</Text>
-                <Text style={styles.heroPriceBadgeValue}>
-                  {formatMoney(unitPrice)}
-                </Text>
-              </LinearGradient>
-            </View>
-            <Text style={styles.heroTitle}>{serviceLine?.name ?? serviceName}</Text>
+            {/* Service name lives in the header now - not repeated on the
+                image. Only the price pill sits at the bottom of the hero. */}
+            <LinearGradient
+              colors={["#0c6c75", "#1aa3b0"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.heroPriceBadge}
+            >
+              <Text style={styles.heroPriceBadgeValue}>
+                Starting from {formatMoney(lowestPrice)}
+              </Text>
+            </LinearGradient>
           </LinearGradient>
         </Animated.View>
 
+        {/* Guarantee strip - builds trust before they read the details */}
+        <Animated.View entering={FadeInDown.delay(30).duration(380)} style={styles.guaranteeStrip}>
+          {(
+            [
+              { icon: "ribbon-outline" as const,            text: "Fit guaranteed\nor free redo" },
+              { icon: "shield-checkmark-outline" as const,  text: "Verified expert\ntailors" },
+              { icon: "bicycle-outline" as const,           text: "Doorstep pickup\n& delivery" },
+            ] as const
+          ).map((item, i) => (
+            <React.Fragment key={item.icon}>
+              <View style={styles.guaranteeItem}>
+                <View style={styles.guaranteeIconBox}>
+                  <Ionicons name={item.icon} size={16} color="#0c6c75" />
+                </View>
+                <Text style={styles.guaranteeText}>{item.text}</Text>
+              </View>
+              {i < 2 ? <View style={styles.guaranteeDivider} /> : null}
+            </React.Fragment>
+          ))}
+        </Animated.View>
+
         <Animated.View entering={FadeInDown.delay(60).duration(400)} style={styles.section}>
-          <Text style={styles.sectionTitle}>About this service</Text>
+          <Text style={styles.sectionTitle}>{t("service.aboutService")}</Text>
           {displayDescription ? (
             <Text style={styles.description}>{displayDescription}</Text>
           ) : loading ? (
@@ -484,11 +527,114 @@ export default function ServiceDetailsScreen() {
           )}
         </Animated.View>
 
+        {serviceRatings != null && serviceRatings.total_reviews > 0 ? (
+          <Animated.View
+            entering={FadeInDown.delay(40).duration(400)}
+            style={styles.ratingsSection}
+          >
+            <Text style={styles.sectionTitle}>{t("service.customerReviews")}</Text>
+            <View style={styles.ratingsSummary}>
+              <View style={styles.ratingsScoreCol}>
+                <Text style={styles.ratingsScore}>
+                  {serviceRatings.avg_rating.toFixed(1)}
+                </Text>
+                <View style={styles.starsRow}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Ionicons
+                      key={star}
+                      name={
+                        serviceRatings.avg_rating >= star
+                          ? "star"
+                          : serviceRatings.avg_rating >= star - 0.5
+                          ? "star-half"
+                          : "star-outline"
+                      }
+                      size={14}
+                      color="#F59E0B"
+                    />
+                  ))}
+                </View>
+                <Text style={styles.ratingsCount}>
+                  {serviceRatings.total_reviews} review
+                  {serviceRatings.total_reviews !== 1 ? "s" : ""}
+                </Text>
+              </View>
+              <View style={styles.ratingsBarsCol}>
+                {[5, 4, 3, 2, 1].map((star) => {
+                  const count = serviceRatings.star_counts[String(star)] ?? 0;
+                  const pct =
+                    serviceRatings.total_reviews > 0
+                      ? count / serviceRatings.total_reviews
+                      : 0;
+                  return (
+                    <View key={star} style={styles.ratingsBarRow}>
+                      <Text style={styles.ratingsBarLabel}>{star}</Text>
+                      <View style={styles.ratingsBarTrack}>
+                        <View
+                          style={[styles.ratingsBarFill, { flex: pct }]}
+                        />
+                        <View style={{ flex: 1 - pct }} />
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            {serviceRatings.recent_reviews.length > 0 ? (
+              <View style={styles.reviewsList}>
+                {serviceRatings.recent_reviews.slice(0, 3).map((review, idx) => (
+                  <View key={idx} style={styles.reviewCard}>
+                    <View style={styles.reviewHeader}>
+                      <View style={styles.reviewStars}>
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Ionicons
+                            key={s}
+                            name={s <= review.rating ? "star" : "star-outline"}
+                            size={12}
+                            color="#F59E0B"
+                          />
+                        ))}
+                      </View>
+                      {review.created_at ? (
+                        <Text style={styles.reviewDate}>
+                          {new Date(review.created_at).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {review.comment ? (
+                      <Text style={styles.reviewComment} numberOfLines={3}>
+                        {review.comment}
+                      </Text>
+                    ) : (
+                      <Text style={styles.reviewNoComment}>No comment</Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </Animated.View>
+        ) : null}
+
         {loading ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator color={COLORS.primary} />
             <Text style={styles.loadingText}>Loading options...</Text>
           </View>
+        ) : loadError ? (
+          <ErrorState
+            message="Could not load service details. Please check your connection and try again."
+            onRetry={() =>
+              loadServiceData(
+                paramServiceLineId > 0 ? paramServiceLineId : undefined,
+                serviceName,
+              )
+            }
+          />
         ) : stitchingTypes.length === 0 ? (
           <View style={styles.emptyWrap}>
             <Ionicons name="alert-circle-outline" size={40} color={COLORS.grayBorder} />
@@ -503,17 +649,21 @@ export default function ServiceDetailsScreen() {
               entering={FadeInDown.delay(100).duration(400)}
               style={styles.stitchingSection}
             >
-              <Text style={styles.sectionTitle}>Stitching type</Text>
-              <Text style={styles.sectionSub}>Select finish and quantity</Text>
+              <Text style={styles.sectionTitle}>{t("service.stitchingType")}</Text>
+              <Text style={styles.sectionSub}>{t("service.selectFinish")}</Text>
               {stitchingTypes.map((stitching) => {
                 const selected = stitching.service_id === selectedStitchingId;
-                const isDesigner = stitching.name.toLowerCase().includes("designer");
+                const isPremium = stitching.is_premium ?? false;
                 const stitchQty = getQuantityForStitching(stitching.service_id);
+                const deliveryDays = stitching.estimated_delivery_days ?? 7;
+                const highlights = stitching.highlights ?? [];
+                const stitchDesc = stitching.description?.trim() || null;
                 return (
                   <Pressable
                     key={stitching.service_id}
                     style={({ pressed }) => [
                       styles.stitchCard,
+                      isPremium && !selected && styles.stitchCardPremium,
                       selected && styles.stitchCardSelected,
                       pressed && styles.optionCardPressed,
                     ]}
@@ -523,29 +673,37 @@ export default function ServiceDetailsScreen() {
                       <View
                         style={[
                           styles.stitchIcon,
-                          {
-                            backgroundColor: isDesigner
-                              ? "#F5E6C0"
-                              : COLORS.primaryLight,
-                          },
+                          { backgroundColor: isPremium ? "#F5E6C0" : COLORS.primaryLight },
                         ]}
                       >
                         <Ionicons
-                          name={isDesigner ? "diamond-outline" : "shirt-outline"}
+                          name={isPremium ? "diamond-outline" : "shirt-outline"}
                           size={24}
-                          color={isDesigner ? "#C9A84C" : COLORS.primaryDark}
+                          color={isPremium ? "#C9A84C" : COLORS.primaryDark}
                         />
                       </View>
                       <View style={styles.stitchBody}>
-                        <Text style={styles.stitchTitle}>{stitching.name}</Text>
-                        <Text style={styles.stitchDesc}>
-                          {isDesigner
-                            ? "Premium designer finish with detailed styling"
-                            : "Classic tailoring with reliable everyday finish"}
-                        </Text>
-                        <Text style={styles.stitchPrice}>
-                          {formatMoney(stitching.base_price)}
-                        </Text>
+                        <View style={styles.stitchTitleRow}>
+                          <Text style={styles.stitchTitle}>{stitching.name}</Text>
+                          {isPremium ? (
+                            <View style={styles.premiumBadge}>
+                              <Ionicons name="diamond-outline" size={9} color="#C9A84C" />
+                              <Text style={styles.premiumBadgeText}>Designer Pick</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        {stitchDesc ? (
+                          <Text style={styles.stitchDesc}>{stitchDesc}</Text>
+                        ) : null}
+                        <View style={styles.stitchMeta}>
+                          <Text style={styles.stitchPrice}>
+                            {formatMoney(stitching.base_price)}
+                          </Text>
+                          <View style={styles.deliveryBadge}>
+                            <Ionicons name="time-outline" size={11} color="#065F46" />
+                            <Text style={styles.deliveryBadgeText}>{deliveryDays}d</Text>
+                          </View>
+                        </View>
                       </View>
                       {selected ? (
                         <View style={styles.stitchActiveDot}>
@@ -559,9 +717,21 @@ export default function ServiceDetailsScreen() {
                         <View style={styles.stitchRadio} />
                       )}
                     </View>
+
+                    {selected && highlights.length > 0 ? (
+                      <View style={styles.highlightsWrap}>
+                        {highlights.map((h, idx) => (
+                          <View key={idx} style={styles.highlightRow}>
+                            <Ionicons name="checkmark-circle" size={13} color={COLORS.primaryDark} />
+                            <Text style={styles.highlightText}>{h}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+
                     {selected ? (
                       <View style={styles.stitchQtyRow}>
-                        <Text style={styles.stitchQtyLabel}>Quantity</Text>
+                        <Text style={styles.stitchQtyLabel}>{t("service.quantity")}</Text>
                         <View style={styles.stitchQtyControl}>
                           <TouchableOpacity
                             style={styles.stitchQtyBtn}
@@ -599,23 +769,87 @@ export default function ServiceDetailsScreen() {
                         </View>
                       </View>
                     ) : null}
+
+                    {selected && isPremium ? (
+                      <View style={styles.designBriefWrap}>
+                        <View style={styles.designBriefHeader}>
+                          <Ionicons name="diamond-outline" size={14} color="#C9A84C" />
+                          <Text style={styles.designBriefTitle}>Your Design Brief</Text>
+                        </View>
+                        <Text style={styles.designBriefSub}>
+                          Tell your specialist tailor what you have in mind - optional, but helps them nail the design.
+                        </Text>
+
+                        <Text style={styles.designBriefLabel}>Design style</Text>
+                        <View style={styles.designChipRow}>
+                          {(["traditional", "contemporary", "fusion", "custom"] as const).map((opt) => (
+                            <TouchableOpacity
+                              key={opt}
+                              style={[styles.designChip, designStyle === opt && styles.designChipSelected]}
+                              onPress={() => setDesignStyle(designStyle === opt ? undefined : opt)}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={[styles.designChipText, designStyle === opt && styles.designChipTextSelected]}>
+                                {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+
+                        <Text style={styles.designBriefLabel}>Embellishment</Text>
+                        <View style={styles.designChipRow}>
+                          {(["none", "light", "heavy"] as const).map((opt) => (
+                            <TouchableOpacity
+                              key={opt}
+                              style={[styles.designChip, embellishmentLevel === opt && styles.designChipSelected]}
+                              onPress={() => setEmbellishmentLevel(embellishmentLevel === opt ? undefined : opt)}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={[styles.designChipText, embellishmentLevel === opt && styles.designChipTextSelected]}>
+                                {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+
+                        <Text style={styles.designBriefLabel}>Describe your design idea</Text>
+                        <TextInput
+                          style={styles.designNotesInput}
+                          placeholder="e.g. Mandarin collar, full sleeves, like a Pathani suit"
+                          placeholderTextColor={COLORS.gray}
+                          value={designNotes}
+                          onChangeText={setDesignNotes}
+                          multiline
+                          numberOfLines={3}
+                          maxLength={1000}
+                        />
+                      </View>
+                    ) : null}
                   </Pressable>
                 );
               })}
             </Animated.View>
 
-            <TouchableOpacity
-              style={[
-                styles.continueBtn,
-                !canContinue && styles.continueBtnDisabled,
-              ]}
-              onPress={handleContinue}
-              disabled={!canContinue}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.continueBtnText}>Continue</Text>
-              <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
-            </TouchableOpacity>
+            <View style={styles.ctaRow}>
+              <TouchableOpacity
+                style={[styles.addToCartBtn, !canContinue && styles.continueBtnDisabled]}
+                onPress={handleContinue}
+                disabled={!canContinue}
+                activeOpacity={0.9}
+              >
+                <Ionicons name="cart-outline" size={18} color={COLORS.primaryDark} />
+                <Text style={styles.addToCartBtnText}>{t("service.addToCart")}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.bookNowBtn, !canContinue && styles.continueBtnDisabled]}
+                onPress={handleBookNow}
+                disabled={!canContinue}
+                activeOpacity={0.9}
+              >
+                <Ionicons name="flash-outline" size={18} color={COLORS.white} />
+                <Text style={styles.bookNowBtnText}>{t("service.bookNow")}</Text>
+              </TouchableOpacity>
+            </View>
           </>
         )}
       </ScrollView>
@@ -625,28 +859,38 @@ export default function ServiceDetailsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.offWhite },
-  scroll: { paddingHorizontal: SPACING.lg },
+  // Uniform vertical rhythm: the ScrollView lays out its section children
+  // with a single `gap`, so every block is evenly spaced. Sections must NOT
+  // add their own marginBottom (it would stack on top of the gap) or
+  // marginHorizontal (the padding here already sets the gutter).
+  scroll: { paddingHorizontal: SPACING.md, gap: SPACING.md },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.sm,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: COLORS.white,
     alignItems: "center",
     justifyContent: "center",
     ...SHADOW.card,
   },
-  headerTitle: { fontSize: 17, fontWeight: "800", color: COLORS.black },
+  headerTitle: {
+    flex: 1,
+    textAlign: "center",
+    marginHorizontal: SPACING.sm,
+    fontSize: 16,
+    fontWeight: "800",
+    color: COLORS.black,
+  },
+  headerSpacer: { width: 36, height: 36 },
   heroCard: {
     borderRadius: RADIUS.xl,
     overflow: "hidden",
-    height: 240,
-    marginBottom: SPACING.lg,
     ...SHADOW.card,
   },
   heroImage: { width: "100%", height: "100%" },
@@ -656,8 +900,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   heroIcon: {
-    width: 72,
-    height: 72,
+    width: 56,
+    height: 56,
     borderRadius: RADIUS.lg,
     alignItems: "center",
     justifyContent: "center",
@@ -671,36 +915,12 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     padding: SPACING.md,
   },
-  heroTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: SPACING.sm,
-    gap: SPACING.sm,
-  },
-  categoryBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.28)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    maxWidth: "58%",
-  },
-  categoryBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.white,
-    letterSpacing: 0.4,
-  },
   heroPriceBadge: {
-    borderRadius: 14,
+    alignSelf: "flex-start",
+    borderRadius: 999,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    alignItems: "flex-end",
+    paddingVertical: 6,
+    marginTop: 8,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -711,30 +931,16 @@ const styles = StyleSheet.create({
       android: { elevation: 5 },
     }),
   },
-  heroPriceBadgeLabel: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: "rgba(255,255,255,0.85)",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
   heroPriceBadgeValue: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "800",
     color: COLORS.white,
-    marginTop: 1,
+    letterSpacing: 0.2,
   },
-  heroTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: COLORS.white,
-    letterSpacing: -0.5,
-    lineHeight: 32,
-  },
-  section: { marginBottom: SPACING.lg },
-  stitchingSection: { marginBottom: SPACING.md },
+  section: {},
+  stitchingSection: {},
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "800",
     color: COLORS.black,
     marginBottom: 6,
@@ -759,8 +965,8 @@ const styles = StyleSheet.create({
   },
   stitchCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: SPACING.md,
+    borderRadius: 16,
+    padding: SPACING.sm,
     marginBottom: SPACING.sm,
     borderWidth: 1.5,
     borderColor: COLORS.grayBorder,
@@ -772,6 +978,19 @@ const styles = StyleSheet.create({
         shadowRadius: 10,
       },
       android: { elevation: 2 },
+    }),
+  },
+  stitchCardPremium: {
+    borderColor: "#E8CE8B",
+    backgroundColor: "#FFFDF7",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#C9A84C",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.12,
+        shadowRadius: 10,
+      },
+      android: { elevation: 3 },
     }),
   },
   stitchCardSelected: {
@@ -794,18 +1013,41 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
   stitchIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
   stitchBody: { flex: 1, minWidth: 0 },
+  stitchTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 4,
+  },
   stitchTitle: {
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: "800",
     color: COLORS.black,
-    marginBottom: 4,
+  },
+  premiumBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  premiumBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#92400E",
+    letterSpacing: 0.2,
   },
   stitchDesc: {
     fontSize: 12,
@@ -813,10 +1055,48 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginBottom: 6,
   },
+  stitchMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   stitchPrice: {
     fontSize: 15,
     fontWeight: "800",
     color: COLORS.primaryDark,
+  },
+  deliveryBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#D1FAE5",
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  deliveryBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#065F46",
+  },
+  highlightsWrap: {
+    marginTop: SPACING.sm,
+    marginBottom: 2,
+    paddingTop: SPACING.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(12, 108, 117, 0.12)",
+    gap: 6,
+  },
+  highlightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  highlightText: {
+    fontSize: 12,
+    color: "#374151",
+    lineHeight: 17,
+    flex: 1,
   },
   stitchActiveDot: { marginTop: 4 },
   stitchRadio: {
@@ -863,6 +1143,73 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: COLORS.black,
   },
+  designBriefWrap: {
+    marginTop: SPACING.md,
+    paddingTop: SPACING.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(12, 108, 117, 0.12)",
+  },
+  designBriefHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  designBriefTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: COLORS.black,
+  },
+  designBriefSub: {
+    fontSize: 11.5,
+    color: COLORS.gray,
+    marginTop: 3,
+    marginBottom: SPACING.sm,
+    lineHeight: 15,
+  },
+  designBriefLabel: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: COLORS.gray,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+    marginTop: SPACING.sm,
+    marginBottom: 6,
+  },
+  designChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  designChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    backgroundColor: COLORS.white,
+  },
+  designChipSelected: {
+    borderColor: "#C9A84C",
+    backgroundColor: "#FDF3DC",
+  },
+  designChipText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: COLORS.gray,
+  },
+  designChipTextSelected: {
+    color: "#8A6D1F",
+  },
+  designNotesInput: {
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    fontSize: 13,
+    color: COLORS.black,
+    minHeight: 64,
+    textAlignVertical: "top",
+  },
   continueBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -870,7 +1217,7 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: COLORS.primaryDark,
     borderRadius: 16,
-    height: 54,
+    height: 48,
     marginTop: SPACING.sm,
     marginBottom: SPACING.md,
     ...Platform.select({
@@ -884,11 +1231,142 @@ const styles = StyleSheet.create({
     }),
   },
   continueBtnDisabled: { opacity: 0.5 },
-  continueBtnText: { fontSize: 16, fontWeight: "800", color: COLORS.white },
+  continueBtnText: { fontSize: 15, fontWeight: "800", color: COLORS.white },
+  ctaRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  addToCartBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: COLORS.primaryDark,
+    backgroundColor: COLORS.white,
+  },
+  addToCartBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+  },
+  bookNowBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: COLORS.primaryDark,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#0c6c75",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.22,
+        shadowRadius: 10,
+      },
+      android: { elevation: 5 },
+    }),
+  },
+  bookNowBtnText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: COLORS.white,
+  },
   loadingWrap: { alignItems: "center", gap: SPACING.sm, paddingVertical: SPACING.xl },
   loadingText: { fontSize: 14, color: COLORS.gray },
   emptyWrap: { alignItems: "center", gap: SPACING.sm, paddingVertical: SPACING.xl },
   emptyTitle: { fontSize: 16, fontWeight: "700", color: COLORS.black },
   emptyDesc: { fontSize: 13, color: COLORS.gray, textAlign: "center" },
   optionCardPressed: { opacity: 0.92 },
+
+  // ── Guarantee strip ───────────────────────────────────────────────────────
+  guaranteeStrip: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    backgroundColor: "#F0FDFB",
+    borderRadius: RADIUS.md,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "#C7F0EE",
+  },
+  guaranteeItem: {
+    flex: 1,
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 6,
+  },
+  guaranteeIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#D1FAF7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  guaranteeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#0c6c75",
+    textAlign: "center",
+    lineHeight: 15,
+  },
+  guaranteeDivider: {
+    width: 1,
+    backgroundColor: "#C7F0EE",
+    marginVertical: 4,
+  },
+  ratingsSection: {},
+  ratingsSummary: {
+    flexDirection: "row",
+    gap: SPACING.md,
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.grayBorder,
+    ...Platform.select({
+      ios: { shadowColor: "#0c6c75", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
+      android: { elevation: 2 },
+    }),
+  },
+  ratingsScoreCol: { alignItems: "center", justifyContent: "center", minWidth: 60 },
+  ratingsScore: { fontSize: 30, fontWeight: "800", color: COLORS.black, lineHeight: 34 },
+  starsRow: { flexDirection: "row", gap: 2, marginTop: 4 },
+  ratingsCount: { fontSize: 11, color: COLORS.gray, marginTop: 4 },
+  ratingsBarsCol: { flex: 1, justifyContent: "center", gap: 5 },
+  ratingsBarRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  ratingsBarLabel: { fontSize: 11, color: COLORS.gray, width: 10, textAlign: "right" },
+  ratingsBarTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#F3F4F6",
+    flexDirection: "row",
+    overflow: "hidden",
+  },
+  ratingsBarFill: { backgroundColor: "#F59E0B", borderRadius: 3 },
+  reviewsList: { gap: SPACING.sm },
+  reviewCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    padding: SPACING.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.grayBorder,
+  },
+  reviewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  reviewStars: { flexDirection: "row", gap: 2 },
+  reviewDate: { fontSize: 11, color: COLORS.gray },
+  reviewComment: { fontSize: 14, color: "#374151", lineHeight: 20 },
+  reviewNoComment: { fontSize: 13, color: COLORS.gray, fontStyle: "italic" },
 });
