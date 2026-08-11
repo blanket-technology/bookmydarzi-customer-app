@@ -12,13 +12,6 @@ interface Props {
 }
 
 function CustomerOrderCard({ item, index, onSummaryPress, onPayNow }: Props) {
-  const serviceLine =
-    item.serviceTitle && item.serviceTitle !== ORDER_DISPLAY_FALLBACK
-      ? item.serviceSubtitle && item.serviceSubtitle !== ORDER_DISPLAY_FALLBACK
-        ? `${item.serviceTitle} · ${item.serviceSubtitle}`
-        : item.serviceTitle
-      : undefined;
-
   const needsPayment = item.canPayNow === true;
 
   return (
@@ -26,10 +19,27 @@ function CustomerOrderCard({ item, index, onSummaryPress, onPayNow }: Props) {
       <BookingCompactCard
         status={item.status}
         statusLabel={item.statusLabel}
+        thumbnail={item.thumbnail}
         bookingId={item.bookingId}
         scheduledLabel={item.scheduledLabel}
+        expectedDeliveryDate={item.expectedDeliveryDate}
         amountPaidDisplay={item.amountPaidDisplay}
-        serviceLine={serviceLine}
+        orderAmount={item.orderAmount}
+        paymentStatus={item.paymentStatus}
+        paymentMethod={item.paymentMethod}
+        pickupType={item.pickupType}
+        pickupTimeSlot={item.pickupTimeSlot}
+        scheduledPickupAt={item.scheduledPickupAt}
+        serviceName={
+          item.serviceTitle && item.serviceTitle !== ORDER_DISPLAY_FALLBACK
+            ? item.serviceTitle
+            : undefined
+        }
+        categoryName={
+          item.serviceSubtitle && item.serviceSubtitle !== ORDER_DISPLAY_FALLBACK
+            ? item.serviceSubtitle
+            : undefined
+        }
         onSummaryPress={() => onSummaryPress(item.id)}
         onPayNow={needsPayment && onPayNow ? () => onPayNow(item.id) : undefined}
         showRatingPlaceholder

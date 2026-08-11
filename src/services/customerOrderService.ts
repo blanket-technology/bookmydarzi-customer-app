@@ -1,7 +1,8 @@
 /**
  * Customer orders API
- *   GET /customer/orders/active
- *   GET /customer/orders/completed
+ *   GET /customer/orders/active?status=&page=&limit=
+ *   GET /customer/orders/completed?page=&limit=
+ *   GET /customer/orders/cancelled?page=&limit=
  *   GET /customer/orders/{order_id}/summary
  *   GET /customer/orders/{order_id}/details
  */
@@ -17,6 +18,7 @@ import type {
   CustomerOrderSummaryPayload,
   CustomerOrderSupportInfo,
   OrderDetailsDeliveryAddressBlock,
+  OrderDetailsLineItem,
   OrderDetailsMeasurementBlock,
   OrderDetailsOrderBlock,
   OrderDetailsPaymentBlock,
@@ -29,6 +31,7 @@ import type {
   OrderSummaryOrderBlock,
   OrderSummaryPaymentBlock,
   OrderSummaryServiceBlock,
+  PaginatedCustomerOrders,
 } from "../types/customerOrders";
 import { ORDER_DISPLAY_FALLBACK, orderDisplayValue } from "../types/api";
 import { isCompletedCustomerOrderStatus } from "../utils/customerOrderStatus";
@@ -38,10 +41,27 @@ const BASE = "/customer/orders";
 function extractList(res: unknown): Record<string, unknown>[] {
   if (Array.isArray(res)) return res as Record<string, unknown>[];
   const r = res as Record<string, unknown>;
+  if (Array.isArray(r?.items)) return r.items as Record<string, unknown>[];
   if (Array.isArray(r?.orders)) return r.orders as Record<string, unknown>[];
   if (Array.isArray(r?.data)) return r.data as Record<string, unknown>[];
   if (Array.isArray(r?.results)) return r.results as Record<string, unknown>[];
   return [];
+}
+
+/** Total/page/limit from the paginated envelope, defaulting to a
+ * single-page result when the backend ever returns a bare array (keeps
+ * older cached responses / other callers from breaking). */
+function extractPageMeta(
+  res: unknown,
+  items: unknown[],
+  fallbackPage: number,
+  fallbackLimit: number,
+): { total: number; page: number; limit: number } {
+  const r = res as Record<string, unknown>;
+  const total = typeof r?.total === "number" ? r.total : items.length;
+  const page = typeof r?.page === "number" ? r.page : fallbackPage;
+  const limit = typeof r?.limit === "number" ? r.limit : fallbackLimit;
+  return { total, page, limit };
 }
 
 function unwrapRecord(res: unknown): Record<string, unknown> {
@@ -82,57 +102,47 @@ function pickBool(
   return undefined;
 }
 
+/** Order total in rupees - `price` is the actual field name on the backend's
+ * CustomerActiveOrderItem/CustomerCompletedOrderItem list schemas, and is
+ * always populated (= order.FinalAmount) regardless of payment state. */
+function pickOrderAmount(obj: Record<string, unknown>): number | undefined {
+  // `price` is the actual field name on both list schemas
+  // (CustomerActiveOrderItem/CustomerCompletedOrderItem), always populated
+  // (= order.FinalAmount) regardless of payment state.
+  const n = pickNum(obj, "price");
+  return n > 0 ? n : undefined;
+}
+
 function formatAmountDisplay(obj: Record<string, unknown>): string {
-  const display = pickStr(
-    obj,
-    "amountPaidDisplay",
-    "AmountPaidDisplay",
-    "amount_paid_display",
-    "amountDisplay",
-    "AmountDisplay",
-    "paid_amount_display",
-    "total_display",
-  );
-  if (display) return display;
-
-  const paid =
-    pickNum(obj, "amountPaid", "AmountPaid", "amount_paid", "paid_amount") ||
-    pickNum(obj, "total_price", "TotalPrice", "final_amount", "FinalAmount", "total");
-
-  if (paid > 0) {
-    return `₹${paid.toLocaleString("en-IN")}`;
-  }
+  // `price` can carry paise (e.g. a discounted order placed before the
+  // backend's own whole-rupee rounding fix), so always round for display.
+  const paid = pickOrderAmount(obj);
+  if (paid) return `₹${Math.round(paid).toLocaleString("en-IN")}`;
   return ORDER_DISPLAY_FALLBACK;
 }
 
 function mapListItem(raw: Record<string, unknown>): CustomerOrderListItem {
   const id = pickNum(raw, "id", "Id", "order_id", "OrderId");
   const status = pickStr(raw, "status", "Status").toLowerCase() || "pending";
-  const bookingId = pickStr(
-    raw,
-    "orderNumber",
-    "OrderNumber",
-    "booking_id",
-    "BookingId",
-    "booking_number",
-    "BookingNumber",
-    "order_number",
-  );
+  // `order_code` is the actual field name on both
+  // CustomerActiveOrderItem/CustomerCompletedOrderItem list schemas.
+  const bookingId = pickStr(raw, "order_code");
 
-  const scheduledLabel = pickStr(
-    raw,
-    "scheduledLabel",
-    "ScheduledLabel",
-    "scheduled_at_label",
-    "scheduled_date_time",
-    "ScheduledDateTime",
-    "deliveryLabel",
-    "DeliveryLabel",
-    "expected_delivery_date",
-    "ExpectedDeliveryDate",
-    "appointment_label",
-    "AppointmentLabel",
-  );
+  // Active-list items carry `expected_delivery_date`; completed-list items
+  // carry `completed_at` instead - the two backend schemas
+  // (CustomerActiveOrderItem / CustomerCompletedOrderItem) never return both.
+  // Some of these can be a bare date ("2026-08-06") or a full timestamp with
+  // microseconds/offset ("2026-08-04T20:44:29.192209+05:30") - always
+  // reduce to one consistent date-only value here so every consumer of
+  // `scheduledLabel` (home screen, Orders tab, support picker) renders the
+  // same shape regardless of which raw field/format the backend used.
+  const rawDate = pickStr(raw, "expected_delivery_date", "completed_at") || raw.created_at?.toString() || "";
+  const parsedDate = rawDate ? new Date(rawDate) : null;
+  const scheduledLabel =
+    parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : "";
+
+  const paymentStatus = pickStr(raw, "payment_status", "PaymentStatus", "paymentStatus") || undefined;
+  const paymentMethod = pickStr(raw, "payment_method", "PaymentMethod", "paymentMethod") || null;
 
   return {
     id,
@@ -142,25 +152,30 @@ function mapListItem(raw: Record<string, unknown>): CustomerOrderListItem {
       pickStr(raw, "statusLabel", "StatusLabel", "status_label",
               "CustomerStatus", "customer_status") || status,
     ),
-    scheduledLabel: orderDisplayValue(scheduledLabel || raw.created_at?.toString()),
+    scheduledLabel: orderDisplayValue(scheduledLabel),
     amountPaidDisplay: formatAmountDisplay(raw),
-    serviceTitle: orderDisplayValue(
-      pickStr(raw, "serviceTitle", "ServiceTitle", "service_title", "service_name", "ServiceName"),
-    ),
-    serviceSubtitle: orderDisplayValue(
-      pickStr(
-        raw,
-        "serviceSubtitle",
-        "ServiceSubtitle",
-        "service_subtitle",
-        "category_name",
-        "CategoryName",
-      ),
-    ),
+    orderAmount: pickOrderAmount(raw),
+    paymentStatus,
+    paymentMethod,
+    // `service_name`/`category_name` are the actual field names on both
+    // list schemas (see backend CustomerActiveOrderItem/CustomerCompletedOrderItem).
+    serviceTitle: orderDisplayValue(pickStr(raw, "service_name")),
+    serviceSubtitle: orderDisplayValue(pickStr(raw, "category_name")),
+    thumbnail: pickStr(raw, "thumbnail", "Thumbnail", "image_url", "ImageUrl") || null,
+    expectedDeliveryDate:
+      pickStr(raw, "expected_delivery_date", "ExpectedDeliveryDate", "expectedDeliveryDate") || null,
     canPayNow: pickBool(raw, "canPayNow", "CanPayNow", "can_pay_now", "show_pay_now"),
     paymentStatusLabel:
       pickStr(raw, "paymentStatusLabel", "PaymentStatusLabel", "payment_status_label") ||
       undefined,
+    pickupType: pickStr(raw, "pickup_type", "PickupType", "pickupType") || null,
+    pickupTimeSlot: pickStr(raw, "pickup_time_slot", "PickupTimeSlot", "pickupTimeSlot") || null,
+    scheduledPickupAt:
+      pickStr(raw, "scheduled_pickup_at", "ScheduledPickupAt", "scheduledPickupAt") || null,
+    cancelledAt: pickStr(raw, "cancelled_at", "CancelledAt", "cancelledAt") || null,
+    cancelReason: pickStr(raw, "reason", "Reason", "cancel_reason") || null,
+    penaltyAmount: pickNum(raw, "penalty_amount", "PenaltyAmount") || undefined,
+    refundAmount: pickNum(raw, "refund_amount", "RefundAmount") || undefined,
   };
 }
 
@@ -172,7 +187,7 @@ function mapKeyValueRows(raw: unknown): CustomerOrderKeyValue[] {
       const label = pickStr(row, "label", "Label", "title", "Title", "key", "Key");
       const value = pickStr(row, "value", "Value", "text", "Text", "description");
       if (!label && !value) return null;
-      return { label: label || "—", value: orderDisplayValue(value) };
+      return { label: label || "-", value: orderDisplayValue(value) };
     })
     .filter((r): r is CustomerOrderKeyValue => r != null);
 }
@@ -310,14 +325,45 @@ function mapSummaryOrDetails(
   };
 }
 
-export async function fetchActiveCustomerOrders(): Promise<CustomerOrderListItem[]> {
-  const res = await request<unknown>(`${BASE}/active`);
-  return extractList(res).map(mapListItem).filter((o) => o.id > 0);
+export interface CustomerOrdersPageParams {
+  page?: number;
+  limit?: number;
+  /** Active-tab only - filter to a single order status. */
+  status?: string;
 }
 
-export async function fetchCompletedCustomerOrders(): Promise<CustomerOrderListItem[]> {
-  const res = await request<unknown>(`${BASE}/completed`);
-  return extractList(res).map(mapListItem).filter((o) => o.id > 0);
+function buildQuery(params?: CustomerOrdersPageParams): string {
+  if (!params) return "";
+  const qp = new URLSearchParams();
+  if (params.page) qp.set("page", String(params.page));
+  if (params.limit) qp.set("limit", String(params.limit));
+  if (params.status) qp.set("status", params.status);
+  const qs = qp.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export async function fetchActiveCustomerOrders(
+  params?: CustomerOrdersPageParams,
+): Promise<PaginatedCustomerOrders> {
+  const res = await request<unknown>(`${BASE}/active${buildQuery(params)}`);
+  const items = extractList(res).map(mapListItem).filter((o) => o.id > 0);
+  return { items, ...extractPageMeta(res, items, params?.page ?? 1, params?.limit ?? 20) };
+}
+
+export async function fetchCompletedCustomerOrders(
+  params?: CustomerOrdersPageParams,
+): Promise<PaginatedCustomerOrders> {
+  const res = await request<unknown>(`${BASE}/completed${buildQuery(params)}`);
+  const items = extractList(res).map(mapListItem).filter((o) => o.id > 0);
+  return { items, ...extractPageMeta(res, items, params?.page ?? 1, params?.limit ?? 20) };
+}
+
+export async function fetchCancelledCustomerOrders(
+  params?: CustomerOrdersPageParams,
+): Promise<PaginatedCustomerOrders> {
+  const res = await request<unknown>(`${BASE}/cancelled${buildQuery(params)}`);
+  const items = extractList(res).map(mapListItem).filter((o) => o.id > 0);
+  return { items, ...extractPageMeta(res, items, params?.page ?? 1, params?.limit ?? 20) };
 }
 
 function block(raw: Record<string, unknown>, ...keys: string[]): Record<string, unknown> {
@@ -418,6 +464,8 @@ function mapSummaryBillingBlock(raw: Record<string, unknown>): OrderSummaryBilli
         billing.final_amount ??
         billing.finalAmount,
     ),
+    advance_amount: nullableNum(billing.advance_amount ?? billing.advanceAmount),
+    remaining_amount: nullableNum(billing.remaining_amount ?? billing.remainingAmount),
   };
 }
 
@@ -470,6 +518,10 @@ function mapDetailsOrderBlock(raw: Record<string, unknown>): OrderDetailsOrderBl
     pickup_type: nullableStr(order.pickup_type ?? order.pickupType ?? order.PickupType),
     pickup_time_slot: nullableStr(order.pickup_time_slot ?? order.pickupTimeSlot ?? order.PickupTimeSlot),
     scheduled_pickup_at: nullableStr(order.scheduled_pickup_at ?? order.scheduledPickupAt ?? order.ScheduledPickupAt),
+    image_references: Array.isArray(order.image_references ?? order.ImageReferences)
+      ? ((order.image_references ?? order.ImageReferences) as unknown[]).map(String)
+      : null,
+    customization_notes: nullableStr(order.customization_notes ?? order.CustomizationNotes),
   };
 }
 
@@ -491,9 +543,12 @@ function mapDetailsPricingBlock(raw: Record<string, unknown>): OrderDetailsPrici
     cgst_amount: nullableMoney(pricing.cgst_amount ?? pricing.cgstAmount),
     sgst_amount: nullableMoney(pricing.sgst_amount ?? pricing.sgstAmount),
     service_fee: nullableMoney(pricing.service_fee ?? pricing.serviceFee ?? pricing.platform_fee),
+    penalty_amount: nullableMoney(pricing.penalty_amount ?? pricing.penaltyAmount),
     final_amount: nullableMoney(
       pricing.final_amount ?? pricing.finalAmount ?? pricing.total_amount,
     ),
+    advance_amount: nullableNum(pricing.advance_amount ?? pricing.advanceAmount),
+    remaining_amount: nullableNum(pricing.remaining_amount ?? pricing.remainingAmount),
   };
 }
 
@@ -521,17 +576,55 @@ function mapDetailsAddressBlock(
   };
 }
 
-function mapDetailsMeasurementBlock(
-  raw: Record<string, unknown>,
-): OrderDetailsMeasurementBlock {
-  const m = block(raw, "measurement", "Measurement");
+function mapMeasurementFields(m: Record<string, unknown>): OrderDetailsMeasurementBlock {
   return {
     profile_name: nullableStr(m.profile_name ?? m.profileName ?? m.name),
     gender: nullableStr(m.gender),
     fit: nullableStr(m.fit),
+    neck: nullableMoney(m.neck),
     chest: nullableMoney(m.chest),
     waist: nullableMoney(m.waist),
+    hips: nullableMoney(m.hips),
+    shoulder: nullableMoney(m.shoulder),
+    sleeve_length: nullableMoney(m.sleeve_length ?? m.sleeveLength),
+    inseam: nullableMoney(m.inseam),
+    height: nullableMoney(m.height),
+    notes: nullableStr(m.notes),
   };
+}
+
+function mapDetailsMeasurementBlock(
+  raw: Record<string, unknown>,
+): OrderDetailsMeasurementBlock {
+  const m = block(raw, "measurement", "Measurement");
+  return mapMeasurementFields(m);
+}
+
+function mapDetailsLineItems(raw: Record<string, unknown>): OrderDetailsLineItem[] {
+  const list = raw.line_items ?? raw.lineItems ?? raw.LineItems;
+  if (!Array.isArray(list)) return [];
+  return list.map((item) => {
+    const row = item as Record<string, unknown>;
+    const measurementRaw = row.measurement as Record<string, unknown> | null | undefined;
+    return {
+      order_item_id: nullableNum(row.order_item_id ?? row.orderItemId),
+      person_name: nullableStr(row.person_name ?? row.personName),
+      service_id: nullableNum(row.service_id ?? row.serviceId),
+      service_name: nullableStr(row.service_name ?? row.serviceName),
+      category_name: nullableStr(row.category_name ?? row.categoryName),
+      quantity: nullableNum(row.quantity) ?? 1,
+      unit_price: nullableMoney(row.unit_price ?? row.unitPrice),
+      line_total: nullableMoney(row.line_total ?? row.lineTotal),
+      measurement:
+        measurementRaw && typeof measurementRaw === "object"
+          ? mapMeasurementFields(measurementRaw)
+          : null,
+      stitching_preferences:
+        row.stitching_preferences && typeof row.stitching_preferences === "object"
+          ? (row.stitching_preferences as OrderDetailsLineItem["stitching_preferences"])
+          : null,
+    };
+  });
 }
 
 function mapDetailsTimeline(raw: Record<string, unknown>): OrderDetailsTimelineItem[] {
@@ -566,7 +659,9 @@ export function mapCustomerOrderDetailsPayload(
     payment: mapDetailsPaymentBlock(raw),
     delivery_address: mapDetailsAddressBlock(raw),
     measurement: mapDetailsMeasurementBlock(raw),
+    line_items: mapDetailsLineItems(raw),
     tracking_timeline: mapDetailsTimeline(raw),
+    pendingPenaltyAmount: nullableNum(raw.pending_penalty_amount ?? raw.pendingPenaltyAmount),
   };
 }
 
