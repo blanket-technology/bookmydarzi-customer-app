@@ -14,6 +14,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
 import { listOrders, type AdminOrder } from "../../src/services/adminService";
+import { useAuthStore } from "../../store/useAuthStore";
+import {
+  getOrderStatusMeta,
+  normalizeOrderStatus,
+  STATUS_TONE_COLORS,
+} from "../../src/constants/orderStatus";
 
 const TEAL = "#149694";
 
@@ -21,32 +27,18 @@ const STATUS_FILTERS = [
   { label: "All", value: "" },
   { label: "Placed", value: "order_placed" },
   { label: "Accepted", value: "order_accepted" },
-  { label: "In Progress", value: "stitching_in_progress" },
+  { label: "In Progress", value: "in_progress" },
   { label: "Out for Delivery", value: "out_for_delivery" },
   { label: "Delivered", value: "delivered" },
   { label: "Cancelled", value: "cancelled" },
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  order_placed: "#3B82F6",
-  order_accepted: "#8B5CF6",
-  tailor_assigned: "#F59E0B",
-  cloth_pickup_pending: "#F97316",
-  cloth_picked_up: "#F97316",
-  stitching_in_progress: "#EC4899",
-  stitching_completed: "#10B981",
-  out_for_delivery: "#3B82F6",
-  delivered: "#065F46",
-  cancelled: "#B91C1C",
-};
-
 function StatusBadge({ status }: { status: string | null | undefined }) {
-  const s = status ?? "";
-  const color = STATUS_COLORS[s] ?? COLORS.gray;
-  const label = s.replace(/_/g, " ");
+  const meta = getOrderStatusMeta(normalizeOrderStatus(status ?? ""));
+  const color = STATUS_TONE_COLORS[meta.tone].fg;
   return (
     <View style={[styles.badge, { backgroundColor: color + "1A" }]}>
-      <Text style={[styles.badgeText, { color }]}>{label}</Text>
+      <Text style={[styles.badgeText, { color }]}>{meta.title}</Text>
     </View>
   );
 }
@@ -82,9 +74,18 @@ function OrderCard({ order, onPress }: { order: AdminOrder; onPress: () => void 
   );
 }
 
+// Only these roles may call the /admin/* APIs. A regular "user" can briefly
+// have this screen mounted during the post-login redirect race (index.tsx
+// redirects before the profile fetch resolves the true role); firing the
+// admin fetch in that window returns 403. Gating the fetch on role is
+// defence-in-depth so no forbidden request goes out regardless of routing.
+const ADMIN_ROLES = new Set(["admin", "superadmin", "employee"]);
+
 export default function AdminOrders() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const role = useAuthStore((s) => s.user?.role);
+  const canLoad = !!role && ADMIN_ROLES.has(role);
 
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [total, setTotal] = useState(0);
@@ -126,7 +127,15 @@ export default function AdminOrders() {
     [statusFilter, search]
   );
 
-  useEffect(() => { load(); }, []); // eslint-disable-line
+  // Wait until the role is known AND qualifies before hitting /admin/orders.
+  // If a non-admin briefly mounts this screen, no request fires (avoids the
+  // 403); once AuthGuard redirects them away, the screen unmounts. Re-runs if
+  // the role resolves to an admin role after an initial unknown state.
+  useEffect(() => {
+    if (canLoad) load();
+    else setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canLoad]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

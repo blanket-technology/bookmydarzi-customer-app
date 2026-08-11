@@ -45,10 +45,14 @@ function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionTitle}>{title}</Text>;
 }
 
+// Roles permitted to call /admin/* - see the note in (admin)/orders.tsx.
+const ADMIN_ROLES = new Set(["admin", "superadmin", "employee"]);
+
 export default function AdminDashboard() {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const canLoad = !!user?.role && ADMIN_ROLES.has(user.role);
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,7 +73,13 @@ export default function AdminDashboard() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Only fetch once the role is known and qualifies - avoids a 403 when a
+  // non-admin briefly mounts this screen during the post-login redirect race.
+  useEffect(() => {
+    if (canLoad) load();
+    else setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canLoad, load]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
