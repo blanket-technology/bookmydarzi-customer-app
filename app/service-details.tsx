@@ -89,7 +89,7 @@ export default function ServiceDetailsScreen() {
   const {
     setPendingService,
     setPendingRoute,
-    clearPendingBookingMeasurement,
+    setBookingFlowActive,
     setBuyNowMode,
   } = useCartStore();
 
@@ -401,24 +401,28 @@ export default function ServiceDetailsScreen() {
       if (!isAuthenticated) {
         setPendingService(pendingItem);
         setBuyNowMode(bookNow);
-        clearPendingBookingMeasurement();
         setPendingRoute("/service-details", buildReturnParams());
         safeRouterPush(router, "/(auth)/login");
         return;
       }
       setPendingService(pendingItem);
       setBuyNowMode(bookNow);
-      clearPendingBookingMeasurement();
-      safeRouterPush(router, {
-        pathname: "/measurement",
-        params: { bookableServiceId: String(selectedStitching.service_id) },
-      } as never);
+      // Measurement is never collected from the customer - go straight to
+      // address selection; measurement is filled later by Bridge/employee at
+      // pickup, or by Admin.
+      setBookingFlowActive(!bookNow);
+      safeRouterPush(
+        router,
+        bookNow
+          ? ({ pathname: "/address", params: { mode: "buy-now" } } as never)
+          : ("/address" as never),
+      );
     },
     [
-      buildReturnParams, catalogCategoryId, categoryName, clearPendingBookingMeasurement,
+      buildReturnParams, catalogCategoryId, categoryName,
       directService?.name, getQuantityForStitching, isAuthenticated, router,
       selectedStitching, serviceLine, serviceName,
-      setBuyNowMode, setPendingRoute, setPendingService,
+      setBookingFlowActive, setBuyNowMode, setPendingRoute, setPendingService,
       designStyle, embellishmentLevel, designNotes,
     ],
   );

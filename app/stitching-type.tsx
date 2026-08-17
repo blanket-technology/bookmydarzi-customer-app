@@ -33,7 +33,7 @@ export default function StitchingTypeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const { setPendingService, setPendingRoute } = useCartStore();
+  const { setPendingService, setPendingRoute, setBookingFlowActive } = useCartStore();
 
   const params = useLocalSearchParams<{
     catalogCategoryId: string;
@@ -114,6 +114,7 @@ export default function StitchingTypeScreen() {
         categoryName,
         basePrice: stitching.base_price,
         displayName: `${serviceLineName} · ${stitching.name}`,
+        imageUrl: stitching.image_url,
         tailorId: resolvedTailorId,
         tailorName: resolvedTailorName,
       });
@@ -131,15 +132,11 @@ export default function StitchingTypeScreen() {
         return;
       }
 
-      router.push({
-        pathname: "/measurement",
-        params: {
-          bookableServiceId: String(bookableServiceId),
-          stitchingType: stitching.name,
-          serviceLineName,
-          basePrice: String(stitching.base_price),
-        },
-      });
+      // Measurement is never collected from the customer - go straight to
+      // address selection; measurement is filled later by Bridge/employee at
+      // pickup, or by Admin.
+      setBookingFlowActive(true);
+      router.push("/address");
     },
     [
       paramTailorId,
@@ -150,6 +147,7 @@ export default function StitchingTypeScreen() {
       categoryName,
       isAuthenticated,
       router,
+      setBookingFlowActive,
       setPendingRoute,
       setPendingService,
     ],

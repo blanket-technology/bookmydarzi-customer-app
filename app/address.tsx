@@ -5,10 +5,10 @@
  * then places the order and navigates to the Orders tab.
  */
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -24,37 +24,38 @@ import {
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
-import { useAddressStore } from "../src/store/useAddressStore";
-import { useCartStore } from "../src/store/useCartStore";
-import { useToastStore } from "../src/store/useToastStore";
-import {
-  isValidAddressType,
-  toApiAddressTypeValue,
-} from "../src/services/addressService";
-import type { AddressPayload, AddressType, ApiAddress } from "../src/types/api";
-import { useAuthStore } from "../store/useAuthStore";
-import { safeRouterReplace } from "../src/utils/safeNavigation";
-import { executeCheckoutFromCart } from "../src/utils/checkoutNavigation";
-import type { AddCartServiceEntryPayload } from "../src/types/cart";
 import { LocationSelectField } from "../src/components/common/LocationSelectField";
 import { MapPinPicker, type PickedLocation } from "../src/components/common/MapPinPicker";
+import {
+    DEFAULT_CITY,
+    DEFAULT_STATE,
+    INDIA_STATES,
+    findStateForCity,
+    getCitiesForState,
+    isServiceCity,
+    withCustomOption,
+} from "../src/constants/indiaLocations";
 import { useHardwareBackHandler } from "../src/hooks/useHardwareBackHandler";
 import {
-  DEFAULT_CITY,
-  DEFAULT_STATE,
-  INDIA_STATES,
-  findStateForCity,
-  getCitiesForState,
-  isServiceCity,
-  withCustomOption,
-} from "../src/constants/indiaLocations";
+    isValidAddressType,
+    toApiAddressTypeValue,
+} from "../src/services/addressService";
 import {
-  GpsCoords,
-  ServiceabilityResult,
-  checkServiceability,
-  getCurrentGpsCoords,
-  reverseGeocodeCoords,
+    GpsCoords,
+    ServiceabilityResult,
+    checkServiceability,
+    getCurrentGpsCoords,
+    reverseGeocodeCoords,
 } from "../src/services/locationService";
+import { useAddressStore } from "../src/store/useAddressStore";
+import { useCartStore } from "../src/store/useCartStore";
+import { useCheckoutPreferencesStore } from "../src/store/useCheckoutPreferencesStore";
+import { useToastStore } from "../src/store/useToastStore";
+import type { AddressPayload, AddressType, ApiAddress } from "../src/types/api";
+import type { AddCartServiceEntryPayload } from "../src/types/cart";
+import { executeCheckoutFromCart } from "../src/utils/checkoutNavigation";
+import { safeRouterReplace } from "../src/utils/safeNavigation";
+import { useAuthStore } from "../store/useAuthStore";
 
 const ADDRESS_TYPES: { key: AddressType; label: string; icon: string }[] = [
   { key: "home", label: "Home", icon: "home-outline" },
@@ -144,6 +145,10 @@ export default function AddressScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const navigation = useNavigation();
+  const { mode: routeMode } = useLocalSearchParams<{
+    mode?: string;
+  }>();
+  const isBuyNowFlow = routeMode === "buy-now";
   const user = useAuthStore((s) => s.user);
   const {
     addresses,
@@ -161,10 +166,8 @@ export default function AddressScreen() {
     setAddressId,
     bookingFlowActive,
     pendingService,
-    pendingBookingMeasurement,
     addServiceEntry,
     clearPendingService,
-    clearPendingBookingMeasurement,
     setBookingFlowActive,
     mutating,
   } = useCartStore();
@@ -226,6 +229,34 @@ export default function AddressScreen() {
     setServiceability(null);
   }, [addresses.length, user]);
 
+  const openNewAddressForm = useCallback(() => {
+    setSaveSuccess(false);
+    resetForm();
+    setMode("form");
+    setScrollToForm(true);
+    // Auto-detect location when opening a new address form
+    setTimeout(() => {
+      void handleUseMyLocation();
+    }, 300);
+  }, [resetForm]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // In buy-now mode: auto-select default address; auto-open form if none exist.
+  const autoOpenedBuyNowFormRef = useRef(false);
+  useEffect(() => {
+    if (!isBuyNowFlow || loading) return;
+    if (addresses.length === 0) {
+      if (!autoOpenedBuyNowFormRef.current) {
+        autoOpenedBuyNowFormRef.current = true;
+        openNewAddressForm();
+      }
+      return;
+    }
+    if (!selectedAddressId) {
+      const def = addresses.find((a) => a.is_default) ?? addresses[0];
+      if (def) setSelectedAddressIdLocal(def.id);
+    }
+  }, [isBuyNowFlow, loading, addresses, selectedAddressId, openNewAddressForm]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const returnToAddressSelection = useCallback(() => {
     resetForm();
     setMode("select");
@@ -264,17 +295,6 @@ export default function AddressScreen() {
     });
     return unsubscribe;
   }, [navigation, mode, returnToAddressSelection]);
-
-  const openNewAddressForm = useCallback(() => {
-    setSaveSuccess(false);
-    resetForm();
-    setMode("form");
-    setScrollToForm(true);
-    // Auto-detect location when opening a new address form
-    setTimeout(() => {
-      void handleUseMyLocation();
-    }, 300);
-  }, [resetForm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!scrollToForm || mode !== "form") return;
@@ -331,8 +351,11 @@ export default function AddressScreen() {
             await fetchAddresses();
             useToastStore.getState().show("Address Deleted Successfully");
             scrollToTop();
-          } catch {
-            Alert.alert("Error", error ?? "Failed to delete address.");
+          } catch (err) {
+            Alert.alert(
+              "Error",
+              err instanceof Error ? err.message : "Failed to delete address.",
+            );
           }
         },
       },
@@ -413,7 +436,7 @@ export default function AddressScreen() {
       const coords = await getCurrentGpsCoords();
       setGpsCoords(coords);
 
-      // Reverse geocode — auto-fill all address fields
+      // Reverse geocode - auto-fill all address fields
       try {
         const geo = await reverseGeocodeCoords(coords.latitude, coords.longitude);
 
@@ -434,15 +457,26 @@ export default function AddressScreen() {
 
         if (geo.pincode) setPincode(geo.pincode);
       } catch {
-        // Reverse-geocode failures are non-fatal — GPS coords still captured
+        // Reverse-geocode failures are non-fatal - GPS coords still captured
       }
 
-      // Check serviceability (non-blocking — result shown as a badge)
+      // Check serviceability - shown as a badge either way. The backend is
+      // the actual authority (create/update address now rejects an
+      // unserviceable location outright) - this early check exists purely
+      // so the customer sees the problem before filling out the rest of the
+      // form, not after tapping Save.
       try {
         const svc = await checkServiceability(coords.latitude, coords.longitude);
         setServiceability(svc);
+        if (!svc.serviceable) {
+          Alert.alert(
+            "Not serviceable yet",
+            svc.message || "Sorry, we don't deliver to this location yet.",
+          );
+        }
       } catch {
-        // Serviceability failures don't block the form
+        // Serviceability check failing here just means the badge won't
+        // show yet - the backend still enforces the real rule on Save.
       }
     } catch (err) {
       Alert.alert(
@@ -477,8 +511,15 @@ export default function AddressScreen() {
       try {
         const svc = await checkServiceability(picked.latitude, picked.longitude);
         setServiceability(svc);
+        if (!svc.serviceable) {
+          Alert.alert(
+            "Not serviceable yet",
+            svc.message || "Sorry, we don't deliver to this location yet.",
+          );
+        }
       } catch {
-        // non-fatal
+        // Serviceability check failing here just means the badge won't
+        // show yet - the backend still enforces the real rule on Save.
       }
     },
     [line1, line2],
@@ -527,6 +568,19 @@ export default function AddressScreen() {
   };
 
   const handleSaveAddress = async (): Promise<ApiAddress | null> => {
+    // A fully manually-typed address (no "Use my location" / map pin) has no
+    // coordinates at all yet. The backend now requires them (it can't check
+    // serviceability, and won't save an address, without a real lat/lng) -
+    // block here with a clear, specific message instead of letting the
+    // generic backend 422 surface after a save attempt with no coordinates.
+    if (!gpsCoords) {
+      Alert.alert(
+        "Location needed",
+        "Please use \"Use my location\" or pin your address on the map so we can confirm we deliver there.",
+      );
+      return null;
+    }
+
     const wasEditing = editingId != null;
     const saved = await performSaveAddress();
     if (saved) {
@@ -534,12 +588,16 @@ export default function AddressScreen() {
       setSelectedAddressIdLocal(saved.id);
       setEditingId(null);
       setSaveSuccess(true);
-      setMode("select");
       useToastStore.getState().show(
         wasEditing
           ? "Address Updated Successfully"
           : "Address Added Successfully",
       );
+      if (isBuyNowFlow) {
+        finishAddressFlow(saved.id);
+        return saved;
+      }
+      setMode("select");
       scrollToTop();
       return saved;
     } else {
@@ -576,9 +634,20 @@ export default function AddressScreen() {
   };
 
   const finishAddressFlow = (addressId: number) => {
+    if (isBuyNowFlow) {
+      safeRouterReplace(router, {
+        pathname: "/buy-now-review",
+        params: { addressId: String(addressId) },
+      } as never);
+      return;
+    }
     if (isCheckoutFlow) {
       setAddressId(addressId);
-      void executeCheckoutFromCart(router);
+      void executeCheckoutFromCart(
+        router,
+        undefined,
+        useCheckoutPreferencesStore.getState().lastPaymentMethod,
+      );
       return;
     }
     if (!isBookingFlow) {
@@ -605,23 +674,11 @@ export default function AddressScreen() {
         tailor_id: pendingService.tailorId,
       };
 
-      if (
-        pendingBookingMeasurement &&
-        !pendingBookingMeasurement.skipped &&
-        pendingBookingMeasurement.profileId
-      ) {
-        payload.measurement_profile_id = pendingBookingMeasurement.profileId;
-        payload.selected_measurements =
-          pendingBookingMeasurement.selectedMeasurements;
-        payload.selected_size = pendingBookingMeasurement.selectedSize;
-      }
-
       await addServiceEntry(payload, {
         toastMessage: "Added to Cart Successfully",
       });
       setAddressId(addressId);
       clearPendingService();
-      clearPendingBookingMeasurement();
       setBookingFlowActive(false);
       safeRouterReplace(router, "/(tabs)/cart");
     } catch (err) {
@@ -644,6 +701,18 @@ export default function AddressScreen() {
   };
 
   const handleContinue = async () => {
+    if (isBuyNowFlow) {
+      if (mode === "form") {
+        await handleStickyFormSave();
+        return;
+      }
+      if (!selectedAddressId) {
+        Alert.alert("Select Address", "Please select a delivery address.");
+        return;
+      }
+      finishAddressFlow(selectedAddressId);
+      return;
+    }
     if (isBookingFlow) {
       await handleAddToCartBooking();
       return;
@@ -682,7 +751,7 @@ export default function AddressScreen() {
             <Ionicons name="arrow-back" size={22} color={COLORS.black} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
-            {isBookingFlow || isCheckoutFlow
+            {isBuyNowFlow || isBookingFlow || isCheckoutFlow
               ? "Delivery Address"
               : "Manage Address"}
           </Text>
@@ -707,7 +776,7 @@ export default function AddressScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.scroll,
-            (mode === "form" || isBookingFlow) && styles.scrollWithStickyFooter,
+            (mode === "form" || isBookingFlow || isBuyNowFlow) && styles.scrollWithStickyFooter,
           ]}
           keyboardShouldPersistTaps="handled"
         >
@@ -733,14 +802,14 @@ export default function AddressScreen() {
               <Text style={styles.heroSub}>
                 {mode === "form"
                   ? "Enter your delivery details"
-                  : isCheckoutFlow || isBookingFlow
+                  : isBuyNowFlow || isCheckoutFlow || isBookingFlow
                     ? "Select where we should deliver your order"
                     : "Add your delivery address"}
               </Text>
             </LinearGradient>
           </Animated.View>
 
-          {/* Address form — full screen when adding/editing */}
+          {/* Address form - full screen when adding/editing */}
           {mode === "form" ? (
             <Animated.View
               entering={FadeInDown.delay(80).duration(400)}
@@ -1002,7 +1071,7 @@ export default function AddressScreen() {
             </Animated.View>
           ) : null}
 
-          {/* Saved addresses — selection screen only */}
+          {/* Saved addresses - selection screen only */}
           {mode === "select" ? (
             <>
               {saveSuccess ? (
@@ -1077,7 +1146,7 @@ export default function AddressScreen() {
             </>
           ) : null}
 
-          {/* Continue button — checkout / manage (selection screen only) */}
+          {/* Continue button - checkout / buy-now / manage (selection screen only) */}
           {!isBookingFlow && mode === "select" ? (
           <Animated.View
             entering={FadeInDown.delay(200).duration(400)}
@@ -1102,7 +1171,11 @@ export default function AddressScreen() {
                     color={COLORS.white}
                   />
                   <Text style={styles.continueBtnText}>
-                    {isCheckoutFlow ? "Continue to Checkout" : "Done"}
+                    {isBuyNowFlow
+                      ? "Confirm Address"
+                      : isCheckoutFlow
+                        ? "Continue to Checkout"
+                        : "Done"}
                   </Text>
                 </>
               )}
