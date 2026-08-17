@@ -5,13 +5,12 @@ import type {
   CartBilling,
   CartCheckoutPayload,
   CartCheckoutResult,
-  CartEntryMeasurement,
   CartServiceEntry,
   CheckoutLineItem,
-  MeasurementPreviewItem,
   UpdateCartServiceEntryPayload,
 } from "../types/cart";
 import { EMPTY_CART } from "../types/cart";
+import { generateIdempotencyKey } from "../utils/idempotencyKey";
 
 const BASE = "/cart";
 
@@ -28,45 +27,13 @@ function str(value: unknown, fallback = ""): string {
   return value == null ? fallback : String(value);
 }
 
-function mapMeasurementPreview(raw: unknown): MeasurementPreviewItem[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((item) => {
-    const r = asRecord(item);
-    return {
-      name: str(r.measurement_name),
-      value: str(r.measurement_value),
-    };
-  });
-}
-
-function mapEntryMeasurement(raw: unknown): CartEntryMeasurement | null {
-  if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
-  return {
-    id: num(r.id),
-    userId: num(r.user_id),
-    profileName: str(r.profile_name),
-    gender: r.gender != null ? str(r.gender) : null,
-    chest: num(r.chest),
-    waist: num(r.waist),
-    hips: num(r.hips),
-    shoulder: num(r.shoulder),
-    neck: num(r.neck),
-    sleeveLength: num(r.sleeve_length),
-    inseam: num(r.inseam),
-    height: num(r.height),
-    fitPreference: r.fit_preference != null ? str(r.fit_preference) : null,
-    notes: r.notes != null ? str(r.notes) : null,
-    isDefault: Boolean(r.is_default),
-  };
-}
-
 function mapCartEntry(raw: Record<string, unknown>): CartServiceEntry {
   return {
     id: num(raw.entry_id ?? raw.id),
     serviceId: num(raw.service_id),
     serviceName: str(raw.service_name, "Service"),
     categoryName: raw.category_name != null ? str(raw.category_name) : null,
+    imageUrl: raw.image_url != null ? str(raw.image_url) : null,
     personName: str(raw.person_name),
     gender: raw.gender != null ? str(raw.gender) : null,
     quantity: num(raw.quantity, 1),
@@ -75,10 +42,7 @@ function mapCartEntry(raw: Record<string, unknown>): CartServiceEntry {
     unitPriceDisplay: str(raw.unit_price_display ?? raw.price_display, "₹0"),
     lineTotalDisplay: str(raw.line_total_display, "₹0"),
     notes: raw.notes != null ? str(raw.notes) : null,
-    measurementId: raw.measurement_id != null ? num(raw.measurement_id) : null,
-    measurementRequired: Boolean(raw.measurement_required),
-    measurement: mapEntryMeasurement(raw.measurement),
-    measurementPreview: mapMeasurementPreview(raw.measurement_preview),
+    stitchingPreferences: (raw.stitching_preferences as CartServiceEntry["stitchingPreferences"]) ?? null,
   };
 }
 
@@ -91,6 +55,7 @@ function mapBilling(raw: unknown): CartBilling {
     cgstAmount: num(r.cgst_amount),
     sgstAmount: num(r.sgst_amount),
     gstAmount: num(r.gst_amount),
+    penaltyAmount: num(r.penalty_amount),
     totalAmount: num(r.total_amount),
     advanceAmount: num(r.advance_amount),
     remainingAmount: num(r.remaining_amount),
@@ -142,7 +107,6 @@ function mapCheckoutLineItems(raw: unknown): CheckoutLineItem[] {
       lineTotal: num(r.line_total),
       price: num(r.price),
       priceDisplay: str(r.price_display, "₹0"),
-      measurements: mapMeasurementPreview(r.measurements),
     };
   });
 }
@@ -161,6 +125,7 @@ function mapCheckoutResult(raw: unknown): CartCheckoutResult {
     cgstAmount: num(r.cgst_amount),
     sgstAmount: num(r.sgst_amount),
     gstAmount: num(r.gst_amount),
+    penaltyAmount: num(r.penalty_amount),
     finalAmount: num(r.final_amount),
     totalAmountDisplay: str(r.total_amount_display, "₹0"),
     advanceAmount: num(r.advance_amount),
@@ -211,27 +176,22 @@ export async function addCartServiceEntry(
     quantity: payload.quantity ?? 1,
   };
 
-  if (payload.measurement_profile_id && payload.measurement_profile_id > 0) {
-    body.measurement_profile_id = payload.measurement_profile_id;
-    body.measurement_id =
-      payload.measurement_id ?? payload.measurement_profile_id;
-  }
-
-  if (payload.selected_size) body.selected_size = payload.selected_size;
-  if (
-    payload.selected_measurements &&
-    Object.keys(payload.selected_measurements).length > 0
-  ) {
-    body.selected_measurements = payload.selected_measurements;
-  }
   if (payload.tailor_id) body.tailor_id = payload.tailor_id;
   if (payload.customization_notes) {
     body.customization_notes = payload.customization_notes;
+  }
+  if (payload.stitching_preferences) {
+    body.stitching_preferences = payload.stitching_preferences;
   }
 
   const res = await request<unknown>(`${BASE}/service-entry`, {
     method: "POST",
     body,
+    // A retry after a lost response (Railway cold-start, brief connectivity
+    // blip) would otherwise silently add the same service twice - the
+    // backend now dedupes on this key (see add_service_entry in
+    // app/api/v1/endpoints/cart.py).
+    idempotencyKey: generateIdempotencyKey(),
   });
 
   return mapCart(res);
@@ -288,10 +248,17 @@ export async function checkoutCart(
   if (payload.offer_id) checkoutBody.offer_id = payload.offer_id;
   if (payload.scheduled_pickup_at) checkoutBody.scheduled_pickup_at = payload.scheduled_pickup_at;
   if (payload.pickup_time_slot) checkoutBody.pickup_time_slot = payload.pickup_time_slot;
+  if (payload.customization_notes) checkoutBody.customization_notes = payload.customization_notes;
+  if (payload.image_references?.length) checkoutBody.image_references = payload.image_references;
 
   const res = await request<unknown>(`${BASE}/checkout`, {
     method: "POST",
     body: checkoutBody,
+    // One key per attempt - the request wrapper's own network-failure retry
+    // reuses this same call (and therefore the same key), so a response lost
+    // to a network blip is safely replayed server-side instead of either
+    // 404ing on an already-converted cart or creating a duplicate order.
+    idempotencyKey: generateIdempotencyKey(),
   });
 
   if (__DEV__) {
@@ -303,9 +270,12 @@ export async function checkoutCart(
   if (result.orderId <= 0) {
     throw new Error("Checkout succeeded but no order ID was returned.");
   }
-  if (result.advanceAmount <= 0) {
-    throw new Error("Unable to determine payable amount.");
-  }
+  // Note: a legitimate order can have advanceAmount === 0 (e.g. platform fee
+  // configured to 0, or a discount that zeroes the upfront charge) - the
+  // order itself is still valid and already created server-side, so this is
+  // NOT treated as a failure here. Callers that need to open a payment
+  // gateway must check advanceAmount themselves and skip the gateway when
+  // there's nothing to charge upfront (see checkoutNavigation.ts).
 
   return result;
 }

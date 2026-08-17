@@ -13,9 +13,34 @@
  * No user_id is sent - the backend identifies the user from the JWT token.
  */
 import { request } from "../../services/api";
-import type { CreateOrderApiPayload, ApiOrder, ApiOrderTracking } from "../types/api";
+import { getOrderStatusMeta } from "../constants/orderStatus";
+import { generateIdempotencyKey } from "../utils/idempotencyKey";
+import type {
+    ApiOrder,
+    ApiOrderTracking,
+    CreateOrderApiPayload,
+    OrderTrackingPayload,
+} from "../types/api";
 
 const BASE = "/orders";
+
+/**
+ * Derive the legacy 6-value simplified status enum from the single shared
+ * status metadata source (src/constants/orderStatus.ts) rather than
+ * maintaining an independent duplicate map. Kept only because ApiOrder is
+ * still the type OrderCard.tsx / useOrderStore compile against - actual
+ * rendering in those call sites already prefers the backend-provided
+ * `statusLabel` string over this bucketed value.
+ */
+function toSimplifiedStatus(raw: string): ApiOrder["status"] {
+  const meta = getOrderStatusMeta(raw);
+  if (meta.status === "cancelled" || meta.status === "order_rejected") return "cancelled";
+  if (meta.status === "completed" || meta.status === "delivered") return "delivered";
+  if (meta.status === "out_for_delivery" || meta.status === "ready_for_dispatch") return "ready";
+  if (meta.progress >= getOrderStatusMeta("searching_tailor").progress) return "in_progress";
+  if (meta.progress >= getOrderStatusMeta("order_accepted").progress) return "confirmed";
+  return "pending";
+}
 
 // ---------------------------------------------------------------------------
 // PascalCase → camelCase mapper for a single order object
@@ -25,47 +50,34 @@ function mapOrder(raw: any): ApiOrder {
   if (!raw) throw new Error("Invalid order data received from server");
 
   // Status normalisation - backend uses snake_case or PascalCase
-  const rawStatus: string = (
-    raw?.Status ?? raw?.status ?? "pending"
-  ).toLowerCase();
-
-  const STATUS_MAP: Record<string, ApiOrder["status"]> = {
-    draft: "pending",
-    pending: "pending",
-    pending_payment: "pending",
-    pendingpayment: "pending",
-    confirmed: "confirmed",
-    accepted: "confirmed",
-    processing: "in_progress",
-    assigned: "confirmed",
-    assigned_to_tailor: "confirmed",
-    in_progress: "in_progress",
-    inprogress: "in_progress",
-    measurement_pending: "in_progress",
-    ready: "ready",
-    ready_for_delivery: "ready",
-    out_for_delivery: "ready",
-    delivered: "delivered",
-    completed: "delivered",
-    cancelled: "cancelled",
-    canceled: "cancelled",
-  };
-  const status: ApiOrder["status"] = STATUS_MAP[rawStatus] ?? "pending";
+  const rawStatus: string = raw?.Status ?? raw?.status ?? "order_placed";
+  const status: ApiOrder["status"] = toSimplifiedStatus(rawStatus);
 
   // Payment status normalisation
   const rawPayStatus: string = (
     raw?.PaymentStatus ?? raw?.payment_status ?? "pending"
   ).toLowerCase();
   const PAY_MAP: Record<string, ApiOrder["payment_status"]> = {
+    // Pre-payment
     pending: "pending",
     pending_payment: "pending",
+    advance_pending: "pending",
     processing: "pending",
+    payment_failed: "failed",
+    advance_failed: "failed",
+    failed: "failed",
+    cancelled: "failed",
+    // Partially paid
+    advance_paid: "paid",
+    balance_due: "paid",
+    balance_pending: "paid",
+    // Fully paid
     paid: "paid",
+    fully_paid: "paid",
     completed: "paid",
     success: "paid",
-    failed: "failed",
-    refunded: "failed",
-    cancelled: "failed",
+    // Refunded (distinct from failed)
+    refunded: "refunded",
   };
   const payment_status: ApiOrder["payment_status"] = PAY_MAP[rawPayStatus] ?? "pending";
 
@@ -127,6 +139,8 @@ function mapOrder(raw: any): ApiOrder {
     deliveryLabel: raw?.DeliveryLabel ?? raw?.delivery_label ?? null,
     paymentStatusLabel: raw?.PaymentStatusLabel ?? raw?.payment_status_label ?? null,
     amountDisplay: raw?.AmountDisplay ?? raw?.amount_display ?? null,
+    scheduledPickupAt: raw?.ScheduledPickupAt ?? raw?.scheduled_pickup_at ?? null,
+    pickupTimeSlot: raw?.PickupTimeSlot ?? raw?.pickup_time_slot ?? null,
     canCancel:
       typeof raw?.CanCancel === "boolean"
         ? raw.CanCancel
@@ -195,7 +209,10 @@ export async function fetchApiOrderById(id: number): Promise<ApiOrder> {
 
 // ---------------------------------------------------------------------------
 // GET /orders/{order_id}/tracking
-// Returns the tracking timeline for an order.
+// @deprecated The real response is a single OrderTrackingResponse object,
+// not an array - this function's defensive array-unwrapping was masking
+// that mismatch. Use fetchOrderTrackingPayload instead. Kept only for
+// OrderCard.tsx's still-live inline timeline until that's migrated.
 // ---------------------------------------------------------------------------
 export async function fetchApiOrderTracking(id: number): Promise<ApiOrderTracking[]> {
   const res = await request<any>(`${BASE}/${id}/tracking`);
@@ -241,6 +258,17 @@ export async function fetchApiOrderTracking(id: number): Promise<ApiOrderTrackin
 }
 
 // ---------------------------------------------------------------------------
+// GET /orders/{order_id}/tracking
+// Returns the real, current tracking response - a single object with a
+// per-stage completed/current timeline (app/schemas/order.py:
+// OrderTrackingResponse). Prefer this over fetchApiOrderTracking, whose
+// return type never matched what the backend actually sends.
+// ---------------------------------------------------------------------------
+export async function fetchOrderTrackingPayload(id: number): Promise<OrderTrackingPayload> {
+  return request<OrderTrackingPayload>(`${BASE}/${id}/tracking`);
+}
+
+// ---------------------------------------------------------------------------
 // POST /orders
 // Creates a draft order for the current authenticated user.
 // ---------------------------------------------------------------------------
@@ -257,7 +285,6 @@ export async function createApiOrder(payload: CreateOrderApiPayload): Promise<Ap
   };
 
   if (payload.tailor_id) body.tailor_id = payload.tailor_id;
-  if (payload.measurement_id) body.measurement_id = payload.measurement_id;
   if (payload.description?.trim()) body.description = payload.description.trim();
   if (payload.cloth_details?.trim()) body.cloth_details = payload.cloth_details.trim();
   if (payload.fabric_notes?.trim()) body.fabric_notes = payload.fabric_notes.trim();
@@ -276,7 +303,11 @@ export async function createApiOrder(payload: CreateOrderApiPayload): Promise<Ap
     console.log("[OrderService] createApiOrder payload:", JSON.stringify(body));
   }
 
-  const res = await request<any>(BASE, { method: "POST", body });
+  const res = await request<any>(BASE, {
+    method: "POST",
+    body,
+    idempotencyKey: generateIdempotencyKey(),
+  });
 
   if (__DEV__) {
     console.log("[OrderService] createApiOrder raw response:", JSON.stringify(res));

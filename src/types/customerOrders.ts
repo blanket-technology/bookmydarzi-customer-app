@@ -231,6 +231,8 @@ export interface OrderDetailsLineItem {
   quantity: number;
   unit_price: number | string | null;
   line_total: number | string | null;
+  /** Filled by Bridge/employee at pickup, or by Admin - never by the
+   * customer. Null until staff have collected it. */
   measurement: OrderDetailsMeasurementBlock | null;
   /** Designer design brief for this item, if any - reflects back what the
    * customer submitted at booking (design style, embellishment, notes). */

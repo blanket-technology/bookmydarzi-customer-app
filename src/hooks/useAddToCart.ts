@@ -30,7 +30,7 @@ async function resolvePopularServiceId(row: PopularServiceRow): Promise<number> 
 
 /**
  * Home Popular Services add-to-cart - POST only, no screen navigation.
- * Sub-services / measurement flows use their own handlers on those screens.
+ * Sub-services flows use their own handlers on those screens.
  */
 export function useAddToCart() {
   const router = useRouter();
@@ -99,11 +99,10 @@ export function useAddToCart() {
   );
 
   const addPendingItemToCart = useCallback(
-    async (item: PendingCartItem, measurementProfileId: number) => {
+    async (item: PendingCartItem) => {
       await addServiceEntry({
         service_id: item.bookableServiceId,
         quantity: 1,
-        measurement_profile_id: measurementProfileId,
         tailor_id: item.tailorId,
       });
     },

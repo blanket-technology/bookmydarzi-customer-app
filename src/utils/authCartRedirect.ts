@@ -37,34 +37,18 @@ export function navigateAfterAuthWithCart(router: Router): void {
   const bookingFlowActive = useCartStore.getState().bookingFlowActive;
   clearPendingRoute();
 
-  if (pendingService && bookingFlowActive && route === "/service-details") {
-    safeRouterReplace(router, {
-      pathname: "/measurement",
-      params: {
-        bookableServiceId: String(pendingService.bookableServiceId),
-      },
-    } as never);
-    return;
-  }
-
-  if (pendingService && route === "/(tabs)") {
+  // Measurement is never supplied by the customer, so a pending service from
+  // service-details/the (tabs) redirect (or the old "/measurement" pending
+  // route from before this flow was removed) all resolve the same way now:
+  // add straight to cart, no measurement step in between.
+  if (
+    pendingService &&
+    (route === "/(tabs)" || (bookingFlowActive && route === "/service-details") || route === "/measurement")
+  ) {
     const item = pendingService;
     clearPendingService();
     safeRouterReplace(router, "/(tabs)");
     void postPopularServiceToCart(item.bookableServiceId).catch(() => {});
-    return;
-  }
-
-  if (pendingService && route === "/measurement") {
-    safeRouterReplace(router, {
-      pathname: "/measurement",
-      params: {
-        bookableServiceId: String(pendingService.bookableServiceId),
-        stitchingType: pendingService.stitchingType ?? "",
-        serviceLineName: pendingService.serviceLineName,
-        basePrice: String(pendingService.basePrice),
-      },
-    } as never);
     return;
   }
 

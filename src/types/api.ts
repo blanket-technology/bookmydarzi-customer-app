@@ -1,39 +1,6 @@
 // ============================================================================
-// API payload & response types for Measurements, Addresses, Orders
+// API payload & response types for Addresses, Orders
 // ============================================================================
-
-// ── Measurement ──────────────────────────────────────────────────────────────
-
-export interface MeasurementPayload {
-  profile_name: string;
-  gender: string;
-  chest: number;
-  waist: number;
-  hips: number;
-  shoulder: number;
-  neck: number;
-  sleeve_length: number;
-  inseam: number;
-  height: number;
-  fit_preference: string;
-  notes: string;
-  is_default: boolean;
-}
-
-export interface ApiMeasurement extends MeasurementPayload {
-  id: number;
-  user_id: number;
-  created_at: string;
-  updated_at: string;
-}
-
-/** GET /users/measurements/form-defaults */
-export interface MeasurementFormDefaults {
-  profile_name?: string;
-  gender?: string;
-  fit_preference?: string;
-  is_default?: boolean;
-}
 
 // ── Address ───────────────────────────────────────────────────────────────────
 
@@ -72,7 +39,6 @@ export type PaymentMethodType = "cod" | "online" | "upi" | "card";
 export interface CreateOrderApiPayload {
   tailor_id?: number;        // Optional - backend assigns tailor if not provided
   service_id: number;
-  measurement_id?: number;
   address_id: number;
   /** cod | online - sent when placing order */
   payment_method?: PaymentMethodType;
@@ -115,6 +81,11 @@ export interface ApiOrderDisplayFields {
   canPayNow?: boolean;
   /** When provided on the list item, used for inline tracking (no extra fetch) */
   trackingSteps?: ApiOrderTrackingDisplay[] | null;
+  /** Backend's ScheduledPickupAt (app/schemas/order.py OrderResponse) - ISO
+   * timestamp when pickup is/was scheduled, null until scheduled. */
+  scheduledPickupAt?: string | null;
+  /** Backend's PickupTimeSlot - human-readable slot string (e.g. "10 AM - 12 PM"). */
+  pickupTimeSlot?: string | null;
 }
 
 /** Amount in rupees for POST /payments/create (from backend numeric fields only) */
@@ -233,7 +204,7 @@ export interface ApiOrder extends ApiOrderDisplayFields {
   customization_notes: string | null;
   cloth_details: string | null;
   total_price: number;
-  payment_status: "pending" | "paid" | "failed";
+  payment_status: "pending" | "paid" | "failed" | "refunded";
   payment_method?: PaymentMethodType;
   created_at: string;
   updated_at: string;
@@ -241,11 +212,35 @@ export interface ApiOrder extends ApiOrderDisplayFields {
   service?: { id: number; name: string; base_price: number };
   tailor?: { id: number; name: string; specialization: string };
   address?: ApiAddress;
-  measurement?: ApiMeasurement;
+  /** Filled by Bridge/employee at pickup, or by Admin - never by the
+   * customer. Present only once staff have collected it. */
+  measurement?: {
+    id: number;
+    profile_name: string;
+    gender: string | null;
+    chest: number | null;
+    waist: number | null;
+    hips: number | null;
+    shoulder: number | null;
+    neck: number | null;
+    sleeve_length: number | null;
+    inseam: number | null;
+    height: number | null;
+    fit_preference: string | null;
+    notes: string | null;
+  };
 }
 
 // ── Order Tracking ────────────────────────────────────────────────────────────
 
+/**
+ * @deprecated GET /orders/{id}/tracking does not return a flat array of
+ * these - it returns a single OrderTrackingResponse object (see
+ * OrderTrackingPayload below). This shape/type was never actually correct;
+ * kept only because OrderCard.tsx's inline expandable timeline still
+ * compiles against it. Migrate remaining call sites to
+ * fetchOrderTrackingPayload + OrderTrackingPayload, then delete this.
+ */
 export interface ApiOrderTracking {
   id: number;
   order_id: number;
@@ -258,13 +253,48 @@ export interface ApiOrderTracking {
   timeLabel?: string | null;
 }
 
-/** Map tracking API step to display fields (backend text only) */
+/** @deprecated see ApiOrderTracking */
 export function mapTrackingStepForDisplay(step: ApiOrderTracking): ApiOrderTrackingDisplay {
   return {
     statusLabel: step.statusLabel ?? step.status ?? null,
     note: step.note ?? null,
     timeLabel: step.timeLabel ?? step.created_at ?? null,
   };
+}
+
+/**
+ * GET /orders/{order_id}/tracking - confirmed against backend source
+ * (app/schemas/order.py: OrderTrackingResponse, TimelineStageResponse,
+ * OrderCurrentStageResponse). This is the real, current response shape -
+ * a single object, not an array.
+ */
+export interface OrderTimelineStage {
+  status: string;
+  title: string;
+  description?: string | null;
+  completed: boolean;
+  current: boolean;
+  /** ISO-8601 when this stage was reached, null if not yet reached. */
+  timestamp: string | null;
+}
+
+export interface OrderCurrentStage {
+  current_stage: string;
+  title: string;
+  description: string;
+}
+
+export interface OrderTrackingPayload {
+  order_id: number;
+  order_code: string;
+  status: string;
+  current_status: string;
+  current_stage: OrderCurrentStage;
+  /** ISO date YYYY-MM-DD, server-calculated, never derive this client-side. */
+  expected_delivery_date: string | null;
+  /** e.g. "Delivery by 5 Jun", server-calculated. */
+  display_eta: string | null;
+  timeline: OrderTimelineStage[];
 }
 
 // ── Payment ───────────────────────────────────────────────────────────────────
