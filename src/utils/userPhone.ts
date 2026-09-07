@@ -24,17 +24,19 @@ export function parseMobileFromProfileApi(raw: unknown): string {
         ? (r.edit_profile as Record<string, unknown>)
         : null;
 
-  const pick = (obj: Record<string, unknown> | null) =>
-    obj
-      ? normalizeTenDigitMobile(
-          obj.Mobile ??
-            obj.mobile ??
-            obj.phone_number ??
-            obj.PhoneNumber ??
-            obj.phone ??
-            obj.Phone,
-        )
-      : "";
+  const pick = (obj: Record<string, unknown> | null) => {
+    if (!obj) return "";
+    const value =
+      obj.Mobile ??
+      obj.mobile ??
+      obj.phone_number ??
+      obj.PhoneNumber ??
+      obj.phone ??
+      obj.Phone;
+    return normalizeTenDigitMobile(
+      typeof value === "string" ? value : undefined,
+    );
+  };
 
   return (
     pick(r) ||

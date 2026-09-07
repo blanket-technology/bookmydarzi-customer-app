@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { COLORS, SPACING } from "../../../constants/theme";
+import { COLORS } from "../../../constants/theme";
 import { cardShadow } from "../../utils/cardShadow";
 
 interface Props {
@@ -18,9 +18,10 @@ export default function OrderScreenSection({ title, children }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    marginBottom: SPACING.md,
-  },
+  // No marginBottom - the parent ScrollView controls vertical rhythm via a
+  // single `gap` so section spacing is uniform. Screens using this component
+  // (order-details, order-summary) set that gap on their content container.
+  wrap: {},
   title: {
     fontSize: 12,
     fontWeight: "600",

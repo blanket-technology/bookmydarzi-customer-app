@@ -137,7 +137,7 @@ export default function CartItemCard({
           </View>
           {prefs!.design_notes ? (
             <Text style={styles.designNotesText} numberOfLines={2}>
-              "{prefs!.design_notes}"
+              &quot;{prefs!.design_notes}&quot;
             </Text>
           ) : null}
         </View>

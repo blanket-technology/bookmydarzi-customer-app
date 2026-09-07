@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import { LocationSelectField } from "../src/components/common/LocationSelectField";
 import { MapPinPicker, type PickedLocation } from "../src/components/common/MapPinPicker";
+import ScreenHeader from "../src/components/common/ScreenHeader";
 import {
     DEFAULT_CITY,
     DEFAULT_STATE,
@@ -742,21 +743,14 @@ export default function AddressScreen() {
     >
       <View style={[styles.root, { paddingTop: insets.top }]}>
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={handleAddressBack}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="arrow-back" size={22} color={COLORS.black} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            {isBuyNowFlow || isBookingFlow || isCheckoutFlow
+        <ScreenHeader
+          title={
+            isBuyNowFlow || isBookingFlow || isCheckoutFlow
               ? "Delivery Address"
-              : "Manage Address"}
-          </Text>
-          <View style={{ width: 40 }} />
-        </View>
+              : "Manage Address"
+          }
+          onBack={handleAddressBack}
+        />
 
         {showComingSoonBanner ? (
           <View style={styles.comingSoonBanner}>
@@ -1266,26 +1260,6 @@ export default function AddressScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   root: { flex: 1, backgroundColor: COLORS.offWhite },
-
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.grayBorder,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.grayLight,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { fontSize: 17, fontWeight: "700", color: COLORS.black },
 
   comingSoonBanner: {
     flexDirection: "row",

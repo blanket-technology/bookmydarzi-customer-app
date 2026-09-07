@@ -7,7 +7,12 @@ export interface CatalogStitchingType {
   name: string;
   description?: string | null;
   base_price: number;
+  estimated_delivery_days: number;
   display_order: number;
+  is_premium: boolean;
+  is_active: boolean;
+  image_url?: string | null;
+  highlights: string[];
   service_line_id: number;
   service_line_name: string;
   category_id: number;
@@ -29,12 +34,16 @@ export interface CatalogDirectService {
   name: string;
   description?: string | null;
   base_price: number;
+  estimated_delivery_days: number;
   display_order: number;
+  is_premium: boolean;
+  is_active: boolean;
+  image_url: string | null;
+  highlights: string[];
   service_line_id: number | null;
   service_line_name: string | null;
   category_id: number;
   category_name: string;
-  image_url: string | null;
 }
 
 export interface CatalogCategory {

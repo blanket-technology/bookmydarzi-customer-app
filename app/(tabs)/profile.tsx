@@ -24,6 +24,7 @@ import {
     uploadProfileAvatar,
 } from "../../src/services/profileService";
 import { useAddressStore } from "../../src/store/useAddressStore";
+import { useMeasurementStore } from "../../src/store/useMeasurementStore";
 import { formatAddressSummary } from "../../src/utils/addressDisplay";
 import { getProfileDisplayEmail } from "../../src/utils/email";
 import {
@@ -60,6 +61,11 @@ export default function ProfileScreen() {
     loading: addressesLoading,
     fetchAddresses,
   } = useAddressStore();
+  const {
+    measurements,
+    loading: measurementsLoading,
+    fetchMeasurements,
+  } = useMeasurementStore();
 
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -85,8 +91,9 @@ export default function ProfileScreen() {
       Promise.all([
         fetchProfile(),
         fetchAddresses(),
+        fetchMeasurements(),
       ]).finally(() => setProfileLoading(false));
-    }, [isAuthenticated, fetchProfile, fetchAddresses]),
+    }, [isAuthenticated, fetchProfile, fetchAddresses, fetchMeasurements]),
   );
 
   const prefillEmail = () => displayEmail;
@@ -238,7 +245,7 @@ export default function ProfileScreen() {
             size={80}
             color={COLORS.grayBorder}
           />
-          <Text style={styles.guestTitle}>You're not logged in</Text>
+          <Text style={styles.guestTitle}>You&apos;re not logged in</Text>
           <Text style={styles.guestSub}>
             Login to view and manage your profile
           </Text>
@@ -402,6 +409,53 @@ export default function ProfileScreen() {
                   </Text>
                 </View>
                 {addr.is_default ? (
+                  <View style={styles.miniBadge}>
+                    <Text style={styles.miniBadgeText}>Default</Text>
+                  </View>
+                ) : null}
+              </View>
+            ))
+          )}
+        </Animated.View>
+
+        {/* Saved measurements - reference only, not required to book */}
+        <Animated.View
+          entering={FadeInDown.delay(135).duration(400)}
+          style={styles.card}
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={styles.cardTitle}>Measurements</Text>
+            <TouchableOpacity onPress={() => router.push("/measurements" as any)}>
+              <Text style={styles.sectionLink}>Manage</Text>
+            </TouchableOpacity>
+          </View>
+          {measurementsLoading && measurements.length === 0 ? (
+            <ActivityIndicator
+              size="small"
+              color={COLORS.primary}
+              style={{ marginVertical: 8 }}
+            />
+          ) : measurements.length === 0 ? (
+            <Text style={styles.emptyHint}>
+              Recorded by our team at your next pickup.
+            </Text>
+          ) : (
+            measurements.slice(0, 3).map((m) => (
+              <View key={m.id} style={styles.listItem}>
+                <Ionicons name="body-outline" size={16} color={COLORS.primary} />
+                <View style={styles.listItemContent}>
+                  <Text style={styles.listItemTitle}>{m.profile_name}</Text>
+                  <Text style={styles.listItemSub} numberOfLines={1}>
+                    {m.gender === "male"
+                      ? "Men's"
+                      : m.gender === "female"
+                        ? "Women's"
+                        : m.gender === "kids"
+                          ? "Kids'"
+                          : "General"}
+                  </Text>
+                </View>
+                {m.is_default ? (
                   <View style={styles.miniBadge}>
                     <Text style={styles.miniBadgeText}>Default</Text>
                   </View>

@@ -1,19 +1,25 @@
 import { request } from "../../services/api";
-import { extractImageUrlFromRecord } from "../utils/serviceImage";
 import type {
-  CatalogCategoriesTreeResponse,
-  CatalogCategory,
-  CatalogDirectService,
-  CatalogServiceLine,
-  CatalogStitchingType,
+    CatalogCategoriesTreeResponse,
+    CatalogCategory,
+    CatalogDirectService,
+    CatalogServiceLine,
+    CatalogStitchingType,
 } from "../types/catalogApi";
+import { extractImageUrlFromRecord } from "../utils/serviceImage";
 
 function mapStitchingType(raw: Record<string, unknown>): CatalogStitchingType {
   return {
     service_id: Number(raw.service_id ?? raw.ServiceId ?? 0),
     name: String(raw.name ?? raw.Name ?? ""),
+    description: (raw.description ?? raw.Description ?? null) as string | null,
     base_price: Number(raw.base_price ?? raw.BasePrice ?? 0),
+    estimated_delivery_days: Number(raw.estimated_delivery_days ?? raw.EstimatedDeliveryDays ?? 0),
     display_order: Number(raw.display_order ?? raw.DisplayOrder ?? 0),
+    is_premium: Boolean(raw.is_premium ?? raw.IsPremium ?? false),
+    is_active: Boolean(raw.is_active ?? raw.IsActive ?? true),
+    image_url: extractImageUrlFromRecord(raw),
+    highlights: Array.isArray(raw.highlights ?? raw.Highlights) ? (raw.highlights ?? raw.Highlights) as string[] : [],
     service_line_id: Number(raw.service_line_id ?? raw.ServiceLineId ?? 0),
     service_line_name: String(raw.service_line_name ?? raw.ServiceLineName ?? ""),
     category_id: Number(raw.category_id ?? raw.CategoryId ?? 0),
@@ -43,8 +49,13 @@ function mapDirectService(raw: Record<string, unknown>): CatalogDirectService {
   return {
     service_id: Number(raw.service_id ?? raw.ServiceId ?? 0),
     name: String(raw.name ?? raw.Name ?? ""),
+    description: (raw.description ?? raw.Description ?? null) as string | null,
     base_price: Number(raw.base_price ?? raw.BasePrice ?? 0),
+    estimated_delivery_days: Number(raw.estimated_delivery_days ?? raw.EstimatedDeliveryDays ?? 0),
     display_order: Number(raw.display_order ?? raw.DisplayOrder ?? 0),
+    is_premium: Boolean(raw.is_premium ?? raw.IsPremium ?? false),
+    is_active: Boolean(raw.is_active ?? raw.IsActive ?? true),
+    highlights: Array.isArray(raw.highlights ?? raw.Highlights) ? (raw.highlights ?? raw.Highlights) as string[] : [],
     service_line_id:
       raw.service_line_id != null || raw.ServiceLineId != null
         ? Number(raw.service_line_id ?? raw.ServiceLineId)
@@ -109,7 +120,7 @@ function mapCategoriesFromRaw(categoriesRaw: unknown[]): CatalogCategory[] {
 let _catalogTreeCache: CatalogCategoriesTreeResponse | null = null;
 let _catalogTreePromise: Promise<CatalogCategoriesTreeResponse> | null = null;
 
-/** GET /catalog/categories/tree — in-memory cached (catalog is static per session) */
+/** GET /catalog/categories/tree - in-memory cached (catalog is static per session) */
 export async function fetchCatalogTree(): Promise<CatalogCategoriesTreeResponse> {
   if (_catalogTreeCache) return _catalogTreeCache;
   if (_catalogTreePromise) return _catalogTreePromise;
@@ -130,7 +141,7 @@ export async function fetchCatalogTree(): Promise<CatalogCategoriesTreeResponse>
   return _catalogTreePromise;
 }
 
-/** GET /catalog/categories/{categoryId}/subcategories (fallback when tree lookup is empty) */
+/** GET /catalog/categories/{categoryId} (fallback when tree lookup is empty) */
 export async function fetchCatalogSubcategories(
   categoryId: number,
 ): Promise<CatalogCategory | null> {
@@ -138,7 +149,7 @@ export async function fetchCatalogSubcategories(
 
   try {
     const res = await request<unknown>(
-      `/catalog/categories/${categoryId}/subcategories`,
+      `/catalog/categories/${categoryId}`,
       { skipAuth: true },
     );
     const itemsRaw = extractCategoriesRaw(res);
@@ -248,6 +259,31 @@ export function findDirectServiceByName(
   });
 }
 
+export interface ServiceReview {
+  rating: number;
+  comment: string | null;
+  created_at: string | null;
+}
+
+export interface ServiceRatings {
+  service_id: number;
+  avg_rating: number;
+  total_reviews: number;
+  star_counts: Record<string, number>;
+  recent_reviews: ServiceReview[];
+}
+
+export async function fetchServiceRatings(serviceId: number): Promise<ServiceRatings | null> {
+  if (serviceId <= 0) return null;
+  try {
+    return await request<ServiceRatings>(`/catalog/services/${serviceId}/ratings`, {
+      skipAuth: true,
+    });
+  } catch {
+    return null;
+  }
+}
+
 export interface CatalogServiceLookup {
   serviceLineName: string;
   stitchingTypeName: string | null;
@@ -278,6 +314,68 @@ export function lookupCatalogServiceById(
         serviceLineName:
           (direct.service_line_name ?? "").trim() || direct.name.trim() || "Service",
         stitchingTypeName: null,
+      };
+    }
+  }
+
+  return null;
+}
+
+export interface ServiceNavParams {
+  catalogCategoryId: string;
+  categoryName: string;
+  serviceName: string;
+  serviceLineId: string;
+  bookableServiceId: string;
+  basePrice: string;
+  imageUrl: string;
+  description: string;
+}
+
+/**
+ * Resolves a bare service_id (e.g. from a lookbook photo tagged with the
+ * garment it shows) into the exact route params /service-details expects -
+ * the same shape sub-services.tsx's navigateToDetail() builds when a
+ * customer taps a stitching type from the browse flow, so a lookbook photo
+ * lands on an identically-configured booking screen instead of a bespoke
+ * one-off. Returns null if the id doesn't match anything in the current
+ * catalog (deleted/deactivated service, stale tag, etc.) - callers should
+ * treat that as "can't book this photo" rather than erroring.
+ */
+export function resolveServiceNavParams(
+  tree: CatalogCategoriesTreeResponse,
+  serviceId: number,
+): ServiceNavParams | null {
+  if (serviceId <= 0) return null;
+
+  for (const category of tree.categories) {
+    for (const line of category.service_lines) {
+      for (const stitching of line.stitching_types) {
+        if (stitching.service_id !== serviceId) continue;
+        return {
+          catalogCategoryId: String(category.id),
+          categoryName: category.name,
+          serviceName: line.name,
+          serviceLineId: String(line.id),
+          bookableServiceId: String(stitching.service_id),
+          basePrice: String(stitching.base_price),
+          imageUrl: stitching.image_url ?? line.image_url ?? "",
+          description: stitching.description ?? line.description ?? "",
+        };
+      }
+    }
+
+    for (const direct of category.direct_services) {
+      if (direct.service_id !== serviceId) continue;
+      return {
+        catalogCategoryId: String(category.id),
+        categoryName: category.name,
+        serviceName: direct.name,
+        serviceLineId: String(direct.service_line_id ?? 0),
+        bookableServiceId: String(direct.service_id),
+        basePrice: String(direct.base_price),
+        imageUrl: direct.image_url ?? "",
+        description: direct.description ?? "",
       };
     }
   }

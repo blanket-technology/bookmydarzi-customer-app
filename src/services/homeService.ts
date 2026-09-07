@@ -51,9 +51,9 @@ function normalizeServiceCategory(raw: Record<string, unknown>): ApiServiceCateg
     ImageObjectFit: (raw.ImageObjectFit ?? raw.image_object_fit ?? null) as
       | string
       | null,
-    ImageShowFull: (raw.ImageShowFull ?? raw.image_show_full ?? null) as
+    ImageShowFull: (raw.ImageShowFull ?? raw.image_show_full ?? undefined) as
       | boolean
-      | null,
+      | undefined,
     DisplayOrder: Number(raw.DisplayOrder ?? raw.display_order ?? 0),
     SubCategories: Array.isArray(subsRaw)
       ? subsRaw.map((item) =>

@@ -10,12 +10,16 @@ import {
   Platform,
   ScrollView,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import {
   forgotPasswordRequest,
   forgotPasswordVerifyRequest,
   forgotPasswordResetRequest,
 } from "../../services/authService";
+import { useHardwareBackHandler } from "../../src/hooks/useHardwareBackHandler";
+import { safeRouterReplace } from "../../src/utils/safeNavigation";
 import { POWERED_BY_LABEL } from "../../constants/branding";
 import { FormBannerError } from "../../src/components/common/FormMessage";
 import { PasswordInput } from "../../src/components/common/PasswordInput";
@@ -25,6 +29,7 @@ const RESEND_COOLDOWN = 30;
 type Step = "request" | "verify" | "reset" | "done";
 
 export default function ForgotPasswordScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const [step, setStep] = useState<Step>("request");
@@ -37,6 +42,18 @@ export default function ForgotPasswordScreen() {
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Step-aware back: inside the multi-step flow, go to the previous step;
+  // from the first step, return to login. Wired to both the header button
+  // and the Android hardware back button so they behave identically.
+  const handleBack = useCallback(() => {
+    if (step === "reset") { setStep("verify"); setError(null); return true; }
+    if (step === "verify") { setStep("request"); setError(null); return true; }
+    safeRouterReplace(router, "/(auth)/login");
+    return true;
+  }, [step, router]);
+
+  useHardwareBackHandler(handleBack);
 
   const startCountdown = useCallback(() => {
     setCountdown(RESEND_COOLDOWN);
@@ -141,8 +158,20 @@ export default function ForgotPasswordScreen() {
       style={styles.flex}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
+      {/* Persistent top-left back button - available on every step and wired
+          to the same step-aware handler as the hardware back button. */}
+      <TouchableOpacity
+        onPress={handleBack}
+        hitSlop={12}
+        style={[styles.headerBack, { top: insets.top + 12 }]}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
+        <Ionicons name="arrow-back" size={20} color="#ffffff" style={{ marginRight: 1.5 }} />
+      </TouchableOpacity>
+
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, { paddingTop: insets.top + 64 }]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
@@ -220,7 +249,7 @@ export default function ForgotPasswordScreen() {
                 </TouchableOpacity>
 
                 <View style={styles.resendRow}>
-                  <Text style={styles.resendPrompt}>Didn't receive it? </Text>
+                  <Text style={styles.resendPrompt}>Didn&apos;t receive it? </Text>
                   {countdown > 0 ? (
                     <Text style={styles.resendCountdown}>Resend in {countdown}s</Text>
                   ) : (
@@ -282,7 +311,7 @@ export default function ForgotPasswordScreen() {
             {step === "request" && (
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => router.back()}
+                onPress={() => safeRouterReplace(router, "/(auth)/login")}
               >
                 <Text style={styles.cancelText}>← Back to Login</Text>
               </TouchableOpacity>
@@ -302,7 +331,6 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 100,
     paddingBottom: 40,
     alignItems: "center",
   },
@@ -366,4 +394,15 @@ const styles = StyleSheet.create({
   cancelButton: { alignItems: "center", marginTop: 16 },
   cancelText: { color: "#ffffff", fontSize: 14 },
   footer: { fontSize: 12, color: "#d1faf8", textAlign: "center", marginTop: 40 },
+  headerBack: {
+    position: "absolute",
+    left: 20,
+    zIndex: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
 });

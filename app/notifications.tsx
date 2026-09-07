@@ -7,7 +7,6 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useCallback } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -17,6 +16,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
+import ErrorState from "../src/components/common/ErrorState";
+import ScreenHeader from "../src/components/common/ScreenHeader";
+import EmptyState from "../src/components/common/EmptyState";
+import NotificationSkeleton from "../src/components/skeletons/NotificationSkeleton";
 import { useNotificationStore } from "../src/store/useNotificationStore";
 import { useAuthStore } from "../store/useAuthStore";
 import type { AppNotification } from "../src/types/engagement";
@@ -24,6 +27,7 @@ import type { AppNotification } from "../src/types/engagement";
 function iconForType(type: string): keyof typeof Ionicons.glyphMap {
   switch (type) {
     case "order":
+    case "order_update":
       return "bag-check-outline";
     case "payment":
       return "card-outline";
@@ -50,7 +54,7 @@ function formatTime(iso: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.round(hrs / 24);
   if (days < 7) return `${days}d ago`;
-  return d.toLocaleDateString();
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
 export default function NotificationsScreen() {
@@ -78,9 +82,19 @@ export default function NotificationsScreen() {
     if (!n.is_read) markRead(n.id);
     const data = (n.data ?? {}) as Record<string, unknown>;
     const orderId = data.order_id ?? data.orderId;
-    if (n.type === "chat" && orderId != null) {
-      router.push({ pathname: "/chat" as never, params: { orderId: String(orderId) } });
-    } else if ((n.type === "order" || n.type === "payment") && orderId != null) {
+    // "chat" notifications are always chat_v2 support conversations (see
+    // app/services/chat_v2/handoff_service.py) - route by order_id, not a
+    // session_uuid, matching app/_layout.tsx's push-tap resolver so both
+    // paths land on the same conversation. Tailor chat (app/chat.tsx) has
+    // no notification type of its own and is only ever reached from an
+    // order's own screen.
+    if (n.type === "chat") {
+      router.push(
+        orderId != null
+          ? { pathname: "/support-chat" as never, params: { orderId: String(orderId) } }
+          : ("/support-chat" as never),
+      );
+    } else if ((n.type === "order" || n.type === "order_update" || n.type === "payment") && orderId != null) {
       router.push({
         pathname: "/order-details" as never,
         params: { orderId: String(orderId) },
@@ -116,40 +130,27 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Notifications</Text>
-        {unreadCount > 0 ? (
-          <TouchableOpacity onPress={() => markAllRead()} hitSlop={8}>
-            <Text style={styles.markAll}>Mark all</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={{ width: 56 }} />
-        )}
-      </View>
+      <ScreenHeader
+        title="Notifications"
+        right={
+          unreadCount > 0 ? (
+            <TouchableOpacity onPress={() => markAllRead()} hitSlop={8} style={{ width: 56 }}>
+              <Text style={styles.markAll}>Mark all</Text>
+            </TouchableOpacity>
+          ) : undefined
+        }
+      />
 
       {loading && notifications.length === 0 ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
+        <NotificationSkeleton />
       ) : error && notifications.length === 0 ? (
-        <View style={styles.center}>
-          <Ionicons name="alert-circle-outline" size={44} color={COLORS.error} />
-          <Text style={styles.errorTitle}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => fetchNotifications(true)}>
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorState message={error} onRetry={() => fetchNotifications(true)} />
       ) : notifications.length === 0 ? (
-        <View style={styles.center}>
-          <Ionicons name="notifications-off-outline" size={48} color={COLORS.grayBorder} />
-          <Text style={styles.emptyTitle}>No notifications yet</Text>
-          <Text style={styles.emptySub}>
-            Updates about your orders and payments will show up here.
-          </Text>
-        </View>
+        <EmptyState
+          icon="notifications-off-outline"
+          title="No notifications yet"
+          subtitle="Updates about your orders and payments will show up here."
+        />
       ) : (
         <FlatList
           data={notifications}
@@ -172,25 +173,6 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.offWhite },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.grayBorder,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.offWhite,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { fontSize: 18, fontWeight: "800", color: COLORS.black },
   markAll: { fontSize: 13, fontWeight: "700", color: COLORS.primaryDark, width: 56, textAlign: "right" },
   item: {
     flexDirection: "row",
@@ -224,22 +206,4 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     marginTop: 4,
   },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: SPACING.xl,
-    gap: SPACING.sm,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: "700", color: COLORS.black },
-  emptySub: { fontSize: 13, color: COLORS.gray, textAlign: "center" },
-  errorTitle: { fontSize: 14, color: COLORS.error, textAlign: "center" },
-  retryBtn: {
-    backgroundColor: COLORS.primaryDark,
-    borderRadius: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    marginTop: SPACING.sm,
-  },
-  retryText: { fontSize: 14, fontWeight: "700", color: COLORS.white },
 });

@@ -1,74 +1,74 @@
 /**
- * Employee order detail + action flow:
- *   order_placed  → Accept | Reject
- *   order_accepted → Go for Pickup → cloth_pickup_pending
- *   cloth_pickup_pending → Confirm Pickup → cloth_picked_up
- *   cloth_picked_up → [Take Measurements] → Mark Cloth at Hub → cloth_at_hub
- *   cloth_at_hub  → [Take Measurements] → Assign Tailor → WAITING (tailor stitches)
- *   stitching_completed → Mark Out for Delivery → out_for_delivery
- *   out_for_delivery → Mark Delivered (+ payment) → delivered
+ * Employee order detail + action flow (matches app/api/v1/endpoints/employee.py):
+ *   order_placed          → Accept | Reject          → order_accepted
+ *   order_accepted        → Go for Pickup             → pickup_pending | pickup_scheduled
+ *   pickup_scheduled      → WAITING (until ScheduledPickupAt arrives)
+ *   pickup_pending        → Confirm Pickup             → picked_up
+ *   picked_up              → Hand to Tailor             → cloth_received_by_tailor
+ *                            (requires a tailor already assigned via broadcast)
+ *   searching_tailor/broadcasted/tailor_assigned → WAITING (broadcast/tailor's turn)
+ *   cloth_received_by_tailor…final_check → WAITING (tailor stitches + uploads photos)
+ *   ready_for_dispatch    → Mark Out for Delivery      → out_for_delivery
+ *   out_for_delivery      → Mark Delivered (+ payment gate) → delivered → completed
+ *
+ * Tailor assignment itself is admin-only now (assign-tailor), not part of
+ * this flow - tailors accept broadcasts themselves.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Linking,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    KeyboardAvoidingView,
+    Linking,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
 } from "react-native";
-import { Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
+import ScreenHeader from "../../src/components/common/ScreenHeader";
+import { getOrderStatusMeta, normalizeOrderStatus, STATUS_TONE_COLORS } from "../../src/constants/orderStatus";
+import { formatCurrency } from "../../src/utils/formatters";
 import {
-  acceptOrder,
-  assignTailor,
-  collectMeasurement,
-  completeOrder,
-  completeStitching,
-  confirmPickup,
-  getEmployeeOrder,
-  listTailors,
-  markClothAtHub,
-  markOutForDelivery,
-  rejectOrder,
-  schedulePickup,
-  type MeasurementInput,
-  type TailorProfile,
+    acceptOrder,
+    collectDeliveryPayment,
+    collectMeasurement,
+    completeOrder,
+    confirmPickup,
+    getEmployeeOrder,
+    handToTailor,
+    markOutForDelivery,
+    rejectOrder,
+    schedulePickup,
+    type MeasurementInput,
 } from "../../src/services/employeeService";
 
 const TEAL = "#149694";
 
-const STATUS_COLORS: Record<string, string> = {
-  order_placed: "#3B82F6",
-  order_accepted: "#8B5CF6",
-  order_rejected: "#DC2626",
-  tailor_assigned: "#F59E0B",
-  cloth_pickup_pending: "#F97316",
-  cloth_picked_up: "#F97316",
-  cloth_at_hub: "#8B5CF6",
-  stitching_in_progress: "#EC4899",
-  stitching_completed: "#10B981",
-  out_for_delivery: "#3B82F6",
-  delivered: "#065F46",
-  cancelled: "#B91C1C",
-};
-
-const WAITING_STATUSES: Record<string, string> = {
-  order_rejected: "Order was rejected",
-  delivered: "Order delivered successfully",
-  cancelled: "Order has been cancelled",
-  tailor_assigned: "Tailor assigned — waiting for stitching to begin",
-  stitching_in_progress: "Stitching in progress",
-};
+/** Statuses where the employee has no action - waiting on tailor/broadcast/system. */
+const WAITING_STATUSES = new Set([
+  "payment_pending",
+  "order_rejected",
+  "cancelled",
+  "searching_tailor",
+  "broadcasted",
+  "tailor_assigned",
+  "cloth_received_by_tailor",
+  "stitching_started",
+  "in_progress",
+  "final_check",
+  "delivered",
+  "completed",
+]);
 
 function Row({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
@@ -79,8 +79,6 @@ function Row({ label, value }: { label: string; value?: string | null }) {
     </View>
   );
 }
-
-const fmt = (v: number) => Number(v).toFixed(2).replace(/\.00$/, "");
 
 function BillingRow({
   label,
@@ -131,16 +129,20 @@ function DeliveryPaymentModal({
   visible,
   amount,
   orderCode,
-  onCashConfirm,
+  collecting,
+  onConfirm,
   onClose,
 }: {
   visible: boolean;
   amount: number;
   orderCode: string;
-  onCashConfirm: () => void;
+  collecting: boolean;
+  onConfirm: (method: "qr" | "cash") => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"qr" | "cash">("qr");
+  const { width: screenWidth } = useWindowDimensions();
+  const qrSize = Math.min(screenWidth - 48, 260);
 
   const upiLink =
     `upi://pay?pa=${encodeURIComponent(MERCHANT_UPI)}` +
@@ -151,7 +153,7 @@ function DeliveryPaymentModal({
     `&tn=${encodeURIComponent(`Balance payment for order ${orderCode}`)}`;
 
   const qrImageUri =
-    `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=12&data=` +
+    `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&margin=12&data=` +
     encodeURIComponent(upiLink);
 
   return (
@@ -188,17 +190,27 @@ function DeliveryPaymentModal({
           {tab === "qr" ? (
             <View style={styles.qrSection}>
               <Text style={styles.qrHint}>Ask the customer to scan this QR with any UPI app</Text>
-              <View style={styles.qrBox}>
+              <View style={[styles.qrBox, { width: qrSize, height: qrSize }]}>
                 <Image
                   source={{ uri: qrImageUri }}
-                  style={styles.qrImage}
+                  style={[styles.qrImage, { width: qrSize, height: qrSize }]}
                   resizeMode="contain"
                 />
               </View>
               <Text style={styles.qrUpiId}>{MERCHANT_UPI}</Text>
-              <TouchableOpacity style={styles.confirmBtn} onPress={onCashConfirm}>
-                <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.white} />
-                <Text style={styles.confirmBtnText}>Payment Received - Mark Delivered</Text>
+              <TouchableOpacity
+                style={[styles.confirmBtn, collecting && { opacity: 0.6 }]}
+                onPress={() => onConfirm("qr")}
+                disabled={collecting}
+              >
+                {collecting ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.white} />
+                    <Text style={styles.confirmBtnText}>Payment Received - Mark Delivered</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           ) : (
@@ -210,9 +222,19 @@ function DeliveryPaymentModal({
               <Text style={styles.cashNote}>
                 Confirm only after physically receiving cash from the customer.
               </Text>
-              <TouchableOpacity style={styles.confirmBtn} onPress={onCashConfirm}>
-                <Ionicons name="cash-outline" size={18} color={COLORS.white} />
-                <Text style={styles.confirmBtnText}>Cash Received - Mark Delivered</Text>
+              <TouchableOpacity
+                style={[styles.confirmBtn, collecting && { opacity: 0.6 }]}
+                onPress={() => onConfirm("cash")}
+                disabled={collecting}
+              >
+                {collecting ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <>
+                    <Ionicons name="cash-outline" size={18} color={COLORS.white} />
+                    <Text style={styles.confirmBtnText}>Cash Received - Mark Delivered</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -222,83 +244,9 @@ function DeliveryPaymentModal({
   );
 }
 
-// ─── Tailor Selector Modal ────────────────────────────────────────────────────
-
-function TailorSelectorModal({
-  visible,
-  tailors,
-  loading,
-  onSelect,
-  onClose,
-}: {
-  visible: boolean;
-  tailors: TailorProfile[];
-  loading: boolean;
-  onSelect: (id: number) => void;
-  onClose: () => void;
-}) {
-  return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalSheet, { paddingBottom: 28 }]}>
-          <View style={styles.modalHeader}>
-            <View>
-              <Text style={styles.modalTitle}>Assign Tailor</Text>
-              <Text style={styles.modalSubtitle}>Select a tailor for this order</Text>
-            </View>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Ionicons name="close" size={22} color={COLORS.gray} />
-            </TouchableOpacity>
-          </View>
-          {loading ? (
-            <View style={{ paddingVertical: 32, alignItems: "center" }}>
-              <ActivityIndicator size="large" color={TEAL} />
-            </View>
-          ) : tailors.length === 0 ? (
-            <View style={{ paddingVertical: 32, alignItems: "center", gap: 8 }}>
-              <Ionicons name="person-outline" size={32} color={COLORS.gray} />
-              <Text style={{ color: COLORS.gray, fontSize: 13 }}>No tailors available</Text>
-            </View>
-          ) : (
-            <ScrollView style={{ maxHeight: 360 }}>
-              {tailors.map((tailor) => {
-                const name = tailor.user?.name ?? `Tailor #${tailor.Id}`;
-                const sub = [tailor.Specialization, tailor.Location].filter(Boolean).join(" · ");
-                const available = tailor.IsAvailable !== false;
-                return (
-                  <TouchableOpacity
-                    key={tailor.Id}
-                    style={[styles.tailorRow, !available && styles.tailorRowDisabled]}
-                    onPress={() => available && onSelect(tailor.Id)}
-                    disabled={!available}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.tailorAvatar}>
-                      <Text style={styles.tailorAvatarText}>{name.charAt(0).toUpperCase()}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.tailorName}>{name}</Text>
-                      {sub ? <Text style={styles.tailorSub}>{sub}</Text> : null}
-                    </View>
-                    {!available ? (
-                      <Text style={styles.tailorUnavail}>Unavailable</Text>
-                    ) : (
-                      <Ionicons name="chevron-forward" size={16} color={COLORS.gray} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          )}
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 // ─── Measurement Modal ────────────────────────────────────────────────────────
 
-const GENDERS = ["male", "female", "other"] as const;
+const GENDERS = ["male", "female", "kids", "other"] as const;
 const FIT_OPTIONS = ["slim", "regular", "loose"] as const;
 
 function MeasurementModal({
@@ -355,7 +303,7 @@ function MeasurementModal({
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: COLORS.offWhite }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         {/* Header */}
         <View style={[measStyles.header, { paddingTop: insets.top + 8 }]}>
@@ -577,9 +525,6 @@ export default function EmployeeOrderDetail() {
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
-  const [showTailorModal, setShowTailorModal] = useState(false);
-  const [tailors, setTailors] = useState<TailorProfile[]>([]);
-  const [loadingTailors, setLoadingTailors] = useState(false);
   const [showMeasModal, setShowMeasModal] = useState(false);
   const [savingMeas, setSavingMeas] = useState(false);
 
@@ -603,9 +548,10 @@ export default function EmployeeOrderDetail() {
     load();
   }, [load]);
 
-  const status: string = (order?.Status ?? order?.status ?? "").toLowerCase();
-  const statusColor = STATUS_COLORS[status] ?? COLORS.gray;
-  const waitingMessage = WAITING_STATUSES[status];
+  const status = normalizeOrderStatus(order?.Status ?? order?.status ?? "");
+  const statusMeta = getOrderStatusMeta(status);
+  const statusColor = STATUS_TONE_COLORS[statusMeta.tone].fg;
+  const waitingMessage = WAITING_STATUSES.has(status) ? statusMeta.employeeLabel : null;
 
   // ── Action runners ──────────────────────────────────────────────────────────
 
@@ -669,25 +615,24 @@ export default function EmployeeOrderDetail() {
     run(() => schedulePickup(orderId, pickupType as "instant" | "scheduled"), msg);
   };
 
-  const handleConfirmPickup = () =>
+  const handleConfirmPickup = () => {
+    const isScheduledNow = (order?.PickupType ?? order?.pickup_type ?? "").toLowerCase() === "scheduled";
+    const rawDate = order?.ScheduledPickupAt ?? order?.scheduled_pickup_at;
+    if (isScheduledNow && rawDate && new Date(rawDate).getTime() > Date.now()) {
+      const timeStr = new Date(rawDate).toLocaleString("en-IN", {
+        weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true,
+      });
+      Alert.alert("Too early", `Scheduled pickup time is ${timeStr}. Pickup can't be confirmed before then.`);
+      return;
+    }
     run(() => confirmPickup(orderId), "Confirm cloth has been picked up from customer?");
-
-  const handleMarkAtHub = () =>
-    run(() => markClothAtHub(orderId), "Mark cloth as received at workshop?");
-
-  const handleAssignTailor = () => {
-    setLoadingTailors(true);
-    setShowTailorModal(true);
-    listTailors()
-      .then(setTailors)
-      .catch((e: any) => Alert.alert("Error", e?.message ?? "Failed to load tailors"))
-      .finally(() => setLoadingTailors(false));
   };
 
-  const handleTailorSelected = (tailorId: number) => {
-    setShowTailorModal(false);
-    run(() => assignTailor(orderId, tailorId), "Assign this tailor to the order?");
-  };
+  const handleHandToTailor = () =>
+    run(
+      () => handToTailor(orderId),
+      "Hand over the collected cloth to the assigned tailor?",
+    );
 
   const handleSaveMeasurement = async (data: MeasurementInput) => {
     setSavingMeas(true);
@@ -703,9 +648,6 @@ export default function EmployeeOrderDetail() {
     }
   };
 
-  const handleCompleteStitching = () =>
-    run(() => completeStitching(orderId), "Mark stitching as complete?");
-
   const handleDelivery = () =>
     run(() => markOutForDelivery(orderId), "Mark this order as out for delivery?");
 
@@ -715,13 +657,11 @@ export default function EmployeeOrderDetail() {
     ]);
   };
 
+  // Hard payment gate mirrored from backend (complete_employee_order): never
+  // allow "Mark Delivered" to pretend completion while a balance remains.
   const handleComplete = () => {
     const remaining = Number(order?.RemainingAmount ?? order?.remaining_amount ?? 0);
-    const balanceDue = Boolean(order?.BalanceDue ?? order?.balance_due);
-    const payStatus = (order?.PaymentStatus ?? order?.payment_status ?? "").toLowerCase();
-    const isCodPending = payStatus === "cod_pending";
-    const needsCollection = remaining > 0 || balanceDue || isCodPending;
-    if (needsCollection) {
+    if (remaining > 0) {
       setShowDeliveryModal(true);
     } else {
       run(
@@ -732,9 +672,25 @@ export default function EmployeeOrderDetail() {
     }
   };
 
-  const handleDeliveryConfirmed = () => {
-    setShowDeliveryModal(false);
-    run(() => completeOrder(orderId), undefined, onDelivered);
+  const [collectingPayment, setCollectingPayment] = useState(false);
+
+  const handleCollectPayment = async (method: "qr" | "cash") => {
+    const remaining = Number(order?.RemainingAmount ?? order?.remaining_amount ?? 0);
+    if (remaining <= 0) {
+      setShowDeliveryModal(false);
+      return;
+    }
+    setCollectingPayment(true);
+    try {
+      await collectDeliveryPayment(orderId, { method, amount: remaining });
+      await completeOrder(orderId);
+      setShowDeliveryModal(false);
+      onDelivered();
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "Failed to collect payment");
+    } finally {
+      setCollectingPayment(false);
+    }
   };
 
   // ── Action config per status ─────────────────────────────────────────────────
@@ -771,25 +727,25 @@ export default function EmployeeOrderDetail() {
       color: "#F59E0B",
       onPress: handleGoForPickup,
     },
-    cloth_pickup_pending: {
+    pickup_pending: {
       label: "Confirm Pickup",
       icon: "checkmark-done-outline",
       color: "#F97316",
       onPress: handleConfirmPickup,
     },
-    cloth_picked_up: {
-      label: "Mark Cloth at Hub",
-      icon: "business-outline",
-      color: "#8B5CF6",
-      onPress: handleMarkAtHub,
+    pickup_scheduled: {
+      label: "Confirm Pickup",
+      icon: "checkmark-done-outline",
+      color: "#7C3AED",
+      onPress: handleConfirmPickup,
     },
-    cloth_at_hub: {
-      label: "Assign Tailor",
-      icon: "person-add-outline",
-      color: "#8B5CF6",
-      onPress: handleAssignTailor,
+    picked_up: {
+      label: "Hand to Tailor",
+      icon: "swap-horizontal-outline",
+      color: "#0D9488",
+      onPress: handleHandToTailor,
     },
-    stitching_completed: {
+    ready_for_dispatch: {
       label: "Mark Out for Delivery",
       icon: "bicycle-outline",
       color: "#3B82F6",
@@ -829,8 +785,14 @@ export default function EmployeeOrderDetail() {
     ? new Date(rawPickupDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })
     : null;
 
-  // Whether employee should be able to add measurements
-  const canTakeMeasurements = ["cloth_picked_up", "cloth_at_hub", "cloth_pickup_pending", "order_accepted"].includes(status);
+  // Whether employee should be able to add measurements - from acceptance
+  // through handoff to the tailor (measurements travel with the cloth).
+  const canTakeMeasurements = [
+    "order_accepted",
+    "pickup_scheduled",
+    "pickup_pending",
+    "picked_up",
+  ].includes(status);
   const hasMeasurement = !!measurement;
 
   const callCustomer = () => {
@@ -853,31 +815,30 @@ export default function EmployeeOrderDetail() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order Detail</Text>
-        <TouchableOpacity
-          style={styles.chatHeaderBtn}
-          onPress={() =>
-            router.push({
-              pathname: "/(employee)/order-chat" as never,
-              params: {
-                orderId: String(orderId),
-                orderCode: order?.OrderCode ?? order?.order_code ?? String(orderId),
-                customerName:
-                  order?.delivery_address?.full_name ??
-                  order?.customer_name ??
-                  "Customer",
-              },
-            })
-          }
-          hitSlop={12}
-        >
-          <Ionicons name="chatbubble-ellipses-outline" size={22} color={TEAL} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Order Detail"
+        right={
+          <TouchableOpacity
+            style={styles.chatHeaderBtn}
+            onPress={() =>
+              router.push({
+                pathname: "/(employee)/order-chat" as never,
+                params: {
+                  orderId: String(orderId),
+                  orderCode: order?.OrderCode ?? order?.order_code ?? String(orderId),
+                  customerName:
+                    order?.delivery_address?.full_name ??
+                    order?.customer_name ??
+                    "Customer",
+                },
+              })
+            }
+            hitSlop={12}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={22} color={TEAL} />
+          </TouchableOpacity>
+        }
+      />
 
       {loading ? (
         <View style={styles.center}>
@@ -912,8 +873,8 @@ export default function EmployeeOrderDetail() {
               </View>
             ) : null}
 
-            {/* Scheduled pickup callout — prominent when action needed */}
-            {isScheduled && (status === "order_accepted" || status === "cloth_pickup_pending") ? (
+            {/* Scheduled pickup callout - prominent when action needed */}
+            {isScheduled && (status === "order_accepted" || status === "pickup_scheduled") ? (
               <View style={styles.scheduledCard}>
                 <View style={styles.scheduledIconWrap}>
                   <Ionicons name="calendar-outline" size={18} color="#7C3AED" />
@@ -927,17 +888,17 @@ export default function EmployeeOrderDetail() {
                     <Text style={styles.scheduledSlot}>{pickupSlot}</Text>
                   ) : null}
                   {!pickupDateStr && !pickupSlot ? (
-                    <Text style={styles.scheduledSlot}>Customer has not specified a time — contact them to confirm.</Text>
+                    <Text style={styles.scheduledSlot}>Customer has not specified a time - contact them to confirm.</Text>
                   ) : null}
                 </View>
               </View>
             ) : null}
 
-            {/* Measurement nudge — shown when cloth is collected but no measurements */}
+            {/* Measurement nudge - shown when cloth is collected but no measurements */}
             {canTakeMeasurements && !hasMeasurement ? (
               <TouchableOpacity style={styles.measNudge} onPress={() => setShowMeasModal(true)} activeOpacity={0.8}>
                 <Ionicons name="alert-circle-outline" size={18} color="#D97706" />
-                <Text style={styles.measNudgeText}>No measurements recorded — tap to add now</Text>
+                <Text style={styles.measNudgeText}>No measurements recorded - tap to add now</Text>
                 <Ionicons name="chevron-forward" size={16} color="#D97706" />
               </TouchableOpacity>
             ) : null}
@@ -960,9 +921,9 @@ export default function EmployeeOrderDetail() {
                 label="Total"
                 value={
                   order?.TotalAmount != null
-                    ? `₹${order.TotalAmount}`
+                    ? formatCurrency(order.TotalAmount)
                     : order?.total_amount != null
-                    ? `₹${order.total_amount}`
+                    ? formatCurrency(order.total_amount)
                     : null
                 }
               />
@@ -985,7 +946,7 @@ export default function EmployeeOrderDetail() {
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Service</Text>
                 <Row label="Service" value={service.name} />
-                <Row label="Base Price" value={service.base_price != null ? `₹${service.base_price}` : null} />
+                <Row label="Base Price" value={service.base_price != null ? formatCurrency(service.base_price) : null} />
                 <Row
                   label="Est. Delivery"
                   value={
@@ -1071,21 +1032,21 @@ export default function EmployeeOrderDetail() {
                 <Text style={styles.sectionTitle}>Billing</Text>
 
                 {/* Item breakdown */}
-                <BillingRow label="Item Total" value={`₹${fmt(pricing.subtotal)}`} />
+                <BillingRow label="Item Total" value={formatCurrency(pricing.subtotal)} />
                 {pricing.discount > 0 ? (
-                  <BillingRow label="Discount" value={`−₹${fmt(pricing.discount)}`} valueStyle={styles.discountValue} />
+                  <BillingRow label="Discount" value={`−${formatCurrency(pricing.discount)}`} valueStyle={styles.discountValue} />
                 ) : null}
                 {pricing.platform_fee > 0 ? (
-                  <BillingRow label="Convenience Fee" value={`₹${fmt(pricing.platform_fee)}`} hint="Booking / platform charge" />
+                  <BillingRow label="Convenience Fee" value={formatCurrency(pricing.platform_fee)} hint="Booking / platform charge" />
                 ) : null}
                 {pricing.gst_amount > 0 ? (
                   <>
-                    <BillingRow label="GST" value={`₹${fmt(pricing.gst_amount)}`} />
+                    <BillingRow label="GST" value={formatCurrency(pricing.gst_amount)} />
                     {pricing.cgst_amount > 0 ? (
-                      <BillingRow label="  CGST (2.5%)" value={`₹${fmt(pricing.cgst_amount)}`} sub />
+                      <BillingRow label="  CGST (2.5%)" value={formatCurrency(pricing.cgst_amount)} sub />
                     ) : null}
                     {pricing.sgst_amount > 0 ? (
-                      <BillingRow label="  SGST (2.5%)" value={`₹${fmt(pricing.sgst_amount)}`} sub />
+                      <BillingRow label="  SGST (2.5%)" value={formatCurrency(pricing.sgst_amount)} sub />
                     ) : null}
                   </>
                 ) : null}
@@ -1093,15 +1054,18 @@ export default function EmployeeOrderDetail() {
                 <View style={styles.billingDivider} />
 
                 {/* Total */}
-                <BillingRow label="Total Payable" value={`₹${fmt(pricing.final_amount)}`} total />
+                <BillingRow label="Total Payable" value={formatCurrency(pricing.final_amount)} total />
 
                 <View style={styles.billingDivider} />
 
-                {/* Payment split */}
-                {pricing.advance_paid > 0 ? (
+                {/* Payment split - "Advance Paid" only means something when a
+                    balance genuinely remains; both COD and online orders now
+                    collect the full amount in a single event, so a paid
+                    order with nothing outstanding just shows "Fully Paid". */}
+                {pricing.remaining_amount > 0 && pricing.advance_paid > 0 ? (
                   <BillingRow
                     label="Advance Paid"
-                    value={`₹${fmt(pricing.advance_paid)}`}
+                    value={formatCurrency(pricing.advance_paid)}
                     hint={payment?.channel === "cod" ? "COD" : "Online"}
                     valueStyle={styles.paidValue}
                   />
@@ -1109,7 +1073,7 @@ export default function EmployeeOrderDetail() {
                 {pricing.remaining_amount > 0 ? (
                   <BillingRow
                     label="Balance at Delivery"
-                    value={`₹${fmt(pricing.remaining_amount)}`}
+                    value={formatCurrency(pricing.remaining_amount)}
                     valueStyle={pricing.balance_due ? styles.dueValue : undefined}
                     badge={pricing.balance_due ? "PENDING" : undefined}
                   />
@@ -1122,7 +1086,7 @@ export default function EmployeeOrderDetail() {
                 {payment?.transaction_id ? (
                   <>
                     <View style={styles.billingDivider} />
-                    <BillingRow label="Payment Method" value={payment.method ?? payment.channel ?? "—"} />
+                    <BillingRow label="Payment Method" value={payment.method ?? payment.channel ?? "-"} />
                     <BillingRow label="Transaction ID" value={payment.transaction_id} mono />
                     {payment.status ? (
                       <BillingRow label="Payment Status" value={payment.status} />
@@ -1131,7 +1095,7 @@ export default function EmployeeOrderDetail() {
                 ) : payment ? (
                   <>
                     <View style={styles.billingDivider} />
-                    <BillingRow label="Payment Method" value={payment.method ?? payment.channel ?? "—"} />
+                    <BillingRow label="Payment Method" value={payment.method ?? payment.channel ?? "-"} />
                     {payment.status ? (
                       <BillingRow label="Payment Status" value={payment.status} />
                     ) : null}
@@ -1167,7 +1131,7 @@ export default function EmployeeOrderDetail() {
 
           {/* Action buttons */}
           <View style={[styles.actionBar, { paddingBottom: insets.bottom + 8 }]}>
-            {/* Measurement secondary button — visible whenever cloth is accessible */}
+            {/* Measurement secondary button - visible whenever cloth is accessible */}
             {canTakeMeasurements ? (
               <TouchableOpacity
                 style={styles.measBtn}
@@ -1242,26 +1206,13 @@ export default function EmployeeOrderDetail() {
         prefill={measurement}
       />
 
-      {/* Tailor assignment */}
-      <TailorSelectorModal
-        visible={showTailorModal}
-        tailors={tailors}
-        loading={loadingTailors}
-        onSelect={handleTailorSelected}
-        onClose={() => setShowTailorModal(false)}
-      />
-
       {/* Delivery payment collection */}
       <DeliveryPaymentModal
         visible={showDeliveryModal}
-        amount={(() => {
-          const remaining = Number(order?.RemainingAmount ?? order?.remaining_amount ?? 0);
-          return remaining > 0
-            ? remaining
-            : Number(order?.FinalAmount ?? order?.final_amount ?? 0);
-        })()}
+        amount={Number(order?.RemainingAmount ?? order?.remaining_amount ?? 0)}
         orderCode={order?.OrderCode ?? order?.order_code ?? `#${orderId}`}
-        onCashConfirm={handleDeliveryConfirmed}
+        collecting={collectingPayment}
+        onConfirm={handleCollectPayment}
         onClose={() => setShowDeliveryModal(false)}
       />
     </View>
@@ -1270,19 +1221,7 @@ export default function EmployeeOrderDetail() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.offWhite },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 12,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.grayBorder,
-  },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   chatHeaderBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 16, ...FONTS.bold, color: COLORS.black },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   errorText: { color: COLORS.error, fontSize: 14, textAlign: "center", paddingHorizontal: 24 },
   retryBtn: {
@@ -1483,14 +1422,12 @@ const styles = StyleSheet.create({
   qrSection: { alignItems: "center", paddingHorizontal: SPACING.md, gap: 12 },
   qrHint: { fontSize: 13, color: COLORS.gray, textAlign: "center" },
   qrBox: {
-    width: 260,
-    height: 260,
     borderRadius: 12,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: COLORS.grayBorder,
   },
-  qrImage: { width: 260, height: 260 },
+  qrImage: {},
   qrUpiId: { fontSize: 12, color: COLORS.gray },
   confirmBtn: {
     flexDirection: "row",

@@ -18,15 +18,18 @@ import {
   Platform,
   ScrollView,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../../store/useAuthStore";
 import { navigateAfterAuthWithCart } from "../../src/utils/authCartRedirect";
 import { safeRouterReplace } from "../../src/utils/safeNavigation";
+import { FormBannerError } from "../../src/components/common/FormMessage";
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
 export default function OtpLoginScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { verifyOtp, loginWithOtp, loading } = useAuthStore();
 
@@ -138,7 +141,7 @@ export default function OtpLoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, { paddingTop: insets.top + 24 }]}
         keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
@@ -154,12 +157,7 @@ export default function OtpLoginScreen() {
         </View>
 
         {/* Error banner */}
-        {error ? (
-          <View style={styles.errorBanner}>
-            <Ionicons name="alert-circle-outline" size={16} color="#b91c1c" style={{ marginRight: 6 }} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        <FormBannerError message={error} />
 
         <View style={styles.form}>
           {step === "phone" ? (
@@ -233,7 +231,7 @@ export default function OtpLoginScreen() {
 
               {/* Resend row */}
               <View style={styles.resendRow}>
-                <Text style={styles.resendPrompt}>Didn't receive the OTP? </Text>
+                <Text style={styles.resendPrompt}>Didn&apos;t receive the OTP? </Text>
                 {countdown > 0 ? (
                   <Text style={styles.resendCountdown}>Resend in {countdown}s</Text>
                 ) : (
@@ -272,7 +270,6 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 100,
     paddingBottom: 40,
     alignItems: "center",
   },

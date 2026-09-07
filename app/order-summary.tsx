@@ -2,7 +2,7 @@
  * Order booking summary - GET /customer/orders/{order_id}/summary
  * Binds to nested payload: order, dates, service, billing, payment, delivery_address
  */
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -27,18 +27,17 @@ import { cardShadow } from "../src/utils/cardShadow";
 import {
   BOOKING_LINK_GREEN,
   STATUS_ICON_STYLES,
-  formatCustomerOrderStatusLabel,
-  getCustomerOrderStatusTone,
 } from "../src/utils/customerOrderStatus";
+import { getOrderStatusMeta } from "../src/constants/orderStatus";
+import ScreenHeader from "../src/components/common/ScreenHeader";
 import {
-  SUMMARY_NA,
   getSummaryPlacedLabel,
   getSummaryScheduledLabel,
-  getSummaryStatusHeadline,
   summaryMoney,
   summaryText,
 } from "../src/utils/orderSummaryDisplay";
 import { getPaymentStatusVisual } from "../src/utils/paymentStatus";
+import { COD_STATUS_LABELS, PAYMENT_ACTION_LABELS, PAYMENT_METHOD_META } from "../src/types/payment";
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
 
@@ -99,68 +98,113 @@ function PaymentStatusBadge({ status }: { status: string | null | undefined }) {
 
 // ─── Hero card ────────────────────────────────────────────────────────────────
 
+/**
+ * Booking Overview hero - answers, in order: what did I book, how much is
+ * it, what's happening now, what should I do next. Status text/description
+ * always come from the centralized ORDER_STATUS_META (src/constants/orderStatus.ts)
+ * rather than any local copy, so this stays in sync with every other screen
+ * automatically as statuses are added/changed.
+ */
 function SummaryStatusHero({ payload }: { payload: CustomerOrderSummaryPayload }) {
-  const status = payload.order.status ?? "";
-  const tone = getCustomerOrderStatusTone(status);
-  const iconStyle = STATUS_ICON_STYLES[tone];
-  const statusBadge = formatCustomerOrderStatusLabel(status);
-  const headline = getSummaryStatusHeadline(payload);
+  const meta = getOrderStatusMeta(payload.order.status);
+  const iconStyle = STATUS_ICON_STYLES[meta.tone];
+
   const bookingId = summaryText(payload.order.order_code);
   const placed = getSummaryPlacedLabel(payload);
   const schedule = getSummaryScheduledLabel(payload);
 
-  // Context-aware amount row
-  const payStatus = (payload.payment.payment_status ?? "").toLowerCase().replace(/[^a-z]/g, "");
-  let amountLabel = "Amount paid";
-  let amountValue = summaryMoney(payload.billing.total_amount);
-  if (payStatus === "fullypaid" || payStatus === "paid" || payStatus === "success") {
-    amountLabel = "Total paid";
-  } else if (payStatus === "advancepaid" || payStatus === "partiallypaid") {
-    amountLabel = "Advance paid";
-  } else if (payStatus === "balancepending" || payStatus === "balancedue") {
-    amountLabel = "Advance paid";
-  } else if (
-    payStatus === "advancepending" ||
-    payStatus === "initiated" ||
-    payStatus === "pending" ||
-    payStatus === "failed" ||
-    payStatus === "paymentfailed"
-  ) {
-    amountLabel = "Amount due";
+  // "What did I book" - service identity. Future-proof for multi-service
+  // orders: category + quantity are composed from whatever parts exist,
+  // so a payload with only one of the two still reads cleanly, and this
+  // same composition works unchanged if the backend later returns more
+  // service lines (each would just render its own hero-style block).
+  const serviceName = payload.service.service_name?.trim() || "Your Booking";
+  const subtitleParts = [
+    payload.service.category_name?.trim() || null,
+    payload.service.quantity != null ? `Qty ${payload.service.quantity}` : null,
+  ].filter(Boolean);
+  const serviceSubtitle = subtitleParts.join(" • ");
+
+  // "How much is it" - order total is always the prominent figure. Online
+  // orders always collect the full amount in one charge (see compute_billing
+  // in billing_breakdown.py) - there is no advance/remaining split for them,
+  // so the secondary line only ever needs to cover COD's genuine
+  // pay-on-delivery balance or a plain method + status line.
+  const orderAmount = summaryMoney(payload.billing.total_amount);
+  const remainingAmount = payload.billing.remaining_amount;
+  const paymentMethod = (payload.payment.payment_method ?? "").toLowerCase();
+  const paymentVisual = getPaymentStatusVisual(payload.payment.payment_status);
+  const isCod = paymentMethod === "cod";
+
+  let paymentSummaryLines: string[];
+  if (isCod) {
+    paymentSummaryLines = [
+      remainingAmount === 0 ? COD_STATUS_LABELS.collected : COD_STATUS_LABELS.pending,
+    ];
+  } else {
+    paymentSummaryLines = [paymentVisual.label];
   }
 
   return (
     <View style={[styles.heroCard, cardShadow]}>
+      {/* Status badge - small, top */}
       <View style={styles.heroTop}>
         <View style={[styles.iconBox, { backgroundColor: iconStyle.bg }]}>
           <Ionicons name={iconStyle.iconName} size={22} color={iconStyle.icon} />
         </View>
         <View style={styles.heroText}>
-          <View style={styles.badgeRow}>
-            <View style={[styles.statusBadge, { backgroundColor: iconStyle.bg }]}>
-              <Text style={[styles.statusBadgeText, { color: iconStyle.icon }]}>
-                {statusBadge}
-              </Text>
-            </View>
+          <View style={[styles.statusBadge, { backgroundColor: iconStyle.bg }]}>
+            <Text style={[styles.statusBadgeText, { color: iconStyle.icon }]}>
+              {meta.customerLabel}
+            </Text>
           </View>
-          <Text style={styles.headline}>{headline}</Text>
-          <Text style={styles.metaLine}>
-            <Text style={styles.metaKey}>Booking ID  </Text>
-            {bookingId}
+
+          {/* What did I book */}
+          <Text style={styles.headline} numberOfLines={2}>
+            {serviceName}
           </Text>
-          <Text style={styles.metaLine}>
-            <Text style={styles.metaKey}>Placed  </Text>
-            {placed}
-          </Text>
-          <Text style={styles.metaLine}>{schedule}</Text>
+          {serviceSubtitle ? (
+            <Text style={styles.heroSubtitle} numberOfLines={1}>
+              {serviceSubtitle}
+            </Text>
+          ) : null}
         </View>
       </View>
 
       <View style={styles.divider} />
 
-      <View style={styles.amountRow}>
-        <Text style={styles.amountLabel}>{amountLabel}</Text>
-        <Text style={styles.amountValue}>{amountValue}</Text>
+      {/* How much is it */}
+      <View style={styles.priceBlock}>
+        <View style={styles.priceRow}>
+          <Text style={styles.priceLabel}>Order Amount</Text>
+          <Text style={styles.priceValue}>{orderAmount}</Text>
+        </View>
+        {paymentSummaryLines.map((line) => (
+          <Text key={line} style={styles.paymentSummaryLine}>
+            {line}
+          </Text>
+        ))}
+      </View>
+
+      <View style={styles.divider} />
+
+      {/* Compact metadata */}
+      <View style={styles.metaBlock}>
+        <Text style={styles.metaLine}>
+          <Text style={styles.metaKey}>Booking ID  </Text>
+          {bookingId}
+        </Text>
+        <Text style={styles.metaLine}>
+          <Text style={styles.metaKey}>Placed  </Text>
+          {placed}
+        </Text>
+        <Text style={styles.metaLine}>{schedule}</Text>
+      </View>
+
+      {/* What's happening now / what to do next - centralized copy */}
+      <View style={[styles.helperBanner, { backgroundColor: iconStyle.bg }]}>
+        <Ionicons name="information-circle-outline" size={15} color={iconStyle.icon} />
+        <Text style={[styles.helperText, { color: iconStyle.icon }]}>{meta.description}</Text>
       </View>
     </View>
   );
@@ -223,9 +267,13 @@ export default function OrderSummaryScreen() {
     paymentStatusKey === "paymentfailed" ||
     paymentStatusKey === "failed";
 
+  const navigatingToPayment = useRef(false);
+
   const handlePayNow = () => {
-    if (orderId === null || !payload) return;
-    const amountRupees = Number(payload.billing.total_amount ?? 0);
+    if (orderId === null || !payload || navigatingToPayment.current) return;
+    navigatingToPayment.current = true;
+    // Use advance_amount (the ₹99 booking fee), not the full order total.
+    const amountRupees = Number(payload.billing.advance_amount ?? payload.billing.total_amount ?? 0);
     router.push({
       pathname: "/payment" as never,
       params: {
@@ -236,18 +284,15 @@ export default function OrderSummaryScreen() {
         phone: user?.phone_number ?? "",
       },
     });
+    // Reset shortly after navigation so returning to this screen (e.g. user
+    // backs out of /payment) doesn't leave the button permanently disabled.
+    setTimeout(() => { navigatingToPayment.current = false; }, 1000);
   };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Booking Summary</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <ScreenHeader title="Booking Summary" />
 
       {loading ? (
         <View style={styles.center}>
@@ -259,7 +304,7 @@ export default function OrderSummaryScreen() {
           <View style={styles.errorIconWrap}>
             <Ionicons name="alert-circle-outline" size={40} color={COLORS.error} />
           </View>
-          <Text style={styles.errorTitle}>Couldn't load summary</Text>
+          <Text style={styles.errorTitle}>Couldn&apos;t load summary</Text>
           <Text style={styles.errorSub}>{error}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={load}>
             <Ionicons name="refresh-outline" size={16} color={COLORS.white} />
@@ -349,7 +394,12 @@ export default function OrderSummaryScreen() {
             <RowDivider />
             <InfoRow
               label="Method"
-              value={summaryText(payload.payment.payment_method)}
+              value={
+                payload.payment.payment_method === "online" ||
+                payload.payment.payment_method === "cod"
+                  ? PAYMENT_METHOD_META[payload.payment.payment_method].displayLabel
+                  : summaryText(payload.payment.payment_method)
+              }
             />
             {payload.payment.transaction_id ? (
               <>
@@ -381,7 +431,11 @@ export default function OrderSummaryScreen() {
               onPress={handlePayNow}
             >
               <Ionicons name="card-outline" size={18} color={COLORS.white} />
-              <Text style={styles.payNowCtaText}>Pay Now</Text>
+              <Text style={styles.payNowCtaText}>
+                {paymentStatusKey === "paymentfailed" || paymentStatusKey === "failed"
+                  ? PAYMENT_ACTION_LABELS.retryPayment
+                  : PAYMENT_ACTION_LABELS.payNow}
+              </Text>
             </Pressable>
           ) : null}
 
@@ -403,33 +457,12 @@ export default function OrderSummaryScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F5F7FA" },
 
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.grayBorder,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.grayLight,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { fontSize: 17, fontWeight: "700", color: COLORS.black },
-
-  scroll: { padding: SPACING.lg, paddingTop: SPACING.md },
+  scroll: { padding: SPACING.lg, paddingTop: SPACING.md, gap: SPACING.md },
 
   // Hero
   heroCard: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,
-    marginBottom: SPACING.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#E8EAED",
     overflow: "hidden",
@@ -450,20 +483,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   heroText: { flex: 1, minWidth: 0 },
-  badgeRow: { marginBottom: 6 },
   statusBadge: {
     alignSelf: "flex-start",
     borderRadius: RADIUS.full,
     paddingHorizontal: 10,
     paddingVertical: 4,
+    marginBottom: 8,
   },
   statusBadgeText: { fontSize: 11, fontWeight: "700", textTransform: "capitalize" },
   headline: {
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 19,
+    fontWeight: "800",
     color: "#1F2937",
-    lineHeight: 22,
-    marginBottom: 6,
+    lineHeight: 24,
+    letterSpacing: -0.2,
+  },
+  heroSubtitle: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 3,
   },
   metaLine: { fontSize: 12, color: "#6B7280", lineHeight: 18 },
   metaKey: { fontWeight: "600", color: "#9CA3AF" },
@@ -472,15 +510,41 @@ const styles = StyleSheet.create({
     backgroundColor: "#ECEEF2",
     marginHorizontal: SPACING.md,
   },
-  amountRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+
+  // Price block - most visible monetary value on the card
+  priceBlock: {
     paddingHorizontal: SPACING.md,
     paddingVertical: 12,
+    gap: 4,
   },
-  amountLabel: { fontSize: 13, color: "#6B7280" },
-  amountValue: { fontSize: 16, fontWeight: "800", color: "#1F2937" },
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+  },
+  priceLabel: { fontSize: 13, color: "#6B7280", fontWeight: "600" },
+  priceValue: { fontSize: 22, fontWeight: "800", color: "#1F2937", letterSpacing: -0.3 },
+  paymentSummaryLine: { fontSize: 12.5, color: "#6B7280", lineHeight: 18 },
+
+  // Compact metadata block
+  metaBlock: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    gap: 3,
+  },
+
+  // Context-aware helper banner - copy sourced from ORDER_STATUS_META.description
+  helperBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+    marginTop: 2,
+    padding: 10,
+    borderRadius: RADIUS.md,
+  },
+  helperText: { flex: 1, fontSize: 12.5, lineHeight: 17, fontWeight: "600" },
 
   // Service
   serviceTitle: { fontSize: 15, fontWeight: "700", color: "#1F2937", marginBottom: 2 },

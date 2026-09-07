@@ -1,18 +1,17 @@
 import React from "react";
-import { View, StyleSheet, Dimensions } from "react-native";
+import { View, StyleSheet, useWindowDimensions } from "react-native";
 import SkeletonBox from "./SkeletonBox";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../../../constants/theme";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CARD_WIDTH = (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2;
-
 export default function SubServiceCardSkeleton() {
+  const { width } = useWindowDimensions();
+  const cardWidth = (width - SPACING.lg * 2 - SPACING.md) / 2;
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { width: cardWidth }]}>
       {/* Image / icon area */}
       <SkeletonBox
         width="100%"
-        height={110}
+        height={130}
         borderRadius={RADIUS.md}
         style={{ marginBottom: SPACING.sm }}
       />
@@ -29,7 +28,6 @@ export default function SubServiceCardSkeleton() {
 
 const styles = StyleSheet.create({
   card: {
-    width: CARD_WIDTH,
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.xl,
     padding: SPACING.md,

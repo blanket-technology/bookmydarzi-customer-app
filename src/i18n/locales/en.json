@@ -2,12 +2,17 @@
   "common": {
     "login": "Login",
     "retry": "Retry",
-    "browseServices": "Browse Services",
+    "browseServices": "Explore Services",
     "somethingWrong": "Something went wrong",
     "na": "N/A",
     "bookingId": "Booking ID",
     "amountPaid": "Amount paid",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "seeAll": "See all",
+    "bookNow": "Book Now",
+    "viewDetails": "View Details",
+    "addToCart": "View & Add to Cart",
+    "loading": "Loading..."
   },
   "tabs": {
     "home": "Home",
@@ -18,8 +23,8 @@
   "cart": {
     "title": "Your Cart",
     "loading": "Loading your cart...",
-    "emptyTitle": "Your cart is empty",
-    "emptySub": "Browse services and add items with your measurements to get started.",
+    "emptyTitle": "Nothing here yet",
+    "emptySub": "Pick a service, share your measurements - we'll handle pickup, stitching, and delivery to your door.",
     "subtotal": "Subtotal",
     "gst": "GST",
     "grandTotal": "Total Amount",
@@ -30,11 +35,52 @@
     "myBookings": "My Bookings",
     "active": "Active",
     "completed": "Completed",
-    "loginTitle": "Login to view your bookings",
-    "loginSub": "Your order history will appear here after you sign in.",
-    "emptyActiveTitle": "No active orders found",
-    "emptyActiveSub": "When you book a service, your active orders will appear here.",
+    "cancelled": "Cancelled",
+    "loginTitle": "Sign in to see your orders",
+    "loginSub": "Your bookings, tracking, and order history are waiting for you.",
+    "emptyActiveTitle": "No active orders",
+    "emptyActiveSub": "Book a service and your active orders will appear here - with real-time tracking at every step.",
     "emptyCompletedTitle": "No completed orders yet",
-    "emptyCompletedSub": "Completed bookings will show up here once your orders are finished."
+    "emptyCompletedSub": "Your first completed order unlocks your delivery history and rating options.",
+    "emptyCancelledTitle": "No cancelled orders",
+    "emptyCancelledSub": "Orders you cancel will show up here for your reference.",
+    "loadMore": "Load more"
+  },
+  "profile": {
+    "title": "My Account",
+    "edit": "Edit Profile",
+    "logout": "Log Out",
+    "menu": {
+      "myOrders": "My Orders",
+      "payments": "Payments",
+      "notifications": "Notifications",
+      "changePassword": "Change Password",
+      "help": "Help & Support",
+      "faq": "FAQs",
+      "rate": "Rate the App",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service",
+      "about": "About BookMyDarzi"
+    }
+  },
+  "home": {
+    "popularServices": "Popular Services",
+    "tapToExplore": "Tap to explore & customize",
+    "ourServices": "Our Services",
+    "tapCategory": "",
+    "styleInspiration": "Style Inspiration",
+    "recentOrders": "Recent Orders",
+    "needHelp": "Need help?",
+    "hereForYou": "We're here for you"
+  },
+  "service": {
+    "aboutService": "About this service",
+    "stitchingType": "Stitching type",
+    "selectFinish": "Select finish and quantity",
+    "customerReviews": "Customer Reviews",
+    "addToCart": "Add to Cart",
+    "bookNow": "Book Now",
+    "details": "Service Details",
+    "quantity": "Quantity"
   }
 }

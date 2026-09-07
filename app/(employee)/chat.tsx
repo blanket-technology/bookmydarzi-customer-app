@@ -1,62 +1,35 @@
 /**
- * Employee chat inbox — lists ALL customer orders (any status) with chat threads.
+ * Employee chat inbox - lists ALL customer orders (any status) with chat threads.
  * Shows order details, unread count, and last message preview. Tap → open order-chat.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { COLORS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
+import { COLORS, RADIUS, SPACING } from "../../constants/theme";
 import {
-  getOrderChatUnreadCount,
-  getOrderThread,
+    getOrderStatusMeta,
+    normalizeOrderStatus,
+    STATUS_TONE_COLORS,
+} from "../../src/constants/orderStatus";
+import {
+    getOrderChatUnreadCount,
+    getOrderThread,
 } from "../../src/services/chatService";
 import { listAllOrdersForChat, type EmployeeOrder } from "../../src/services/employeeService";
 import { wsService } from "../../src/services/wsService";
 
 const TEAL = "#149694";
-
-const STATUS_LABELS: Record<string, string> = {
-  pending_payment: "Payment Pending",
-  payment_failed: "Payment Failed",
-  order_placed: "Order Placed",
-  order_accepted: "Accepted",
-  cloth_pickup_pending: "Pickup Pending",
-  cloth_picked_up: "Cloth Picked",
-  cloth_at_hub: "At Workshop",
-  tailor_assigned: "Tailor Assigned",
-  stitching_in_progress: "Stitching",
-  stitching_completed: "Ready",
-  out_for_delivery: "Out for Delivery",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-};
-
-const STATUS_COLOR: Record<string, string> = {
-  pending_payment: "#F59E0B",
-  payment_failed: "#DC2626",
-  order_placed: "#3B82F6",
-  order_accepted: "#8B5CF6",
-  cloth_pickup_pending: "#F97316",
-  cloth_picked_up: "#F97316",
-  cloth_at_hub: "#8B5CF6",
-  tailor_assigned: "#F59E0B",
-  stitching_in_progress: "#EC4899",
-  stitching_completed: "#10B981",
-  out_for_delivery: "#3B82F6",
-  delivered: "#065F46",
-  cancelled: "#DC2626",
-};
 
 interface ChatOrderEntry {
   order: EmployeeOrder;
@@ -86,8 +59,9 @@ function ChatRow({
   onPress: () => void;
 }) {
   const { order, unreadCount, lastMessage, lastTime } = entry;
-  const statusColor = STATUS_COLOR[order.status] ?? COLORS.gray;
-  const statusLabel = STATUS_LABELS[order.status] ?? order.status.replace(/_/g, " ");
+  const statusMeta = getOrderStatusMeta(normalizeOrderStatus(order.status));
+  const statusColor = STATUS_TONE_COLORS[statusMeta.tone].fg;
+  const statusLabel = statusMeta.employeeLabel;
   const hasUnread = unreadCount > 0;
 
   return (

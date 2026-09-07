@@ -1275,15 +1275,15 @@ export default function HomeScreen() {
 
   const welcomeGreeting = useMemo(() => {
     const first = user?.first_name?.trim();
-    if (first) return `Hi, ${first}! 👋`;
+    if (first) return `Hi, ${first}`;
     const full = (
       user?.name ?? `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim()
     ).trim();
     if (full) {
       const short = full.split(/\s+/)[0];
-      if (short) return `Hi, ${short}! 👋`;
+      if (short) return `Hi, ${short}`;
     }
-    return "Hi there! 👋";
+    return "Hi there";
   }, [user]);
 
   const popularList = popularServices;
@@ -1729,7 +1729,8 @@ export default function HomeScreen() {
                   style={styles.heroCard}
                 >
                   <View style={styles.heroBadge}>
-                    <Text style={styles.heroBadgeText}>✦ Doorstep tailoring</Text>
+                    <Ionicons name="home-outline" size={10} color="rgba(255,255,255,0.9)" style={{ marginRight: 4 }} />
+                    <Text style={styles.heroBadgeText}>Doorstep tailoring</Text>
                   </View>
                   <Text style={styles.heroHeadline}>
                     Expert stitching picked up from home and delivered back, perfectly fitted.
@@ -2017,7 +2018,7 @@ const styles = StyleSheet.create({
 
   // ── Hero card ─────────────────────────────────────────────────────────────
   heroCard: { borderRadius: 20, padding: SPACING.md, overflow: "hidden" },
-  heroBadge: { alignSelf: "flex-start", backgroundColor: "rgba(255,255,255,0.18)", borderRadius: RADIUS.full, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", marginBottom: 10 },
+  heroBadge: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", backgroundColor: "rgba(255,255,255,0.18)", borderRadius: RADIUS.full, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", marginBottom: 10 },
   heroBadgeText: { fontSize: 9, fontWeight: "700", color: "rgba(255,255,255,0.9)", letterSpacing: 1.2, textTransform: "uppercase" },
   heroHeadline: { fontSize: 18, fontWeight: "800", color: "#FFFFFF", lineHeight: 23, letterSpacing: -0.3, marginBottom: 14 },
   heroBtn: { alignSelf: "flex-start", backgroundColor: "#FFFFFF", borderRadius: RADIUS.full, paddingHorizontal: 16, paddingVertical: 9, flexDirection: "row", alignItems: "center", gap: 5 },

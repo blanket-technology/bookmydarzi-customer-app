@@ -1,4 +1,5 @@
 import { request } from "../../services/api";
+import { generateIdempotencyKey } from "../utils/idempotencyKey";
 
 import type { AddressPayload, AddressType, ApiAddress } from "../types/api";
 
@@ -48,7 +49,7 @@ function toApiAddressBody(
 
 
 
-  if (address_type !== undefined && address_type !== null && address_type !== "") {
+  if (address_type !== undefined && address_type !== null) {
 
     const apiType = toApiAddressTypeValue(address_type);
 
@@ -151,6 +152,8 @@ export async function createAddress(payload: AddressPayload): Promise<ApiAddress
     method: "POST",
 
     body: toApiAddressBody(payload),
+
+    idempotencyKey: generateIdempotencyKey(),
 
   });
 

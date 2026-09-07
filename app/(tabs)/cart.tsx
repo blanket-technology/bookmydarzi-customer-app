@@ -11,55 +11,61 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { LinearGradient } from "expo-linear-gradient";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
-  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
+import { formatCurrency } from "../../src/utils/formatters";
 import CartItemCard from "../../src/components/cart/CartItemCard";
+import CodConfirmModal from "../../src/components/cart/CodConfirmModal";
+import { CouponCodeInput } from "../../src/components/cart/CouponCodeInput";
+import SlideToConfirm from "../../src/components/cart/SlideToConfirm";
+import StyleReferencePicker from "../../src/components/cart/StyleReferencePicker";
 import ErrorState from "../../src/components/common/ErrorState";
+import PickupDateCalendarModal from "../../src/components/common/PickupDateCalendarModal";
+import PaymentMethodSelector from "../../src/components/orders/PaymentMethodSelector";
 import { useAppLanguage } from "../../src/i18n/useAppLanguage";
 import { useAddressStore } from "../../src/store/useAddressStore";
 import { useCartStore } from "../../src/store/useCartStore";
+import { useCheckoutPreferencesStore } from "../../src/store/useCheckoutPreferencesStore";
 import { useHomeStore } from "../../src/store/useHomeStore";
-import type { ApiSpecialOffer } from "../../src/types/homeApi";
 import type { ApiAddress } from "../../src/types/api";
 import type { CartServiceEntry } from "../../src/types/cart";
+import type { ApiSpecialOffer } from "../../src/types/homeApi";
+import type { PaymentMethodOption } from "../../src/types/payment";
 import {
   executeCheckoutFromCart,
   resolveCheckoutAddressId,
 } from "../../src/utils/checkoutNavigation";
+import { buildPickupTimeSlots } from "../../src/utils/pickupTimeSlots";
 
 // ─── Scheduled-pickup helpers ─────────────────────────────────────────────────
 
-const PICKUP_SLOTS = [
-  { label: "9:00 AM – 12:00 PM", startHour: 9 },
-  { label: "12:00 PM – 3:00 PM", startHour: 12 },
-  { label: "3:00 PM – 7:00 PM", startHour: 15 },
-];
-
-function buildPickupDates() {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i + 1);
-    return {
-      iso: d.toISOString().split("T")[0]!,
-      day: d.toLocaleDateString("en-IN", { weekday: "short" }),
-      date: String(d.getDate()),
-    };
-  });
+function formatSelectedPickupDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    });
+  } catch {
+    return iso;
+  }
 }
 
 function formatAddressTypeLabel(type: string): string {
@@ -91,7 +97,7 @@ function CartDeliveryAddressCard({
           <View style={addrStyles.iconWrap}>
             <Ionicons
               name={address ? "location" : "location-outline"}
-              size={14}
+              size={13}
               color={COLORS.primaryDark}
             />
           </View>
@@ -108,9 +114,7 @@ function CartDeliveryAddressCard({
           accessibilityRole="button"
           accessibilityLabel="Change address"
         >
-          <Text style={addrStyles.editText}>
-            {address ? "Change" : "Add"}
-          </Text>
+          <Text style={addrStyles.editText}>{address ? "Change" : "Add"}</Text>
         </TouchableOpacity>
       </View>
       {address ? (
@@ -123,7 +127,7 @@ function CartDeliveryAddressCard({
         </View>
       ) : (
         <Text style={addrStyles.missingText}>
-          Tap "Add" to set a delivery address before checkout
+          Tap &quot;Add&quot; to set a delivery address before checkout
         </Text>
       )}
     </View>
@@ -146,9 +150,7 @@ function BillRow({
 }) {
   return (
     <View style={billStyles.row}>
-      <Text
-        style={[billStyles.label, bold && billStyles.labelBold]}
-      >
+      <Text style={[billStyles.label, bold && billStyles.labelBold]}>
         {label}
       </Text>
       <Text
@@ -181,12 +183,20 @@ function OfferRow({
     <View style={offerStyles.row}>
       <View style={offerStyles.left}>
         <View style={offerStyles.badge}>
-          <Text style={offerStyles.badgeText}>{offer.DiscountPercent}%</Text>
+          <Text style={offerStyles.badgeText}>
+            {offer.DiscountType === "flat"
+              ? formatCurrency(offer.DiscountAmount)
+              : `${offer.DiscountPercent}%`}
+          </Text>
         </View>
         <View style={offerStyles.textWrap}>
-          <Text style={offerStyles.title} numberOfLines={1}>{offer.Title}</Text>
+          <Text style={offerStyles.title} numberOfLines={1}>
+            {offer.Title}
+          </Text>
           {offer.Description ? (
-            <Text style={offerStyles.desc} numberOfLines={1}>{offer.Description}</Text>
+            <Text style={offerStyles.desc} numberOfLines={1}>
+              {offer.Description}
+            </Text>
           ) : null}
         </View>
       </View>
@@ -196,8 +206,16 @@ function OfferRow({
         activeOpacity={0.8}
         hitSlop={8}
       >
-        <Text style={[offerStyles.applyText, applied && offerStyles.applyTextActive]}>
-          {applied ? "Applied ✓" : "Apply"}
+        {applied ? (
+          <Ionicons name="checkmark" size={14} color={offerStyles.applyTextActive.color} style={{ marginRight: 3 }} />
+        ) : null}
+        <Text
+          style={[
+            offerStyles.applyText,
+            applied && offerStyles.applyTextActive,
+          ]}
+        >
+          {applied ? "Applied" : "Apply"}
         </Text>
       </TouchableOpacity>
     </View>
@@ -209,6 +227,13 @@ export default function CartScreen() {
   const { t } = useAppLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+
+  // Responsive scale - same inline useWindowDimensions-derived approach used
+  // on the Home screen (no separate scaling library in this project).
+  const isTablet = screenWidth >= 768;
+  const horizontalPad = isTablet ? Math.max(SPACING.lg, screenWidth * 0.05) : SPACING.lg;
+  const contentMaxWidth = isTablet ? 720 : screenWidth;
 
   const entries = useCartStore((s) => s.entries);
   const itemCount = useCartStore((s) => s.itemCount);
@@ -224,20 +249,63 @@ export default function CartScreen() {
   const pickupType = useCartStore((s) => s.pickupType);
   const setPickupType = useCartStore((s) => s.setPickupType);
 
+  const lastPaymentMethod = useCheckoutPreferencesStore((s) => s.lastPaymentMethod);
+  const setLastPaymentMethod = useCheckoutPreferencesStore((s) => s.setLastPaymentMethod);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodOption>(lastPaymentMethod);
+
+  const handleSelectPaymentMethod = useCallback(
+    (method: PaymentMethodOption) => {
+      setPaymentMethod(method);
+      setLastPaymentMethod(method);
+    },
+    [setLastPaymentMethod],
+  );
+
   const { addresses, fetchAddresses } = useAddressStore();
 
   const specialOffers = useHomeStore((s) => s.specialOffers);
   const loadHomeData = useHomeStore((s) => s.loadHomeData);
   const appliedOfferId = useCartStore((s) => s.appliedOfferId);
-  const appliedOfferPercent = useCartStore((s) => s.appliedOfferPercent);
+  const appliedOfferDiscountType = useCartStore((s) => s.appliedOfferDiscountType);
+  const appliedOfferDiscountValue = useCartStore((s) => s.appliedOfferDiscountValue);
   const setAppliedOffer = useCartStore((s) => s.setAppliedOffer);
   const clearAppliedOffer = useCartStore((s) => s.clearAppliedOffer);
 
   const [refreshing, setRefreshing] = useState(false);
   const [breakdownExpanded, setBreakdownExpanded] = useState(false);
+  // Available Offers: show only 2 by default, "View All" reveals the rest
+  // (Bug Report cycle 1, item 2.1).
+  const [offersExpanded, setOffersExpanded] = useState(false);
   const [scheduledDate, setScheduledDate] = useState<string | null>(null);
   const [scheduledSlot, setScheduledSlot] = useState<string | null>(null);
-  const pickupDates = useMemo(buildPickupDates, []);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const pickupTimeSlots = useMemo(buildPickupTimeSlots, []);
+  const [styleReferenceUri, setStyleReferenceUri] = useState<string | null>(null);
+  // Order-level free-text notes (Bug Report cycle 1, item 3.1).
+  const [orderNotes, setOrderNotes] = useState<string>("");
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [codModalVisible, setCodModalVisible] = useState(false);
+
+  const handlePickStyleReference = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(
+        "Permission needed",
+        "Allow BMD to access your photos to upload a style reference.",
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      // Forced crop UI was overlapping the photo / behaving badly; a style
+      // reference doesn't need cropping, so just take the picked image as-is.
+      allowsEditing: false,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]?.uri) {
+      setStyleReferenceUri(result.assets[0].uri);
+    }
+  };
 
   const hasAdvance =
     typeof billing.advanceAmount === "number" &&
@@ -273,19 +341,56 @@ export default function CartScreen() {
     }
   };
 
-  const handlePayNow = () => {
+  const runCheckout = useCallback(() => {
+    setCheckingOut(true);
+    const finish = () => setCheckingOut(false);
+    // Order-level notes go straight through. The style reference is a local
+    // device URI (file://); only forward it as an image_reference if it is
+    // already a hosted URL, so we never send an unusable local path to the
+    // backend. (Uploading the local image to get a URL is a follow-up.)
+    const extras = {
+      customizationNotes: orderNotes.trim() || undefined,
+      imageReferences:
+        styleReferenceUri && /^https?:\/\//.test(styleReferenceUri)
+          ? [styleReferenceUri]
+          : undefined,
+    };
     if (pickupType === "scheduled" && scheduledDate && scheduledSlot) {
-      const slotStart = PICKUP_SLOTS.find((s) => s.label === scheduledSlot)?.startHour ?? 9;
+      const slot = pickupTimeSlots.find((s) => s.label === scheduledSlot);
       const dt = new Date(scheduledDate);
-      dt.setHours(slotStart, 0, 0, 0);
-      void executeCheckoutFromCart(router, {
-        scheduledPickupAt: dt.toISOString(),
-        pickupTimeSlot: scheduledSlot,
-      });
+      dt.setHours(slot?.hour ?? 9, slot?.minute ?? 0, 0, 0);
+      void executeCheckoutFromCart(
+        router,
+        { scheduledPickupAt: dt.toISOString(), pickupTimeSlot: scheduledSlot },
+        paymentMethod,
+        extras,
+      ).finally(finish);
     } else {
-      void executeCheckoutFromCart(router);
+      void executeCheckoutFromCart(router, undefined, paymentMethod, extras).finally(finish);
     }
-  };
+  }, [pickupType, scheduledDate, scheduledSlot, pickupTimeSlots, paymentMethod, router, orderNotes, styleReferenceUri]);
+
+  const handleConfirmSlide = useCallback(() => {
+    if (paymentMethod === "cod") {
+      // Keep the slider's processing state on through the confirmation
+      // sheet so the thumb doesn't visually "unlock" mid-decision; reset it
+      // explicitly if the user backs out via Cancel.
+      setCheckingOut(true);
+      setCodModalVisible(true);
+      return;
+    }
+    runCheckout();
+  }, [paymentMethod]);
+
+  const handleCodCancel = useCallback(() => {
+    setCodModalVisible(false);
+    setCheckingOut(false);
+  }, []);
+
+  const handleCodConfirm = useCallback(() => {
+    setCodModalVisible(false);
+    runCheckout();
+  }, [runCheckout]);
 
   const handleEditAddress = useCallback(() => {
     setCheckoutFlow(false);
@@ -299,11 +404,14 @@ export default function CartScreen() {
           item={item}
           mutating={mutating}
           onIncrease={() => {
-            void updateEntryQuantity(item.id, item.quantity + 1).catch(() => {});
+            void updateEntryQuantity(item.id, item.quantity + 1).catch(
+              () => {},
+            );
           }}
           onDecrease={() => {
-            if (item.quantity <= 1) return;
-            void updateEntryQuantity(item.id, item.quantity - 1).catch(() => {});
+            void updateEntryQuantity(item.id, item.quantity - 1).catch(
+              () => {},
+            );
           }}
           onRemove={() => {
             void removeEntry(item.id).catch(() => {});
@@ -325,13 +433,17 @@ export default function CartScreen() {
     [itemCount],
   );
 
-  // Filter to valid, non-expired offers with a real discount
+  // Filter to valid, started, non-expired offers with a real discount of
+  // EITHER type - previously only checked DiscountPercent > 0, which
+  // silently hid every flat-amount offer (DiscountPercent is 0 for those;
+  // the real value is in DiscountAmount - see app/models/offer.py).
   // Must be declared BEFORE listFooter which references it
   const validOffers = useMemo(() => {
     const now = Date.now();
     return (specialOffers ?? []).filter(
       (o) =>
-        o.DiscountPercent > 0 &&
+        (o.DiscountType === "flat" ? (o.DiscountAmount ?? 0) > 0 : o.DiscountPercent > 0) &&
+        (!o.ValidFrom || new Date(o.ValidFrom).getTime() <= now) &&
         (!o.ValidUntil || new Date(o.ValidUntil).getTime() > now),
     );
   }, [specialOffers]);
@@ -340,7 +452,24 @@ export default function CartScreen() {
     () => (
       <Animated.View
         entering={FadeInDown.delay(60 + entries.length * 30).duration(250)}
+        style={{ paddingBottom: SPACING.xs }}
       >
+        {/* Section order per Bug Report cycle 1, item 3.1:
+            (Order Items = the FlatList above) → Reference Style Image →
+            Delivery Address → Available Offers → Pickup Type → Notes →
+            (Order Summary = the bottom checkout sheet). */}
+
+        {/* ── Reference Style Image ───────────────────────────────────── */}
+        <Text style={styles.sectionLabel}>Reference style image</Text>
+        <View style={styles.footerCard}>
+          <StyleReferencePicker
+            uri={styleReferenceUri}
+            onPick={() => void handlePickStyleReference()}
+            onRemove={() => setStyleReferenceUri(null)}
+          />
+        </View>
+
+        {/* ── Delivery Address ────────────────────────────────────────── */}
         <Text style={styles.sectionLabel}>Delivery address</Text>
         <CartDeliveryAddressCard
           address={deliveryAddress}
@@ -348,48 +477,239 @@ export default function CartScreen() {
         />
 
         {/* ── Available Offers ─────────────────────────────────────────── */}
-        {validOffers.length > 0 && (
-          <View style={offerStyles.section}>
-            <View style={offerStyles.sectionHeader}>
-              <Ionicons name="pricetag-outline" size={14} color={COLORS.primaryDark} />
-              <Text style={offerStyles.sectionTitle}>Available Offers</Text>
-            </View>
-            {validOffers.map((offer) => (
-              <OfferRow
-                key={offer.Id}
-                offer={offer}
-                applied={appliedOfferId === offer.Id}
-                onApply={() => setAppliedOffer(offer.Id, offer.DiscountPercent, offer.Title)}
-                onRemove={clearAppliedOffer}
-              />
-            ))}
+        <View style={offerStyles.section}>
+          <View style={offerStyles.sectionHeader}>
+            <Ionicons
+              name="pricetag-outline"
+              size={13}
+              color={COLORS.primaryDark}
+            />
+            <Text style={offerStyles.sectionTitle}>Available Offers</Text>
           </View>
-        )}
+          {validOffers.length === 0 ? (
+            <Text style={offerStyles.emptyText}>
+              No offers available right now — got a code? Enter it below.
+            </Text>
+          ) : (
+            <>
+              {(offersExpanded ? validOffers : validOffers.slice(0, 2)).map((offer) => (
+                <OfferRow
+                  key={offer.Id}
+                  offer={offer}
+                  applied={appliedOfferId === offer.Id}
+                  onApply={() =>
+                    setAppliedOffer(
+                      offer.Id,
+                      offer.DiscountType === "flat" ? "flat" : "percentage",
+                      offer.DiscountType === "flat" ? (offer.DiscountAmount ?? 0) : offer.DiscountPercent,
+                      offer.Title,
+                    )
+                  }
+                  onRemove={clearAppliedOffer}
+                />
+              ))}
+              {validOffers.length > 2 && (
+                <TouchableOpacity
+                  onPress={() => setOffersExpanded((v) => !v)}
+                  style={offerStyles.viewAllBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={offersExpanded ? "Show fewer offers" : "View all offers"}
+                >
+                  <Text style={offerStyles.viewAllText}>
+                    {offersExpanded ? "Show less" : `View all (${validOffers.length})`}
+                  </Text>
+                  <Ionicons
+                    name={offersExpanded ? "chevron-up" : "chevron-down"}
+                    size={14}
+                    color={COLORS.primaryDark}
+                  />
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+          {/* Manual coupon-code entry - previously missing entirely; the
+              screen only ever let a customer browse and tap a pre-listed
+              offer. Applies through the same useCartStore mechanism the
+              browse list uses, so checkoutNavigation.ts's existing
+              cart.appliedOfferId read-path needs no changes. */}
+          <CouponCodeInput
+            onApply={(offer) =>
+              setAppliedOffer(offer.offerId, offer.discountType, offer.discountValue, offer.title)
+            }
+          />
+        </View>
 
-        <View style={{ height: SPACING.sm }} />
+        {/* ── Pickup Type (Instant / Scheduled) - standalone section ───── */}
+        <Text style={styles.sectionLabel}>Pickup type</Text>
+        <View style={styles.footerCard}>
+          <View style={styles.pickupToggle}>
+            <TouchableOpacity
+              style={[styles.pickupOption, pickupType === "instant" && styles.pickupOptionActive]}
+              onPress={() => setPickupType("instant")}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="flash"
+                size={15}
+                color={pickupType === "instant" ? COLORS.primaryDark : COLORS.gray}
+              />
+              <Text style={[styles.pickupOptionText, pickupType === "instant" && styles.pickupOptionTextActive]}>
+                Instant
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.pickupOption, pickupType === "scheduled" && styles.pickupOptionActive]}
+              onPress={() => setPickupType("scheduled")}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="calendar"
+                size={15}
+                color={pickupType === "scheduled" ? COLORS.primaryDark : COLORS.gray}
+              />
+              <Text style={[styles.pickupOptionText, pickupType === "scheduled" && styles.pickupOptionTextActive]}>
+                Scheduled
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {pickupType === "scheduled" ? (
+            <View style={styles.scheduledPicker}>
+              <Text style={styles.scheduledPickerTitle}>Pickup date</Text>
+              <TouchableOpacity
+                style={styles.dateSelectBtn}
+                onPress={() => setShowCalendar(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={16}
+                  color={scheduledDate ? COLORS.primaryDark : COLORS.gray}
+                />
+                <Text style={[styles.dateSelectText, !scheduledDate && styles.dateSelectPlaceholder]}>
+                  {scheduledDate ? formatSelectedPickupDate(scheduledDate) : "Choose a date"}
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color={COLORS.gray} />
+              </TouchableOpacity>
+              <Text style={[styles.scheduledPickerTitle, { marginTop: 8 }]}>
+                Time slot (9 AM – 9 PM)
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.slotRow}
+              >
+                {pickupTimeSlots.map((slot) => (
+                  <TouchableOpacity
+                    key={slot.label}
+                    style={[styles.slotChip, scheduledSlot === slot.label && styles.slotChipActive]}
+                    onPress={() => setScheduledSlot(slot.label)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.slotChipText, scheduledSlot === slot.label && styles.slotChipTextActive]}>
+                      {slot.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+        </View>
+
+        {/* ── Notes ───────────────────────────────────────────────────── */}
+        <Text style={styles.sectionLabel}>Notes (optional)</Text>
+        <View style={styles.footerCard}>
+          <View style={styles.notesBox}>
+            <TextInput
+              style={styles.notesInput}
+              value={orderNotes}
+              onChangeText={setOrderNotes}
+              placeholder="Any special instructions for this order?"
+              placeholderTextColor={COLORS.gray}
+              multiline
+              maxLength={1000}
+              textAlignVertical="top"
+            />
+          </View>
+          {orderNotes.length > 0 ? (
+            <Text style={styles.notesCounter}>{orderNotes.length}/1000</Text>
+          ) : null}
+        </View>
       </Animated.View>
     ),
-    [validOffers, appliedOfferId, setAppliedOffer, clearAppliedOffer, deliveryAddress, entries.length, handleEditAddress],
+    [
+      validOffers,
+      offersExpanded,
+      appliedOfferId,
+      setAppliedOffer,
+      clearAppliedOffer,
+      deliveryAddress,
+      entries.length,
+      handleEditAddress,
+      styleReferenceUri,
+      handlePickStyleReference,
+      pickupType,
+      setPickupType,
+      scheduledDate,
+      scheduledSlot,
+      pickupTimeSlots,
+      orderNotes,
+    ],
   );
 
   // Client-side discount estimate for display only; backend is authoritative
-  // Discount is applied on the full bill (after GST + platform fee)
-  const estimatedDiscount = appliedOfferId && appliedOfferPercent > 0
-    ? Math.round(billing.totalAmount * (appliedOfferPercent / 100) * 100) / 100
-    : 0;
+  // (checkout only ever sends offer_id, recomputes the real discount server
+  // -side - see checkout_service.py). Discount is applied on the full bill
+  // (after GST + platform fee), same as the backend's calculation, and
+  // capped at the bill total so a flat discount larger than the order can
+  // never show a negative "you pay" amount.
+  const estimatedDiscount =
+    appliedOfferId && appliedOfferDiscountValue > 0
+      ? appliedOfferDiscountType === "flat"
+        ? Math.min(Math.round(appliedOfferDiscountValue), billing.totalAmount)
+        : Math.round(billing.totalAmount * (appliedOfferDiscountValue / 100) * 100) / 100
+      : 0;
 
   // Derive GST split percentages from actual amounts so labels always match config
   const taxableBase = billing.itemTotal - (billing.discount || 0);
-  const cgstPercent = taxableBase > 0
-    ? +((billing.cgstAmount / taxableBase) * 100).toFixed(2)
-    : 0;
-  const sgstPercent = taxableBase > 0
-    ? +((billing.sgstAmount / taxableBase) * 100).toFixed(2)
-    : 0;
+  const cgstPercent =
+    taxableBase > 0
+      ? +((billing.cgstAmount / taxableBase) * 100).toFixed(2)
+      : 0;
+  const sgstPercent =
+    taxableBase > 0
+      ? +((billing.sgstAmount / taxableBase) * 100).toFixed(2)
+      : 0;
+
+  const displayTotal =
+    estimatedDiscount > 0
+      ? `₹${(billing.totalAmount - estimatedDiscount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
+      : billing.totalAmountDisplay;
 
   const isEmpty = !loading && entries.length === 0;
-  const scheduledReady = pickupType !== "scheduled" || (scheduledDate !== null && scheduledSlot !== null);
-  const canPay = itemCount > 0 && entries.length > 0 && !mutating && hasAdvance && scheduledReady;
+  const scheduledReady =
+    pickupType !== "scheduled" ||
+    (scheduledDate !== null && scheduledSlot !== null);
+  // hasAdvance only matters for online payment (nothing is paid upfront for
+  // COD - a zero advance/platform-fee is a perfectly valid COD order, not a
+  // reason to block checkout). Gating COD on it left the slide-to-confirm
+  // permanently disabled whenever the advance amount happened to be 0.
+  const canPay =
+    itemCount > 0 &&
+    entries.length > 0 &&
+    !mutating &&
+    (paymentMethod === "cod" || hasAdvance) &&
+    scheduledReady;
+
+  const slideLabel =
+    paymentMethod === "cod"
+      ? "Slide to Place Order"
+      : hasAdvance
+        // Use displayTotal (which subtracts the applied discount), not the
+        // pre-discount advanceAmountDisplay, so the slider matches the "To Pay"
+        // amount the customer actually gets charged.
+        ? `Slide to Pay ${displayTotal}`
+        : "Slide to Proceed to Payment";
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -399,7 +719,7 @@ export default function CartScreen() {
           <View style={styles.headerIconWrap}>
             <Ionicons
               name="bag-handle-outline"
-              size={20}
+              size={18}
               color={COLORS.primaryDark}
             />
           </View>
@@ -431,7 +751,11 @@ export default function CartScreen() {
       ) : isEmpty ? (
         <View style={styles.emptyWrap}>
           <View style={styles.emptyIconRing}>
-            <Ionicons name="cart-outline" size={52} color={COLORS.primaryDark} />
+            <Ionicons
+              name="cart-outline"
+              size={48}
+              color={COLORS.primaryDark}
+            />
           </View>
           <Text style={styles.emptyTitle}>{t("cart.emptyTitle")}</Text>
           <Text style={styles.emptySub}>{t("cart.emptySub")}</Text>
@@ -440,8 +764,10 @@ export default function CartScreen() {
             onPress={() => router.push("/(tabs)")}
             activeOpacity={0.85}
           >
-            <Ionicons name="grid-outline" size={18} color={COLORS.white} />
-            <Text style={styles.browseBtnText}>{t("common.browseServices")}</Text>
+            <Ionicons name="grid-outline" size={17} color={COLORS.white} />
+            <Text style={styles.browseBtnText}>
+              {t("common.browseServices")}
+            </Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -454,7 +780,15 @@ export default function CartScreen() {
             renderItem={renderItem}
             ListHeaderComponent={listHeader}
             ListFooterComponent={listFooter}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[
+              styles.listContent,
+              {
+                paddingHorizontal: horizontalPad,
+                maxWidth: contentMaxWidth,
+                alignSelf: "center",
+                width: "100%",
+              },
+            ]}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
@@ -465,307 +799,187 @@ export default function CartScreen() {
             }
           />
 
-          {/* ── Sticky billing footer ──────────────────────────────────── */}
+          {/* ── Compact checkout sheet ───────────────────────────────────
+              Bottom-sheet style panel (Swiggy/Blinkit/Uber Eats pattern):
+              default state shows only Order Total + Payment Method +
+              Slide to Confirm. Pickup, scheduled date/slot, style
+              reference, and the full price breakdown are all collapsed
+              or minimal by default so the cart items stay primary. */}
           <View
             style={[
-              styles.footer,
-              { paddingBottom: Math.max(insets.bottom, SPACING.md) },
+              styles.sheet,
+              { paddingBottom: Math.max(insets.bottom, SPACING.sm) },
             ]}
           >
-            {/* Total + expandable breakdown */}
-            <TouchableOpacity
-              style={styles.totalRow}
-              onPress={() => setBreakdownExpanded((v) => !v)}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: breakdownExpanded }}
+            <View style={styles.sheetGrabber} />
+
+            <View
+              style={{
+                width: "100%",
+                maxWidth: contentMaxWidth,
+                alignSelf: "center",
+                paddingHorizontal: horizontalPad,
+              }}
             >
-              <View style={styles.totalRowLeft}>
-                <Ionicons
-                  name={breakdownExpanded ? "chevron-up" : "chevron-down"}
-                  size={15}
-                  color={COLORS.primaryDark}
-                />
-                <Text style={styles.totalRowLabel}>
-                  {breakdownExpanded ? "Price breakdown" : "Order total"}
-                </Text>
-              </View>
-              <View style={{ alignItems: "flex-end" }}>
-                <Text style={styles.totalRowValue}>
-                  {estimatedDiscount > 0
-                    ? `₹${(billing.totalAmount - estimatedDiscount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
-                    : billing.totalAmountDisplay}
-                </Text>
-                {estimatedDiscount > 0 ? (
-                  <Text style={styles.savingsBadge}>
-                    You save ₹{estimatedDiscount.toLocaleString("en-IN")}
-                  </Text>
-                ) : null}
-              </View>
-            </TouchableOpacity>
-
-            {breakdownExpanded ? (
-              <View style={styles.breakdown}>
-                <BillRow
-                  label="Services subtotal"
-                  value={billing.itemTotalDisplay}
-                />
-                <BillRow
-                  label="Convenience fee"
-                  value={billing.platformFeeDisplay}
-                />
-                <BillRow label={`CGST (${cgstPercent}%)`} value={billing.cgstDisplay} />
-                <BillRow label={`SGST (${sgstPercent}%)`} value={billing.sgstDisplay} />
-                <View style={styles.breakdownDivider} />
-                {/* When a discount is active, show pre-discount total then discount line */}
-                {billing.discount > 0 ? (
-                  <>
-                    <BillRow
-                      label="Total before discount"
-                      value={billing.totalAmountDisplay}
-                    />
-                    <BillRow
-                      label="Discount"
-                      value={`−₹${billing.discount.toLocaleString("en-IN")}`}
-                      discount
-                    />
-                    <View style={styles.breakdownDivider} />
-                  </>
-                ) : estimatedDiscount > 0 ? (
-                  <>
-                    <BillRow
-                      label="Total before offer"
-                      value={billing.totalAmountDisplay}
-                    />
-                    <BillRow
-                      label="Offer discount (est.)"
-                      value={`−₹${estimatedDiscount.toLocaleString("en-IN")}`}
-                      discount
-                    />
-                    <View style={styles.breakdownDivider} />
-                  </>
-                ) : null}
-                <BillRow
-                  label="Grand total"
-                  value={
-                    estimatedDiscount > 0
-                      ? `₹${(billing.totalAmount - estimatedDiscount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
-                      : billing.discount > 0
-                      ? `₹${(billing.totalAmount - billing.discount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
-                      : billing.totalAmountDisplay
-                  }
-                  bold
-                  accent
-                />
-              </View>
-            ) : null}
-
-            {/* Payment split pill */}
-            {hasAdvance ? (
-              <View style={styles.splitRow}>
-                <View style={styles.splitChip}>
-                  <Ionicons
-                    name="card-outline"
-                    size={14}
-                    color={COLORS.primaryDark}
-                  />
-                  <View>
-                    <Text style={styles.splitNow}>
-                      {billing.advanceAmountDisplay}
-                    </Text>
-                    <Text style={styles.splitNowLabel}>Pay now</Text>
-                  </View>
-                </View>
-                <View style={styles.splitArrow}>
-                  <Ionicons
-                    name="arrow-forward"
-                    size={14}
-                    color={COLORS.gray}
-                  />
-                </View>
-                <View style={styles.splitChip}>
-                  <Ionicons
-                    name="time-outline"
-                    size={14}
-                    color={COLORS.gray}
-                  />
-                  <View>
-                    <Text style={styles.splitLater}>
-                      {billing.remainingAmountDisplay}
-                    </Text>
-                    <Text style={styles.splitLaterLabel}>After service</Text>
-                  </View>
-                </View>
-              </View>
-            ) : null}
-
-            {/* Pickup preference toggle */}
-            {entries.length > 0 ? (
-              <View style={styles.pickupRow}>
-                <View style={styles.pickupLabelRow}>
-                  <Ionicons name="bicycle-outline" size={14} color={COLORS.primaryDark} />
-                  <Text style={styles.pickupLabel}>Cloth Pickup</Text>
-                </View>
-                <View style={styles.pickupToggle}>
-                  <TouchableOpacity
-                    style={[
-                      styles.pickupOption,
-                      pickupType === "instant" && styles.pickupOptionActive,
-                    ]}
-                    onPress={() => setPickupType("instant")}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons
-                      name="flash-outline"
-                      size={13}
-                      color={pickupType === "instant" ? COLORS.primaryDark : COLORS.gray}
-                    />
-                    <Text
-                      style={[
-                        styles.pickupOptionText,
-                        pickupType === "instant" && styles.pickupOptionTextActive,
-                      ]}
-                    >
-                      Instant
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.pickupOption,
-                      pickupType === "scheduled" && styles.pickupOptionActive,
-                    ]}
-                    onPress={() => setPickupType("scheduled")}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons
-                      name="calendar-outline"
-                      size={13}
-                      color={pickupType === "scheduled" ? COLORS.primaryDark : COLORS.gray}
-                    />
-                    <Text
-                      style={[
-                        styles.pickupOptionText,
-                        pickupType === "scheduled" && styles.pickupOptionTextActive,
-                      ]}
-                    >
-                      Scheduled
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : null}
-
-            {/* Scheduled pickup date / time-slot picker */}
-            {pickupType === "scheduled" && entries.length > 0 ? (
-              <View style={styles.scheduledPicker}>
-                <Text style={styles.scheduledPickerTitle}>Select pickup date</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.dateRow}
-                  contentContainerStyle={styles.dateRowContent}
+              {/* Order summary card - total is always visible, tap to expand full breakdown */}
+              <View style={styles.summaryCard}>
+                <TouchableOpacity
+                  style={styles.totalRow}
+                  onPress={() => setBreakdownExpanded((v) => !v)}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: breakdownExpanded }}
                 >
-                  {pickupDates.map((d) => (
-                    <TouchableOpacity
-                      key={d.iso}
-                      style={[
-                        styles.dateChip,
-                        scheduledDate === d.iso && styles.dateChipActive,
-                      ]}
-                      onPress={() => setScheduledDate(d.iso)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.dateChipDay,
-                          scheduledDate === d.iso && styles.dateChipTextActive,
-                        ]}
-                      >
-                        {d.day}
+                  <View style={styles.totalRowLeft}>
+                    <Text style={styles.totalRowLabel}>To Pay</Text>
+                    <View style={styles.totalRowHintRow}>
+                      <Text style={styles.totalRowHint}>
+                        {breakdownExpanded ? "Hide breakdown" : "Tap to view breakdown"}
                       </Text>
-                      <Text
-                        style={[
-                          styles.dateChipNum,
-                          scheduledDate === d.iso && styles.dateChipTextActive,
-                        ]}
-                      >
-                        {d.date}
+                      <Ionicons
+                        name={breakdownExpanded ? "chevron-up" : "chevron-down"}
+                        size={11}
+                        color={COLORS.primaryDark}
+                      />
+                    </View>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={styles.totalRowValue}>{displayTotal}</Text>
+                    {estimatedDiscount > 0 ? (
+                      <Text style={styles.savingsBadge}>
+                        You save ₹{estimatedDiscount.toLocaleString("en-IN")}
                       </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-                <Text style={[styles.scheduledPickerTitle, { marginTop: 10 }]}>
-                  Select time slot
-                </Text>
-                <View style={styles.slotRow}>
-                  {PICKUP_SLOTS.map((slot) => (
-                    <TouchableOpacity
-                      key={slot.label}
-                      style={[
-                        styles.slotChip,
-                        scheduledSlot === slot.label && styles.slotChipActive,
-                      ]}
-                      onPress={() => setScheduledSlot(slot.label)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.slotChipText,
-                          scheduledSlot === slot.label && styles.slotChipTextActive,
-                        ]}
-                      >
-                        {slot.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            ) : null}
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
 
-            {/* Pay Now button */}
-            <TouchableOpacity
-              style={[styles.payBtn, !canPay && styles.payBtnDisabled]}
-              onPress={handlePayNow}
-              disabled={!canPay}
-              activeOpacity={0.88}
-            >
-              <LinearGradient
-                colors={
-                  canPay
-                    ? [COLORS.primaryDark, COLORS.primary]
-                    : ["#aaa", "#ccc"]
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.payBtnGradient}
-              >
-                {mutating ? (
-                  <ActivityIndicator color={COLORS.white} />
-                ) : (
-                  <>
-                    <Ionicons
-                      name="shield-checkmark-outline"
-                      size={18}
-                      color={COLORS.white}
+              {breakdownExpanded ? (
+                <View style={styles.breakdown}>
+                  <BillRow
+                    label="Services subtotal"
+                    value={billing.itemTotalDisplay}
+                  />
+                  <BillRow
+                    label="Convenience fee"
+                    value={billing.platformFeeDisplay}
+                  />
+                  <BillRow
+                    label={`CGST (${cgstPercent}%)`}
+                    value={billing.cgstDisplay}
+                  />
+                  <BillRow
+                    label={`SGST (${sgstPercent}%)`}
+                    value={billing.sgstDisplay}
+                  />
+                  {billing.penaltyAmount > 0 ? (
+                    <BillRow
+                      label="Cancellation Charges"
+                      value={`₹${Math.round(billing.penaltyAmount).toLocaleString("en-IN")}`}
                     />
-                    <Text style={styles.payBtnText}>
-                      {hasAdvance
-                        ? `${t("cart.payNow")} ${billing.advanceAmountDisplay}`
-                        : t("cart.payNow")}
-                    </Text>
-                  </>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
+                  ) : null}
+                  <View style={styles.breakdownDivider} />
+                  {billing.discount > 0 ? (
+                    <>
+                      <BillRow
+                        label="Total before discount"
+                        value={billing.totalAmountDisplay}
+                      />
+                      <BillRow
+                        label="Discount"
+                        value={`−₹${billing.discount.toLocaleString("en-IN")}`}
+                        discount
+                      />
+                      <View style={styles.breakdownDivider} />
+                    </>
+                  ) : estimatedDiscount > 0 ? (
+                    <>
+                      <BillRow
+                        label="Total before offer"
+                        value={billing.totalAmountDisplay}
+                      />
+                      <BillRow
+                        label="Offer discount (est.)"
+                        value={`−₹${estimatedDiscount.toLocaleString("en-IN")}`}
+                        discount
+                      />
+                      <View style={styles.breakdownDivider} />
+                    </>
+                  ) : null}
+                  <BillRow label="Grand total" value={displayTotal} bold accent />
 
-            {!hasAdvance && entries.length > 0 && !loading ? (
-              <Text style={styles.payHint}>
-                Refreshing pricing... pull down to reload
-              </Text>
-            ) : null}
+                  {/* COD: a short "pay in cash on delivery" note adds real info.
+                      Online: the full amount IS the grand total (no advance/
+                      remaining split), so a separate "Payable Amount" row just
+                      repeated Grand total - removed as redundant. */}
+                  {hasAdvance && paymentMethod === "cod" ? (
+                    <>
+                      <View style={styles.breakdownDivider} />
+                      <View style={styles.codNotice}>
+                        <Ionicons name="cash-outline" size={14} color={COLORS.primaryDark} />
+                        <Text style={styles.codNoticeText}>
+                          Pay {displayTotal} in cash on delivery. No payment needed now.
+                        </Text>
+                      </View>
+                    </>
+                  ) : null}
+
+                  {/* Pickup type + style reference moved OUT of this collapsed
+                      breakdown into standalone scrollable sections above
+                      (Bug Report cycle 1, item 3.1). */}
+                </View>
+              ) : null}
+              </View>
+
+              {/* Payment method - always visible, compact */}
+              {entries.length > 0 ? (
+                <View style={styles.paymentMethodSection}>
+                  <PaymentMethodSelector
+                    value={paymentMethod}
+                    onChange={handleSelectPaymentMethod}
+                    disabled={mutating}
+                  />
+                </View>
+              ) : null}
+
+              {/* Slide to confirm */}
+              <View style={styles.slideWrap}>
+                <SlideToConfirm
+                  label={slideLabel}
+                  disabled={!canPay}
+                  processing={checkingOut}
+                  onConfirm={handleConfirmSlide}
+                  icon={paymentMethod === "cod" ? "bag-check-outline" : "shield-checkmark-outline"}
+                />
+              </View>
+
+              {paymentMethod !== "cod" && !hasAdvance && entries.length > 0 && !loading ? (
+                <Text style={styles.payHint}>
+                  Refreshing pricing... pull down to reload
+                </Text>
+              ) : !scheduledReady ? (
+                <Text style={styles.payHint}>
+                  Select a pickup date and time slot to continue
+                </Text>
+              ) : null}
+            </View>
           </View>
         </View>
       )}
+
+      <CodConfirmModal
+        visible={codModalVisible}
+        amountDisplay={billing.totalAmountDisplay}
+        itemCount={itemCount}
+        onCancel={handleCodCancel}
+        onConfirm={handleCodConfirm}
+      />
+
+      <PickupDateCalendarModal
+        visible={showCalendar}
+        selectedDate={scheduledDate}
+        onSelect={setScheduledDate}
+        onClose={() => setShowCalendar(false)}
+      />
     </View>
   );
 }
@@ -774,8 +988,8 @@ export default function CartScreen() {
 const addrStyles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm + 2,
     marginBottom: SPACING.sm,
     borderWidth: 1,
     borderColor: "rgba(12,108,117,0.12)",
@@ -785,7 +999,7 @@ const addrStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 6,
+    marginBottom: 5,
   },
   labelRow: {
     flexDirection: "row",
@@ -794,20 +1008,20 @@ const addrStyles = StyleSheet.create({
     flex: 1,
   },
   iconWrap: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
+    width: 22,
+    height: 22,
+    borderRadius: 7,
     backgroundColor: COLORS.primaryLight,
     alignItems: "center",
     justifyContent: "center",
   },
   typeLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: COLORS.primaryDark,
   },
   editBtn: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.primaryLight,
@@ -815,25 +1029,25 @@ const addrStyles = StyleSheet.create({
     borderColor: "rgba(12,108,117,0.2)",
   },
   editText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
     color: COLORS.primaryDark,
   },
   body: { gap: 2 },
   name: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: "700",
     color: COLORS.black,
   },
   detail: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: COLORS.gray,
-    lineHeight: 17,
+    lineHeight: 16,
   },
   missingText: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: COLORS.error,
-    lineHeight: 17,
+    lineHeight: 16,
     fontStyle: "italic",
   },
 });
@@ -844,12 +1058,12 @@ const billStyles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
-  label: { fontSize: 13, color: COLORS.gray, fontWeight: "500" },
+  label: { fontSize: 12.5, color: COLORS.gray, fontWeight: "500" },
   labelBold: { color: COLORS.black, fontWeight: "700" },
-  value: { fontSize: 13, fontWeight: "600", color: COLORS.black },
-  valueBold: { fontSize: 14, fontWeight: "800" },
+  value: { fontSize: 12.5, fontWeight: "600", color: COLORS.black },
+  valueBold: { fontSize: 13.5, fontWeight: "800" },
   valueAccent: { color: COLORS.primaryDark },
   valueDiscount: { color: "#16a34a" },
 });
@@ -863,7 +1077,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.sm + 2,
     backgroundColor: COLORS.white,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.grayBorder,
@@ -874,16 +1088,16 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   headerIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     backgroundColor: COLORS.primaryLight,
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { fontSize: 20, fontWeight: "800", color: COLORS.black },
+  headerTitle: { fontSize: 17, fontWeight: "800", color: COLORS.black },
   headerSub: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.gray,
     marginTop: 1,
     fontWeight: "500",
@@ -892,19 +1106,50 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   list: { flex: 1 },
   listContent: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
+    paddingTop: SPACING.sm,
     paddingBottom: SPACING.sm,
   },
 
   sectionLabel: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: "700",
     color: COLORS.gray,
     letterSpacing: 0.4,
     textTransform: "uppercase",
-    marginBottom: SPACING.sm,
-    marginTop: SPACING.xs,
+    marginBottom: SPACING.xs + 2,
+    // Uniform gap above every section label so sections are evenly spaced
+    // (was too tight below the offers card, which sets its own top margin).
+    marginTop: SPACING.md,
+  },
+  footerCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.sm + 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#ECEEF2",
+    ...SHADOW.card,
+  },
+  notesBox: {
+    backgroundColor: "#F7F9F9",
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: "#EAEEEE",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  notesInput: {
+    minHeight: 52,
+    maxHeight: 120,
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.black,
+    padding: 0,
+  },
+  notesCounter: {
+    alignSelf: "flex-end",
+    marginTop: 6,
+    fontSize: 11,
+    color: COLORS.gray,
   },
 
   centerState: {
@@ -913,39 +1158,39 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: SPACING.md,
   },
-  loadingText: { fontSize: 14, color: COLORS.gray },
+  loadingText: { fontSize: 13, color: COLORS.gray },
 
   emptyWrap: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: SPACING.xl,
-    paddingBottom: SPACING.xxl,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.xl,
   },
   emptyIconRing: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: COLORS.primaryLight,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
     borderWidth: 1,
     borderColor: "rgba(12,108,117,0.12)",
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "700",
     color: COLORS.black,
     marginBottom: SPACING.sm,
     textAlign: "center",
   },
   emptySub: {
-    fontSize: 14,
+    fontSize: 12.5,
     color: COLORS.gray,
     textAlign: "center",
-    lineHeight: 22,
-    marginBottom: SPACING.lg,
+    lineHeight: 18,
+    marginBottom: SPACING.md,
     maxWidth: 300,
   },
   browseBtn: {
@@ -954,136 +1199,111 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     backgroundColor: COLORS.primaryDark,
     borderRadius: RADIUS.full,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
     ...SHADOW.card,
   },
-  browseBtnText: { fontSize: 15, fontWeight: "700", color: COLORS.white },
+  browseBtnText: { fontSize: 14, fontWeight: "700", color: COLORS.white },
 
-  // ── Footer ──────────────────────────────────────────────────────────────────
-  footer: {
+  // ── Bottom sheet ──────────────────────────────────────────────────────────
+  sheet: {
     backgroundColor: COLORS.white,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.grayBorder,
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
-    gap: SPACING.sm,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-      },
-      android: { elevation: 10 },
-    }),
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    paddingTop: SPACING.xs,
+    ...SHADOW.strong,
+  },
+  sheetGrabber: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.grayBorder,
+    alignSelf: "center",
+    marginBottom: SPACING.xs + 2,
   },
 
+  summaryCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: "rgba(12,108,117,0.12)",
+    paddingHorizontal: SPACING.sm + 2,
+    marginBottom: SPACING.sm,
+    ...SHADOW.card,
+  },
   totalRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 4,
+    paddingVertical: 10,
   },
-  totalRowLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flex: 1,
-  },
+  totalRowLeft: { flex: 1, gap: 2 },
   totalRowLabel: {
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: "700",
     color: COLORS.black,
   },
+  totalRowHintRow: { flexDirection: "row", alignItems: "center", gap: 2 },
+  totalRowHint: {
+    fontSize: 10.5,
+    fontWeight: "500",
+    color: COLORS.gray,
+  },
   totalRowValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "800",
     color: COLORS.primaryDark,
+    letterSpacing: -0.4,
   },
   savingsBadge: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "700",
     color: "#16a34a",
     marginTop: 1,
   },
 
   breakdown: {
-    backgroundColor: COLORS.offWhite,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.grayBorder,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.grayBorder,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.sm + 2,
   },
   breakdownDivider: {
     height: 1,
     backgroundColor: COLORS.grayBorder,
     marginVertical: 4,
   },
-
-  splitRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderWidth: 1,
-    borderColor: "rgba(12,108,117,0.15)",
-  },
-  splitChip: {
+  codNotice: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+  },
+  codNoticeText: {
     flex: 1,
-  },
-  splitArrow: { paddingHorizontal: 2 },
-  splitNow: {
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: 11.5,
+    fontWeight: "600",
     color: COLORS.primaryDark,
-    lineHeight: 20,
-  },
-  splitNowLabel: {
-    fontSize: 11,
-    color: COLORS.primaryDark,
-    fontWeight: "500",
-    opacity: 0.8,
-  },
-  splitLater: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.gray,
-    lineHeight: 20,
-  },
-  splitLaterLabel: {
-    fontSize: 11,
-    color: COLORS.gray,
-    fontWeight: "500",
+    lineHeight: 15,
   },
 
-  payBtn: {
-    borderRadius: RADIUS.lg,
-    overflow: "hidden",
+  paymentMethodSection: {
+    marginBottom: SPACING.sm,
   },
-  payBtnDisabled: { opacity: 0.5 },
-  payBtnGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: SPACING.sm,
-    height: 54,
-    borderRadius: RADIUS.lg,
+  slideWrap: {
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.xs,
   },
-  payBtnText: { fontSize: 17, fontWeight: "700", color: COLORS.white },
 
   payHint: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.gray,
     textAlign: "center",
     fontStyle: "italic",
+    marginBottom: SPACING.xs,
   },
 
   pickupRow: {
@@ -1092,98 +1312,90 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 4,
   },
-  pickupLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    flex: 1,
-  },
   pickupLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: COLORS.black,
   },
   pickupToggle: {
     flexDirection: "row",
-    backgroundColor: COLORS.offWhite,
+    backgroundColor: "#F1F5F5",
     borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.grayBorder,
-    padding: 3,
-    gap: 3,
+    padding: 4,
+    gap: 4,
   },
   pickupOption: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 11,
     borderRadius: RADIUS.sm,
   },
   pickupOptionActive: {
-    backgroundColor: COLORS.primaryLight,
-    borderWidth: 1,
-    borderColor: "rgba(12,108,117,0.25)",
+    backgroundColor: COLORS.white,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   pickupOptionText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: "600",
     color: COLORS.gray,
   },
   pickupOptionTextActive: {
     color: COLORS.primaryDark,
+    fontWeight: "700",
   },
 
   // Scheduled pickup date/slot picker
   scheduledPicker: {
-    marginTop: 10,
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADIUS.md,
-    padding: SPACING.sm,
-    borderWidth: 1,
-    borderColor: "rgba(12,108,117,0.15)",
+    marginTop: 8,
   },
   scheduledPickerTitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700" as const,
     color: COLORS.primaryDark,
     textTransform: "uppercase" as const,
     letterSpacing: 0.6,
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  dateRow: { flexGrow: 0 },
-  dateRowContent: { gap: 6, paddingBottom: 2 },
-  dateChip: {
-    alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.white,
+  // Opens the full calendar (PickupDateCalendarModal) instead of a fixed
+  // 7-day chip row, so scheduling isn't capped to the next week.
+  dateSelectBtn: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    height: 40,
+    borderRadius: RADIUS.sm,
     borderWidth: 1,
     borderColor: COLORS.grayBorder,
-    minWidth: 44,
+    paddingHorizontal: SPACING.sm,
+    backgroundColor: COLORS.white,
   },
-  dateChipActive: {
+  dateSelectText: { flex: 1, fontSize: 13, color: COLORS.black, fontWeight: "600" as const },
+  dateSelectPlaceholder: { color: COLORS.gray, fontWeight: "400" as const },
+  slotRow: { flexDirection: "row" as const, gap: 8, paddingRight: 4 },
+  slotChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.white,
+    borderWidth: 1.5,
+    borderColor: COLORS.grayBorder,
+  },
+  slotChipActive: {
     backgroundColor: COLORS.primaryDark,
     borderColor: COLORS.primaryDark,
   },
-  dateChipDay: { fontSize: 10, fontWeight: "600" as const, color: COLORS.gray },
-  dateChipNum: { fontSize: 16, fontWeight: "800" as const, color: COLORS.black, marginTop: 2 },
-  dateChipTextActive: { color: COLORS.white },
-  slotRow: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 6 },
-  slotChip: {
-    flex: 1,
-    minWidth: "45%" as any,
-    alignItems: "center",
-    paddingVertical: 9,
-    paddingHorizontal: 8,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.grayBorder,
+  slotChipText: {
+    fontSize: 12.5,
+    fontWeight: "600" as const,
+    color: COLORS.black,
   },
-  slotChipActive: { backgroundColor: COLORS.primaryDark, borderColor: COLORS.primaryDark },
-  slotChipText: { fontSize: 11, fontWeight: "600" as const, color: COLORS.gray, textAlign: "center" as const },
   slotChipTextActive: { color: COLORS.white },
 });
 
@@ -1194,7 +1406,9 @@ const offerStyles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     borderWidth: 1,
     borderColor: "rgba(12,108,117,0.12)",
-    marginTop: SPACING.xs,
+    // Matches sectionLabel's marginTop so the gap before the offers card equals
+    // the gap before every other labelled section (uniform rhythm).
+    marginTop: SPACING.md,
     overflow: "hidden",
     ...SHADOW.card,
   },
@@ -1202,25 +1416,44 @@ const offerStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
+    paddingHorizontal: SPACING.sm + 2,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.grayBorder,
     backgroundColor: COLORS.primaryLight,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
     color: COLORS.primaryDark,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
+  emptyText: {
+    fontSize: 12,
+    color: COLORS.gray,
+    paddingHorizontal: SPACING.sm + 2,
+    paddingTop: 10,
+  },
+  viewAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 8,
+    marginTop: 2,
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
+    paddingHorizontal: SPACING.sm + 2,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.grayBorder,
   },
@@ -1234,18 +1467,20 @@ const offerStyles = StyleSheet.create({
   badge: {
     backgroundColor: COLORS.primaryDark,
     borderRadius: RADIUS.sm,
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
     paddingVertical: 3,
-    minWidth: 40,
+    minWidth: 36,
     alignItems: "center",
   },
-  badgeText: { fontSize: 12, fontWeight: "800", color: COLORS.white },
+  badgeText: { fontSize: 11, fontWeight: "800", color: COLORS.white },
   textWrap: { flex: 1 },
-  title: { fontSize: 13, fontWeight: "700", color: COLORS.black },
-  desc: { fontSize: 11, color: COLORS.gray, marginTop: 1 },
+  title: { fontSize: 12.5, fontWeight: "700", color: COLORS.black },
+  desc: { fontSize: 10.5, color: COLORS.gray, marginTop: 1 },
   applyBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: RADIUS.full,
     borderWidth: 1.5,
     borderColor: COLORS.primaryDark,
@@ -1254,6 +1489,6 @@ const offerStyles = StyleSheet.create({
   applyBtnActive: {
     backgroundColor: COLORS.primaryDark,
   },
-  applyText: { fontSize: 12, fontWeight: "700", color: COLORS.primaryDark },
+  applyText: { fontSize: 11, fontWeight: "700", color: COLORS.primaryDark },
   applyTextActive: { color: COLORS.white },
 });

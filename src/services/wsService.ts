@@ -77,7 +77,8 @@ class WebSocketService {
     if (!token) return;
 
     const origin = resolveApiOrigin().replace(/^http/, "ws");
-    const url = `${origin}/api/v1/ws?token=${encodeURIComponent(token)}`;
+    // Token sent in a post-connect auth frame, not the URL (keeps it out of logs).
+    const url = `${origin}/api/v1/ws`;
 
     let ws: WebSocket;
     try {
@@ -90,6 +91,7 @@ class WebSocketService {
 
     ws.onopen = () => {
       if (this.ws !== ws) return;
+      try { ws.send(JSON.stringify({ type: "auth", token })); } catch {}
       this.reconnectDelay = 3000;
       this._startHeartbeat(ws);
     };

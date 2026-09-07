@@ -1,9 +1,10 @@
 /**
  * Location helpers - GPS capture, reverse-geocode, serviceability check.
  *
- * Geocode cascade (most reliable first for India):
- *  1. expo-location native geocoder (Google on Android / Apple Maps on iOS)
- *  2. Nominatim (OSM) - richer street detail, used to fill gaps from native
+ * Geocode priority (most accurate first):
+ *  1. Backend proxy  → /location/reverse-geocode  (Mapbox server-side + DB cache, free)
+ *  2. expo-location native geocoder (Google on Android, Apple Maps on iOS) - fallback
+ *  3. Nominatim (OSM) - last resort if backend is unreachable
  */
 import * as Location from "expo-location";
 import { buildApiV1Url } from "../config/api";
@@ -49,9 +50,19 @@ export async function requestLocationPermission(): Promise<boolean> {
 // GPS - with timeout + accuracy fallback
 // ---------------------------------------------------------------------------
 
+const GPS_BEST_TIMEOUT_MS = 12_000;
 const GPS_HIGH_TIMEOUT_MS = 10_000;
 const GPS_BALANCED_TIMEOUT_MS = 8_000;
 
+// Accuracy.High (4) is NOT the best expo-location can request - Highest (5)
+// and BestForNavigation (6) exist above it and are what actually forces the
+// device to use its real GPS chip for a precise (~3-10m) fix under open sky,
+// instead of accepting a fast network/WiFi-triangulated position (~100-500m,
+// which resolves to "the general area" - e.g. the correct neighbourhood but
+// the wrong building - exactly the "shows Mamura, not my exact spot" symptom).
+// BestForNavigation is the strongest signal but can fail/be unsupported on
+// some devices, so it's tried first and true GPS-grade accuracy still comes
+// from the Highest fallback beneath it - Balanced is only a last resort.
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
@@ -61,12 +72,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
-/**
- * Gets the device's current GPS fix.
- * - Tries HIGH accuracy first (10 s timeout)
- * - Falls back to BALANCED accuracy (8 s timeout) on timeout
- * - Throws a user-friendly message if permission denied or both attempts fail
- */
 export async function getCurrentGpsCoords(): Promise<GpsCoords> {
   const granted = await requestLocationPermission();
   if (!granted) {
@@ -76,12 +81,11 @@ export async function getCurrentGpsCoords(): Promise<GpsCoords> {
     );
   }
 
-  // Attempt 1: High accuracy (uses GPS chip)
   try {
     const loc = await withTimeout(
-      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-      GPS_HIGH_TIMEOUT_MS,
-      "High-accuracy GPS",
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation }),
+      GPS_BEST_TIMEOUT_MS,
+      "Best-for-navigation GPS",
     );
     return {
       latitude: loc.coords.latitude,
@@ -92,10 +96,27 @@ export async function getCurrentGpsCoords(): Promise<GpsCoords> {
     const msg = err instanceof Error ? err.message : "";
     const isTimeout = msg.includes("timed out");
     if (!isTimeout) throw formatGpsError(err);
-    if (__DEV__) console.warn("[GPS] High accuracy timed out - retrying with Balanced");
+    if (__DEV__) console.warn("[GPS] BestForNavigation timed out - retrying with Highest");
   }
 
-  // Attempt 2: Balanced accuracy (uses network/wifi - faster, less precise)
+  try {
+    const loc = await withTimeout(
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest }),
+      GPS_HIGH_TIMEOUT_MS,
+      "Highest-accuracy GPS",
+    );
+    return {
+      latitude: loc.coords.latitude,
+      longitude: loc.coords.longitude,
+      accuracy: loc.coords.accuracy,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    const isTimeout = msg.includes("timed out");
+    if (!isTimeout) throw formatGpsError(err);
+    if (__DEV__) console.warn("[GPS] Highest accuracy timed out - retrying with Balanced");
+  }
+
   try {
     const loc = await withTimeout(
       Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
@@ -120,20 +141,142 @@ function formatGpsError(err: unknown): Error {
         "You can also enter your address manually or pin it on the map.",
     );
   }
-  if (msg.toLowerCase().includes("location provider") || msg.toLowerCase().includes("unavailable")) {
+  if (
+    msg.toLowerCase().includes("location provider") ||
+    msg.toLowerCase().includes("unavailable")
+  ) {
     return new Error(
       "Location services are off. Please enable GPS in your device settings.",
     );
   }
-  return new Error("Could not get your location. Please try again or enter the address manually.");
+  return new Error(
+    "Could not get your location. Please try again or enter the address manually.",
+  );
 }
 
 // ---------------------------------------------------------------------------
-// Reverse-geocode - native first, Nominatim for detail gaps
+// 1. Google Maps Geocoding API - primary, most accurate for India
+//    Returns full address_components with typed fields:
+//    street_number, route, sublocality_level_1/2, locality, postal_code, etc.
 // ---------------------------------------------------------------------------
 
-// ─── expo-location native geocoder ─────────────────────────────────────────
-// Most reliable in India - backed by Google Maps on Android, Apple Maps on iOS.
+interface GoogleAddressComponent {
+  long_name: string;
+  short_name: string;
+  types: string[];
+}
+
+interface GoogleGeocodeResult {
+  address_components: GoogleAddressComponent[];
+  formatted_address: string;
+}
+
+interface GoogleGeocodeResponse {
+  status: string;
+  results: GoogleGeocodeResult[];
+}
+
+function getComponent(
+  components: GoogleAddressComponent[],
+  ...types: string[]
+): string {
+  for (const type of types) {
+    const match = components.find((c) => c.types.includes(type));
+    if (match?.long_name) return match.long_name;
+  }
+  return "";
+}
+
+async function reverseGeocodeGoogle(
+  latitude: number,
+  longitude: number,
+): Promise<ReverseGeocodeResult | null> {
+  const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8_000);
+
+    // result_type filter gets the most specific result first
+    const url =
+      `https://maps.googleapis.com/maps/api/geocode/json` +
+      `?latlng=${latitude},${longitude}` +
+      `&key=${apiKey}` +
+      `&language=en` +
+      `&result_type=street_address|route|sublocality|locality`;
+
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+
+    if (!res.ok) return null;
+
+    const data: GoogleGeocodeResponse = await res.json();
+    if (data.status !== "OK" || !data.results?.length) return null;
+
+    // Use most specific result (first in list after result_type filter)
+    const c = data.results[0].address_components;
+
+    const houseNumber  = getComponent(c, "street_number");
+    const route        = getComponent(c, "route");
+    const premise      = getComponent(c, "premise");
+    const establishment = getComponent(c, "establishment", "point_of_interest");
+
+    // Sublocality: level 2 is more specific (Block B, Sector 12)
+    // level 1 is the neighbourhood (Connaught Place, Hauz Khas)
+    const sublocality2 = getComponent(c, "sublocality_level_2");
+    const sublocality1 = getComponent(c, "sublocality_level_1", "sublocality");
+
+    // City: locality works for most cities; admin_level_2 covers some district-towns
+    const city = getComponent(c, "locality", "administrative_area_level_2");
+
+    // State
+    const state = getComponent(c, "administrative_area_level_1");
+
+    // Pincode
+    const pincode = getComponent(c, "postal_code");
+
+    // Build line1: named building/POI > premise > house + road
+    const streetPart = [houseNumber, route].filter(Boolean).join(" ");
+    const namedPlace = establishment || premise;
+    const line1 = namedPlace
+      ? streetPart
+        ? `${namedPlace}, ${streetPart}`
+        : namedPlace
+      : streetPart;
+
+    // Build line2: sub-locality detail (more specific first)
+    // Only include sublocality2 in line1 if it gives real detail (e.g. "Block B")
+    const line2Parts: string[] = [];
+    if (sublocality2 && sublocality2.toLowerCase() !== route.toLowerCase()) {
+      line2Parts.push(sublocality2);
+    }
+    if (
+      sublocality1 &&
+      sublocality1.toLowerCase() !== city.toLowerCase() &&
+      sublocality1.toLowerCase() !== route.toLowerCase()
+    ) {
+      line2Parts.push(sublocality1);
+    }
+    const line2 = line2Parts.join(", ");
+
+    if (!city && !pincode) return null;
+
+    if (__DEV__) {
+      console.log("[Geocode:Google]", { line1, line2, city, state, pincode });
+    }
+
+    return { line1, line2, city, state, pincode };
+  } catch (err) {
+    if (__DEV__) console.warn("[Geocode:Google] failed:", err);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 2. expo-location native geocoder - secondary fallback
+//    Google Maps on Android, Apple Maps on iOS. Less structured than direct API.
+// ---------------------------------------------------------------------------
 
 async function reverseGeocodeNative(
   latitude: number,
@@ -141,19 +284,13 @@ async function reverseGeocodeNative(
 ): Promise<ReverseGeocodeResult | null> {
   try {
     const results = await Location.reverseGeocodeAsync({ latitude, longitude });
-    if (!results || results.length === 0) return null;
+    if (!results?.length) return null;
 
     const r = results[0];
-
-    // streetNumber is typed as string | null in newer expo-location
     const streetNumber = (r as any).streetNumber ?? "";
     const street = r.street ?? "";
     const line1 = [streetNumber, street].filter(Boolean).join(" ");
-
-    // district → subregion are the best locality proxies from native geocoder
     const line2 = r.district || r.subregion || "";
-
-    // city: Android gives city, iOS gives subregion for smaller places
     const city = r.city || r.subregion || r.district || "";
     const state = r.region || "";
     const pincode = r.postalCode || "";
@@ -165,9 +302,10 @@ async function reverseGeocodeNative(
   }
 }
 
-// ─── Nominatim (OSM) ────────────────────────────────────────────────────────
-// Better for: specific colony/sector names, house numbers, road names.
-// Rate-limited: max 1 req/s. User-Agent required by ToS.
+// ---------------------------------------------------------------------------
+// 3. Nominatim (OSM) - last resort fallback
+//    Rate-limited: max 1 req/s. User-Agent required by ToS.
+// ---------------------------------------------------------------------------
 
 interface NominatimAddress {
   house_number?: string;
@@ -194,7 +332,6 @@ interface NominatimAddress {
 }
 
 function resolveCityIndia(a: NominatimAddress): string {
-  // Delhi special case - `city` is often empty, district is more useful
   if (a.state?.toLowerCase() === "delhi") {
     const sub = a.city_district || a.county || a.district || a.state_district;
     if (sub && sub.toLowerCase() !== "delhi") return sub;
@@ -242,14 +379,14 @@ async function reverseGeocodeNominatim(
 
     const a: NominatimAddress = data.address;
     const road = a.road || a.pedestrian || a.footway || "";
-    // POI/building name comes from the top-level `name` field (e.g. "DLF Cyber City", "Apollo Hospital")
     const poiName: string = (data as any).name || "";
     const buildingName = a.building || a.amenity || a.shop || a.office || poiName || "";
     const houseNo = a.house_number || "";
-    // Build line1: building name first, then house no + road
     const streetPart = [houseNo, road].filter(Boolean).join(" ");
     const line1 = buildingName
-      ? streetPart ? `${buildingName}, ${streetPart}` : buildingName
+      ? streetPart
+        ? `${buildingName}, ${streetPart}`
+        : buildingName
       : streetPart;
     const locality = resolveLocalityIndia(a);
     const line2 = locality && locality.toLowerCase() !== road.toLowerCase() ? locality : "";
@@ -264,12 +401,11 @@ async function reverseGeocodeNominatim(
   }
 }
 
-// ─── Merge: native fills city/state/pincode, Nominatim fills street detail ──
+// ---------------------------------------------------------------------------
+// Merge: used when Google API is unavailable, combines native + Nominatim
+// Native is better for city/state/pincode; Nominatim for street detail
+// ---------------------------------------------------------------------------
 
-/**
- * Merge two geocode results - prefer Nominatim for line1/line2 (street detail),
- * prefer native for city/state/pincode (more reliable for Indian cities).
- */
 function mergeResults(
   native: ReverseGeocodeResult | null,
   nominatim: ReverseGeocodeResult | null,
@@ -290,27 +426,69 @@ function mergeResults(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Main export - try Google first, fall back gracefully
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// 0. Backend proxy - primary path (server-side Google key + DB cache)
+//    No API key exposed on client. Cache hit = instant, zero cost.
+// ---------------------------------------------------------------------------
+
+async function reverseGeocodeBackend(
+  latitude: number,
+  longitude: number,
+): Promise<ReverseGeocodeResult | null> {
+  try {
+    const url = `${buildApiV1Url("/location/reverse-geocode")}?latitude=${latitude}&longitude=${longitude}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6_000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.city && !data.pincode) return null;
+    if (__DEV__) console.log("[Geocode:Backend]", data.cached ? "(cache hit)" : "(API call)", data);
+    return {
+      line1: data.line1 ?? "",
+      line2: data.line2 ?? "",
+      city: data.city ?? "",
+      state: data.state ?? "",
+      pincode: data.pincode ?? "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Turns GPS coordinates into structured Indian address components.
  *
- * Strategy:
- *  - Fires native geocoder and Nominatim in parallel
- *  - Merges results: native wins for city/state/pincode,
- *    Nominatim wins for street/locality detail
+ * Priority:
+ *  1. Backend proxy (server-side Google key + DB cache) - zero client key exposure
+ *  2. Google Maps Geocoding API (direct client call) - if backend is unreachable
+ *  3. expo-location native + Nominatim merge - final fallback
  */
 export async function reverseGeocodeCoords(
   latitude: number,
   longitude: number,
 ): Promise<ReverseGeocodeResult> {
-  const [native, nominatim] = await Promise.allSettled([
+  // Fire backend + client fallbacks in parallel for speed
+  const [backendResult, nativeResult, nominatimResult] = await Promise.allSettled([
+    reverseGeocodeBackend(latitude, longitude),
     reverseGeocodeNative(latitude, longitude),
     reverseGeocodeNominatim(latitude, longitude),
   ]);
 
-  const nativeResult = native.status === "fulfilled" ? native.value : null;
-  const nominatimResult = nominatim.status === "fulfilled" ? nominatim.value : null;
+  const backend   = backendResult.status   === "fulfilled" ? backendResult.value   : null;
+  const native    = nativeResult.status    === "fulfilled" ? nativeResult.value    : null;
+  const nominatim = nominatimResult.status === "fulfilled" ? nominatimResult.value : null;
 
-  return mergeResults(nativeResult, nominatimResult);
+  // Backend wins (Mapbox/cached, key stays server-side)
+  if (backend) return backend;
+
+  // Final fallback: merge native geocoder + Nominatim
+  return mergeResults(native, nominatim);
 }
 
 // ---------------------------------------------------------------------------
@@ -327,18 +505,39 @@ export async function checkServiceability(
   });
   const url = `${buildApiV1Url("/location/check-serviceability")}?${params}`;
 
-  try {
-    const res = await fetch(url, { method: "GET" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json() as Promise<ServiceabilityResult>;
-  } catch {
-    // Serviceability failures must never block the form
-    return {
-      serviceable: true,
-      city: null,
-      distance_km: null,
-      estimated_pickup_hours: null,
-      message: "",
-    };
-  }
+  // Deliberately NOT fail-open: a network/server failure here must never be
+  // silently treated as "serviceable" - that's exactly backwards (it would
+  // let an out-of-area address save with no warning whenever the check
+  // itself happens to fail, rather than only when the area genuinely is
+  // serviceable). Callers see the failure and decide what to do (e.g. skip
+  // showing a badge, but never claim serviceability we didn't verify).
+  const res = await fetch(url, { method: "GET" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<ServiceabilityResult>;
+}
+
+/**
+ * Serviceability check for a manually-typed address (no GPS/map coords
+ * available) - forward-geocodes the typed fields server-side, then runs the
+ * same check as checkServiceability(). Used by the address form's save flow
+ * so a typed address gets the same "not serviceable" warning a GPS-detected
+ * one already does, instead of silently saving with no check at all.
+ */
+export async function checkServiceabilityByAddress(fields: {
+  line1?: string;
+  city: string;
+  state?: string;
+  pincode?: string;
+}): Promise<ServiceabilityResult> {
+  const params = new URLSearchParams({
+    city: fields.city,
+    ...(fields.line1 ? { line1: fields.line1 } : {}),
+    ...(fields.state ? { state: fields.state } : {}),
+    ...(fields.pincode ? { pincode: fields.pincode } : {}),
+  });
+  const url = `${buildApiV1Url("/location/check-serviceability-by-address")}?${params}`;
+
+  const res = await fetch(url, { method: "GET" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<ServiceabilityResult>;
 }

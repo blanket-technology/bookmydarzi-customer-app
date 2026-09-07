@@ -154,7 +154,12 @@ export class PaymentStatusForbiddenError extends Error {
 
 const POLL_INTERVAL_MS = 1500;
 
-const POLL_MAX_ATTEMPTS = 5;
+// Was 5 (7.5s total) - too short a window for a webhook that can legitimately
+// lag a few seconds under load. Razorpay's webhook typically lands in 1-3s
+// but isn't guaranteed instant; this was throwing "still processing" on
+// payments that had actually already succeeded a couple seconds later,
+// scaring the customer for no reason.
+const POLL_MAX_ATTEMPTS = 10;
 
 
 
@@ -1316,7 +1321,7 @@ export async function confirmRazorpayPayment(
 
   throw new Error(
 
-    "Payment is still processing. Refresh My Orders in a moment.",
+    "Payment is still processing. We'll update your order automatically once it's confirmed - check My Orders in a moment.",
 
   );
 

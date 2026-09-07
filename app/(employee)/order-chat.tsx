@@ -7,20 +7,21 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS, SPACING } from "../../constants/theme";
+import { getOrderStatusMeta, normalizeOrderStatus } from "../../src/constants/orderStatus";
 import { getEmployeeOrderForChat } from "../../src/services/employeeService";
 import { wsService } from "../../src/services/wsService";
 import { useChatStore } from "../../src/store/useChatStore";
@@ -90,22 +91,6 @@ function MessageBubble({ item, myRole }: { item: OrderChatMessage; myRole: "staf
   );
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  pending_payment: "Payment Pending",
-  payment_failed: "Payment Failed",
-  order_placed: "Order Placed",
-  order_accepted: "Accepted",
-  cloth_pickup_pending: "Pickup Pending",
-  cloth_picked_up: "Cloth Picked",
-  cloth_at_hub: "At Workshop",
-  tailor_assigned: "Tailor Assigned",
-  stitching_in_progress: "Stitching",
-  stitching_completed: "Ready",
-  out_for_delivery: "Out for Delivery",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-};
-
 function InfoChip({ icon, label }: { icon: string; label: string }) {
   return (
     <View style={orderInfoStyles.chip}>
@@ -116,8 +101,7 @@ function InfoChip({ icon, label }: { icon: string; label: string }) {
 }
 
 function OrderInfoStrip({ order }: { order: any }) {
-  const status = order.Status ?? order.status ?? "";
-  const statusLabel = STATUS_LABELS[status] ?? status.replace(/_/g, " ");
+  const statusLabel = getOrderStatusMeta(normalizeOrderStatus(order.Status ?? order.status ?? "")).employeeLabel;
   const addr = order.address ?? order.Address ?? {};
   const addrLine = [
     addr.address_line_1 ?? addr.AddressLine1 ?? "",
@@ -296,12 +280,12 @@ export default function EmployeeOrderChatScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.root, { paddingTop: insets.top }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.black} />
+          <Ionicons name="arrow-back" size={22} color={COLORS.black} style={{ marginRight: 1.5 }} />
         </TouchableOpacity>
         <View style={styles.headerMeta}>
           <View style={styles.headerAvatar}>
@@ -355,7 +339,7 @@ export default function EmployeeOrderChatScreen() {
               </View>
               <Text style={styles.emptyTitle}>No messages yet</Text>
               <Text style={styles.emptySub}>
-                Start the conversation — updates you send will appear instantly to the customer.
+                Start the conversation - updates you send will appear instantly to the customer.
               </Text>
             </View>
           }

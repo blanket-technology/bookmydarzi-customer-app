@@ -15,35 +15,38 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
+import ErrorState from "../../src/components/common/ErrorState";
 import { listEmployeeOrders, type EmployeeOrder } from "../../src/services/employeeService";
+import {
+  getOrderStatusMeta,
+  normalizeOrderStatus,
+  STATUS_TONE_COLORS,
+} from "../../src/constants/orderStatus";
 
 const TEAL = "#149694";
 
-const STATUS_COLORS: Record<string, string> = {
-  order_accepted: "#8B5CF6",
-  cloth_pickup_pending: "#F97316",
-  cloth_picked_up: "#F97316",
-  cloth_at_hub: "#8B5CF6",
-  tailor_assigned: "#F59E0B",
-  stitching_in_progress: "#EC4899",
-  stitching_completed: "#10B981",
-  out_for_delivery: "#3B82F6",
-};
-
+/** Next employee action per status, mirrored from app/(employee)/order-detail.tsx's ACTION_MAP. */
 const NEXT_ACTION: Record<string, string> = {
-  order_accepted: "Schedule Pickup →",
-  cloth_pickup_pending: "Confirm Pickup →",
-  cloth_picked_up: "Mark Cloth at Hub →",
-  cloth_at_hub: "Waiting for tailor…",
-  tailor_assigned: "Schedule Pickup →",
-  stitching_in_progress: "Tailor stitching…",
-  stitching_completed: "Mark Out for Delivery →",
+  order_accepted: "Go for Pickup →",
+  pickup_scheduled: "Confirm Pickup →",
+  pickup_pending: "Confirm Pickup →",
+  picked_up: "Hand to Tailor →",
+  searching_tailor: "Finding tailor…",
+  broadcasted: "Awaiting tailor…",
+  tailor_assigned: "Tailor to begin stitching…",
+  cloth_received_by_tailor: "Tailor stitching…",
+  stitching_started: "Tailor stitching…",
+  in_progress: "Tailor stitching…",
+  final_check: "Tailor final check…",
+  ready_for_dispatch: "Mark Out for Delivery →",
   out_for_delivery: "Mark Delivered →",
 };
 
 function WorkCard({ order, onPress }: { order: EmployeeOrder; onPress: () => void }) {
-  const statusColor = STATUS_COLORS[order.status] ?? COLORS.gray;
-  const nextAction = NEXT_ACTION[order.status];
+  const status = normalizeOrderStatus(order.status);
+  const meta = getOrderStatusMeta(status);
+  const statusColor = STATUS_TONE_COLORS[meta.tone].fg;
+  const nextAction = NEXT_ACTION[status];
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
@@ -51,7 +54,7 @@ function WorkCard({ order, onPress }: { order: EmployeeOrder; onPress: () => voi
         <Text style={styles.code}>{order.order_code}</Text>
         <View style={[styles.badge, { backgroundColor: statusColor + "1A" }]}>
           <Text style={[styles.badgeText, { color: statusColor }]}>
-            {order.status.replace(/_/g, " ")}
+            {meta.employeeLabel}
           </Text>
         </View>
       </View>
@@ -113,12 +116,7 @@ export default function MyOrders() {
       {loading ? (
         <View style={styles.center}><ActivityIndicator size="large" color={TEAL} /></View>
       ) : error ? (
-        <View style={styles.center}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => load()}>
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorState message={error} onRetry={() => load()} />
       ) : (
         <FlatList
           data={orders}

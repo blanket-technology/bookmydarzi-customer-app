@@ -1,18 +1,20 @@
-/** Raw statuses treated as completed (Completed tab only). */
-const COMPLETED_STATUSES = new Set([
-  "completed",
-  "delivered",
-  "done",
-  "finished",
-  "closed",
-]);
+import {
+    getOrderStatusMeta,
+    isOrderStatusCompleted,
+    normalizeOrderStatus,
+    type StatusVisualTone,
+} from "../constants/orderStatus";
 
+/**
+ * @deprecated Use `isOrderStatusCompleted` from `src/constants/orderStatus`
+ * directly. Kept as a thin re-export so existing call sites keep working
+ * during the migration - matches the backend's own "Completed" tab
+ * semantics: only COMPLETED counts, DELIVERED is still considered active.
+ */
 export function isCompletedCustomerOrderStatus(
   status: string | null | undefined,
 ): boolean {
-  const normalized = (status ?? "").trim().toLowerCase().replace(/\s+/g, "_");
-  if (!normalized) return false;
-  return COMPLETED_STATUSES.has(normalized);
+  return isOrderStatusCompleted(status);
 }
 
 export function formatCustomerOrderStatusLabel(
@@ -40,24 +42,18 @@ export function getBookingHeadline(
   return "Booking active";
 }
 
-export type StatusVisualTone = "success" | "warning" | "neutral" | "error";
+export type { StatusVisualTone };
 
+/**
+ * @deprecated Use `getOrderStatusMeta(status).tone` from
+ * `src/constants/orderStatus` directly - that mapping is curated per status
+ * rather than inferred from substring matches, and is the single source of
+ * truth other screens should share.
+ */
 export function getCustomerOrderStatusTone(
   status: string | null | undefined,
-): StatusVisualTone {
-  const s = (status ?? "").toLowerCase();
-  if (isCompletedCustomerOrderStatus(s) && !s.includes("cancel")) return "success";
-  if (s.includes("cancel")) return "error";
-  if (
-    s.includes("pending") ||
-    s.includes("scheduled") ||
-    s.includes("assigned") ||
-    s.includes("confirmed") ||
-    s.includes("progress")
-  ) {
-    return "warning";
-  }
-  return "neutral";
+) {
+  return getOrderStatusMeta(status).tone;
 }
 
 export const STATUS_ICON_STYLES: Record<
@@ -68,7 +64,34 @@ export const STATUS_ICON_STYLES: Record<
   warning: { bg: "#FEF6E7", icon: "#D97706", iconName: "time-outline" },
   neutral: { bg: "#E8F4F6", icon: "#0c6c75", iconName: "ellipse-outline" },
   error: { bg: "#FEECEC", icon: "#DC2626", iconName: "time-outline" },
+  info: { bg: "#E8F4F6", icon: "#0c6c75", iconName: "ellipse-outline" },
 };
 
 /** Green accent for text links - matches reference */
 export const BOOKING_LINK_GREEN = "#1F8A4C";
+
+export interface StatusNarrative {
+  headline: string;
+  detail: string;
+  nextStep: string | null;
+}
+
+/**
+ * @deprecated Use `getOrderStatusMeta` from `src/constants/orderStatus`
+ * directly (its `title`/`description`/`nextStep` fields are this same data,
+ * kept in sync with the current 20-status backend state machine). This
+ * wrapper exists only so existing call sites keep compiling during the
+ * migration - remove once every caller has switched over.
+ */
+export function getOrderStatusNarrative(status: string | null | undefined): StatusNarrative {
+  const meta = getOrderStatusMeta(status);
+  return {
+    headline: meta.title,
+    detail: meta.description,
+    nextStep: meta.nextStep,
+  };
+}
+
+// Re-exported so old imports of `normalizeOrderStatus`-shaped helpers from
+// this file keep working; new code should import from constants/orderStatus.
+export { normalizeOrderStatus };

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
+import { formatCurrency } from "../../src/utils/formatters";
 import {
   cancelOrder,
   getOrderDetail,
@@ -27,6 +28,7 @@ import {
   isOrderStatusTerminal,
   STATUS_TONE_COLORS,
 } from "../../src/constants/orderStatus";
+import ScreenHeader from "../../src/components/common/ScreenHeader";
 import { useAuthStore } from "../../store/useAuthStore";
 
 // Roles permitted to call /admin/* - see the note in (admin)/orders.tsx.
@@ -100,7 +102,6 @@ function CancelModal({
 
 export default function AdminOrderDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const role = useAuthStore((s) => s.user?.role);
   const canLoad = !!role && ADMIN_ROLES.has(role);
@@ -156,13 +157,7 @@ export default function AdminOrderDetail() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order Detail</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <ScreenHeader title="Order Detail" />
 
       {loading ? (
         <View style={styles.center}>
@@ -192,7 +187,7 @@ export default function AdminOrderDetail() {
               <Row label="Order Code" value={order?.OrderCode ?? order?.order_code} />
               <Row label="Created" value={order?.CreatedAt ? new Date(order.CreatedAt).toLocaleString("en-IN") : null} />
               <Row label="Payment Status" value={order?.PaymentStatus ?? order?.payment_status} />
-              <Row label="Total Amount" value={order?.TotalAmount ? `₹${order.TotalAmount}` : null} />
+              <Row label="Total Amount" value={order?.TotalAmount ? formatCurrency(order.TotalAmount) : null} />
             </View>
 
             {/* Customer */}
@@ -252,18 +247,6 @@ export default function AdminOrderDetail() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.offWhite },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 12,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.grayBorder,
-  },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 16, ...FONTS.bold, color: COLORS.black },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   errorText: { color: COLORS.error, fontSize: 14 },
   retryBtn: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: TEAL, borderRadius: RADIUS.md },

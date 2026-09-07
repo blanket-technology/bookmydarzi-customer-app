@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { StyleSheet, ViewStyle } from "react-native";
+import { ViewStyle } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -27,6 +27,9 @@ export default function SkeletonBox({ width = "100%", height = 16, borderRadius 
       ),
       -1
     );
+  // Reanimated shared values are stable refs, not reactive state -
+  // intentionally omitted from deps.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
