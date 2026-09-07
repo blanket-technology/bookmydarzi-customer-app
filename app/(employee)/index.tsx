@@ -23,22 +23,15 @@ import {
   listEmployeeOrders,
   type EmployeeOrder,
 } from "../../src/services/employeeService";
+import { wsService } from "../../src/services/wsService";
 import { useAuthStore } from "../../store/useAuthStore";
+import {
+  getOrderStatusMeta,
+  normalizeOrderStatus,
+  STATUS_TONE_COLORS,
+} from "../../src/constants/orderStatus";
 
 const TEAL = "#149694";
-
-const STATUS_COLORS: Record<string, string> = {
-  order_placed: "#3B82F6",
-  order_accepted: "#8B5CF6",
-  tailor_assigned: "#F59E0B",
-  cloth_pickup_pending: "#F97316",
-  cloth_picked_up: "#F97316",
-  stitching_in_progress: "#EC4899",
-  stitching_completed: "#10B981",
-  out_for_delivery: "#3B82F6",
-  delivered: "#065F46",
-  cancelled: "#B91C1C",
-};
 
 function QueueCard({
   order,
@@ -54,7 +47,8 @@ function QueueCard({
   accepting: boolean;
 }) {
   const isUnassigned = order.assigned_employee_id == null;
-  const statusColor = STATUS_COLORS[order.status] ?? COLORS.gray;
+  const meta = getOrderStatusMeta(normalizeOrderStatus(order.status));
+  const statusColor = STATUS_TONE_COLORS[meta.tone].fg;
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
@@ -62,7 +56,7 @@ function QueueCard({
         <Text style={styles.code}>{order.order_code}</Text>
         <View style={[styles.badge, { backgroundColor: statusColor + "1A" }]}>
           <Text style={[styles.badgeText, { color: statusColor }]}>
-            {(order.status ?? "").replace(/_/g, " ")}
+            {meta.employeeLabel}
           </Text>
         </View>
       </View>
@@ -150,6 +144,16 @@ export default function EmployeeQueue() {
 
   const isFirstMount = useRef(true);
   useEffect(() => { load(); }, [load]);
+
+  // A pickup broadcast (Rapido-style FCFS) pushes new order_placed orders to
+  // nearby online employees. Refresh the queue in real time when one arrives
+  // so the offer shows up without a manual pull - mirrors the tailor
+  // broadcasts screen's BROADCAST_OFFER listener. Non-breaking: it only
+  // triggers a reload of the same queue.
+  useEffect(() => {
+    const unsub = wsService.on("PICKUP_BROADCAST_OFFER", () => load({ isRefresh: true }));
+    return () => unsub();
+  }, [load]);
 
   // Reload when navigating back from order-detail
   useFocusEffect(useCallback(() => {

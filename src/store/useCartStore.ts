@@ -2,7 +2,9 @@
  * Cart store - API cart + booking flow state.
  *
  * Booking flow (pre-cart):
- *   Service line → stitching type → measurement → add to cart → cart tab
+ *   Service line → stitching type → add to cart → cart tab
+ * (Measurement is never collected from the customer - it's filled later by
+ * Bridge/employee at pickup, or by Admin.)
  *
  * API cart:
  *   GET/POST /cart, service entries, checkout
@@ -28,6 +30,7 @@ import type {
   CartCheckoutPayload,
   CartCheckoutResult,
   CartServiceEntry,
+  StitchingPreferences,
 } from "../types/cart";
 
 export interface PendingCartItem {
@@ -39,19 +42,13 @@ export interface PendingCartItem {
   categoryName: string;
   basePrice: number;
   displayName: string;
+  imageUrl?: string | null;
   tailorId?: number;
   tailorName?: string;
-  /** Client-only quantity selected before measurement / add-to-cart */
+  /** Client-only quantity selected before add-to-cart */
   quantity?: number;
-}
-
-/** Measurement choice during service booking (before add-to-cart). */
-export interface PendingBookingMeasurement {
-  profileId: number | null;
-  profileName: string | null;
-  skipped: boolean;
-  selectedMeasurements?: Record<string, number>;
-  selectedSize?: string;
+  /** Designer design brief - only collected when stitchingType is Designer. */
+  stitchingPreferences?: StitchingPreferences;
 }
 
 interface CartState {
@@ -73,15 +70,29 @@ interface CartState {
   selectedAddressId: number | null;
   checkoutFlow: boolean;
   pickupType: "instant" | "scheduled";
-  /** Service Details → Measurement → Address booking path */
+  /** Service Details → Address booking path */
   bookingFlowActive: boolean;
-  pendingBookingMeasurement: PendingBookingMeasurement | null;
 
-  /** Applied offer (selected by user on cart screen) */
+  /** True when the user tapped "Order Now" (quantity=1 direct flow, bypasses cart) */
+  buyNowMode: boolean;
+  setBuyNowMode: (v: boolean) => void;
+  clearBuyNowMode: () => void;
+
+  /** Applied offer (selected by user on cart screen) - discountType/Value
+   * drive the CLIENT-SIDE display estimate only; checkout sends just
+   * offer_id and the backend recomputes the real discount authoritatively
+   * (see checkout_service.py's is_flat/is_percentage branch), so this can
+   * never desync into an incorrect charge even if the estimate is stale. */
   appliedOfferId: number | null;
-  appliedOfferPercent: number;
+  appliedOfferDiscountType: "percentage" | "flat";
+  appliedOfferDiscountValue: number;
   appliedOfferTitle: string;
-  setAppliedOffer: (id: number, percent: number, title: string) => void;
+  setAppliedOffer: (
+    id: number,
+    discountType: "percentage" | "flat",
+    discountValue: number,
+    title: string,
+  ) => void;
   clearAppliedOffer: () => void;
 
   applyCart: (cart: ApiCart) => void;
@@ -108,10 +119,6 @@ interface CartState {
   setCheckoutFlow: (active: boolean) => void;
   setPickupType: (type: "instant" | "scheduled") => void;
   setBookingFlowActive: (active: boolean) => void;
-  setPendingBookingMeasurement: (
-    data: PendingBookingMeasurement | null,
-  ) => void;
-  clearPendingBookingMeasurement: () => void;
   resetBookingFlow: () => void;
 }
 
@@ -148,15 +155,26 @@ export const useCartStore = create<CartState>()(
       checkoutFlow: false,
       pickupType: "instant",
       bookingFlowActive: false,
-      pendingBookingMeasurement: null,
+      buyNowMode: false,
       appliedOfferId: null,
-      appliedOfferPercent: 0,
+      appliedOfferDiscountType: "percentage",
+      appliedOfferDiscountValue: 0,
       appliedOfferTitle: "",
 
-      setAppliedOffer: (id, percent, title) =>
-        set({ appliedOfferId: id, appliedOfferPercent: percent, appliedOfferTitle: title }),
+      setAppliedOffer: (id, discountType, discountValue, title) =>
+        set({
+          appliedOfferId: id,
+          appliedOfferDiscountType: discountType,
+          appliedOfferDiscountValue: discountValue,
+          appliedOfferTitle: title,
+        }),
       clearAppliedOffer: () =>
-        set({ appliedOfferId: null, appliedOfferPercent: 0, appliedOfferTitle: "" }),
+        set({
+          appliedOfferId: null,
+          appliedOfferDiscountType: "percentage",
+          appliedOfferDiscountValue: 0,
+          appliedOfferTitle: "",
+        }),
 
       applyCart: (cart) => set(applyCartToState(cart)),
 
@@ -171,7 +189,8 @@ export const useCartStore = create<CartState>()(
           error: null,
           initialized: false,
           appliedOfferId: null,
-          appliedOfferPercent: 0,
+          appliedOfferDiscountType: "percentage",
+          appliedOfferDiscountValue: 0,
           appliedOfferTitle: "",
         }),
 
@@ -352,7 +371,8 @@ export const useCartStore = create<CartState>()(
             checkoutFlow: false,
             selectedAddressId: null,
             appliedOfferId: null,
-            appliedOfferPercent: 0,
+            appliedOfferDiscountType: "percentage",
+            appliedOfferDiscountValue: 0,
             appliedOfferTitle: "",
           });
           void get()
@@ -367,6 +387,9 @@ export const useCartStore = create<CartState>()(
         }
       },
 
+      setBuyNowMode: (v) => set({ buyNowMode: v }),
+      clearBuyNowMode: () => set({ buyNowMode: false }),
+
       setPendingService: (item) => set({ pendingService: item }),
       clearPendingService: () => set({ pendingService: null }),
       setPendingRoute: (route, params = {}) =>
@@ -377,10 +400,6 @@ export const useCartStore = create<CartState>()(
       setCheckoutFlow: (active) => set({ checkoutFlow: active }),
       setPickupType: (type) => set({ pickupType: type }),
       setBookingFlowActive: (active) => set({ bookingFlowActive: active }),
-      setPendingBookingMeasurement: (data) =>
-        set({ pendingBookingMeasurement: data }),
-      clearPendingBookingMeasurement: () =>
-        set({ pendingBookingMeasurement: null }),
       resetBookingFlow: () =>
         set({
           pendingService: null,
@@ -390,7 +409,7 @@ export const useCartStore = create<CartState>()(
           checkoutFlow: false,
           pickupType: "instant",
           bookingFlowActive: false,
-          pendingBookingMeasurement: null,
+          buyNowMode: false,
         }),
     }),
     {

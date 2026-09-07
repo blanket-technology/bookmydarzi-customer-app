@@ -29,6 +29,7 @@ export async function updateProfile(
       body.mobile = digits;
     }
   }
+  if (payload.gender !== undefined) body.gender = payload.gender;
   if (payload.address !== undefined) body.address = payload.address;
   if (payload.profile_image !== undefined) body.profile_image = payload.profile_image;
 

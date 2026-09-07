@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, FONTS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
 import { getDashboardStats, type DashboardStats } from "../../src/services/adminService";
+import { formatPrice } from "../../src/utils/formatters";
 import { useAuthStore } from "../../store/useAuthStore";
 
 const TEAL = "#149694";
@@ -86,9 +87,6 @@ export default function AdminDashboard() {
     load(true);
   }, [load]);
 
-  const fmt = (n: number) =>
-    n >= 1000 ? `₹${(n / 1000).toFixed(1)}k` : `₹${n.toFixed(0)}`;
-
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       {/* Header */}
@@ -152,16 +150,16 @@ export default function AdminDashboard() {
 
           <SectionHeader title="Revenue" />
           <View style={styles.row}>
-            <StatCard label="Total" value={fmt(stats?.revenue.total ?? 0)} icon="cash" color={TEAL} />
-            <StatCard label="Today" value={fmt(stats?.revenue.today ?? 0)} icon="today" color="#8B5CF6" />
+            <StatCard label="Total" value={formatPrice(stats?.revenue.total ?? 0)} icon="cash" color={TEAL} />
+            <StatCard label="Today" value={formatPrice(stats?.revenue.today ?? 0)} icon="today" color="#8B5CF6" />
           </View>
           <View style={styles.row}>
-            <StatCard label="This Week" value={fmt(stats?.revenue.this_week ?? 0)} icon="calendar" color="#3B82F6" />
-            <StatCard label="This Month" value={fmt(stats?.revenue.this_month ?? 0)} icon="calendar-outline" color="#F97316" />
+            <StatCard label="This Week" value={formatPrice(stats?.revenue.this_week ?? 0)} icon="calendar" color="#3B82F6" />
+            <StatCard label="This Month" value={formatPrice(stats?.revenue.this_month ?? 0)} icon="calendar-outline" color="#F97316" />
           </View>
           <View style={styles.row}>
-            <StatCard label="Online" value={fmt(stats?.revenue.online ?? 0)} icon="card" color={TEAL} />
-            <StatCard label="COD" value={fmt(stats?.revenue.cod ?? 0)} icon="cash-outline" color="#10B981" />
+            <StatCard label="Online" value={formatPrice(stats?.revenue.online ?? 0)} icon="card" color={TEAL} />
+            <StatCard label="COD" value={formatPrice(stats?.revenue.cod ?? 0)} icon="cash-outline" color="#10B981" />
           </View>
 
           <View style={{ height: 24 }} />

@@ -1,5 +1,5 @@
 /**
- * Invoice download — GET /api/v1/orders/{order_id}/invoice
+ * Invoice download - GET /api/v1/orders/{order_id}/invoice
  *
  * Downloads the PDF with the auth header, then saves it to a user-selected
  * folder via Android's Storage Access Framework (SAF). Falls back to the
@@ -37,7 +37,7 @@ async function readErrorDetail(
     if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
     if (typeof parsed?.message === "string") return parsed.message;
   } catch {
-    // body was not JSON — fall back to generic message
+    // body was not JSON - fall back to generic message
   }
   return "";
 }
@@ -81,7 +81,7 @@ export async function downloadAndShareInvoice(
     throw new Error(detail || `Could not download invoice (status ${result.status}).`);
   }
 
-  // Step 2: try SAF (Android) — lets user pick their Downloads folder directly
+  // Step 2: try SAF (Android) - lets user pick their Downloads folder directly
   try {
     const saf = (FileSystem as any).StorageAccessFramework;
     if (saf && typeof saf.requestDirectoryPermissionsAsync === "function") {
@@ -100,13 +100,13 @@ export async function downloadAndShareInvoice(
         });
         return destUri;
       }
-      // User cancelled the folder picker — fall through to sharing
+      // User cancelled the folder picker - fall through to sharing
     }
   } catch {
-    // SAF not available on this device/OS version — fall through to sharing
+    // SAF not available on this device/OS version - fall through to sharing
   }
 
-  // Step 3: fallback — open share / preview sheet (iOS or SAF unavailable)
+  // Step 3: fallback - open share / preview sheet (iOS or SAF unavailable)
   const canShare = await Sharing.isAvailableAsync();
   if (canShare) {
     await Sharing.shareAsync(result.uri, {

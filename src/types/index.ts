@@ -163,6 +163,7 @@ export interface ProfileUpdatePayload {
   first_name?: string;
   last_name?: string;
   email?: string;
+  gender?: string;
   /** Form value - mapped to backend `Mobile` on PATCH. */
   phone?: string;
   /** Backend User model field (preferred on PATCH). */

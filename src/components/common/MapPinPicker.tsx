@@ -5,10 +5,10 @@
  */
 
 import { Ionicons } from "@expo/vector-icons";
-import * as Location from "expo-location";
 import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Modal,
   StyleSheet,
@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS, RADIUS, SHADOW, SPACING } from "../../../constants/theme";
 import {
+  getCurrentGpsCoords,
   reverseGeocodeCoords,
   type ReverseGeocodeResult,
 } from "../../services/locationService";
@@ -72,6 +73,9 @@ function DropPin({ lifted }: { lifted: boolean }) {
         useNativeDriver: true,
       }),
     ]).start();
+  // translateY/shadowOpacity/shadowScale are stable useRef(...).current
+  // Animated.Values - intentionally omitted from deps.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lifted]);
 
   return (
@@ -211,32 +215,44 @@ export function MapPinPicker({ visible, initialCoords, onConfirm, onClose }: Pro
     });
   }, [centerCoords, addressPreview, onConfirm]);
 
-  // Move map to actual current GPS position
-  const handleMyLocation = useCallback(async () => {
-    setLocating(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      const { latitude, longitude } = pos.coords;
-      const region: Region = { latitude, longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 };
-      mapRef.current?.animateToRegion(region, 500);
-      setCenterCoords({ latitude, longitude });
-      setAddressPreview(null);
-      geocodeCenter(latitude, longitude);
-    } catch {
-      // silently fallback to initialCoords
-      if (initialCoords) {
-        const region: Region = { ...initialCoords, latitudeDelta: 0.005, longitudeDelta: 0.005 };
-        mapRef.current?.animateToRegion(region, 400);
-        setCenterCoords(initialCoords);
+  // Move map to actual current GPS position - uses the same hardened
+  // getCurrentGpsCoords helper as the "Use my location" flow on the address
+  // form (permission check + high-accuracy fetch with an 8-10s timeout and
+  // an automatic retry at lower accuracy), instead of a bare one-shot
+  // getCurrentPositionAsync call with no timeout that silently did nothing
+  // on failure - a customer tapping this button with GPS off, permission
+  // denied, or a weak signal indoors saw no feedback at all.
+  const handleMyLocation = useCallback(
+    async (isAutoLocate = false) => {
+      setLocating(true);
+      try {
+        const { latitude, longitude } = await getCurrentGpsCoords();
+        const region: Region = { latitude, longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 };
+        mapRef.current?.animateToRegion(region, 500);
+        setCenterCoords({ latitude, longitude });
+        setAddressPreview(null);
+        geocodeCenter(latitude, longitude);
+      } catch (err) {
+        // On auto-locate (modal just opened) stay quiet and fall back to
+        // initialCoords/default region - only a manual tap on the "my
+        // location" button surfaces the real reason as an alert.
+        if (!isAutoLocate) {
+          Alert.alert(
+            "Couldn't get your location",
+            err instanceof Error ? err.message : "Please try again or drag the pin manually.",
+          );
+        }
+        if (initialCoords) {
+          const region: Region = { ...initialCoords, latitudeDelta: 0.005, longitudeDelta: 0.005 };
+          mapRef.current?.animateToRegion(region, 400);
+          setCenterCoords(initialCoords);
+        }
+      } finally {
+        setLocating(false);
       }
-    } finally {
-      setLocating(false);
-    }
-  }, [initialCoords, geocodeCenter]);
+    },
+    [initialCoords, geocodeCenter],
+  );
 
   // Auto-jump to GPS when modal opens (once per open)
   React.useEffect(() => {
@@ -246,7 +262,7 @@ export function MapPinPicker({ visible, initialCoords, onConfirm, onClose }: Pro
     }
     if (autoLocatedRef.current) return;
     autoLocatedRef.current = true;
-    void handleMyLocation();
+    void handleMyLocation(true);
   }, [visible, handleMyLocation]);
 
   const addressLine = addressPreview
@@ -295,7 +311,7 @@ export function MapPinPicker({ visible, initialCoords, onConfirm, onClose }: Pro
         {/* ── GPS button ── */}
         <TouchableOpacity
           style={[styles.myLocationBtn, { top: insets.top + 68 }]}
-          onPress={handleMyLocation}
+          onPress={() => handleMyLocation(false)}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel="Use my current location"
@@ -335,7 +351,7 @@ export function MapPinPicker({ visible, initialCoords, onConfirm, onClose }: Pro
           <View style={styles.row}>
             <TouchableOpacity
               style={styles.useGpsBtn}
-              onPress={handleMyLocation}
+              onPress={() => handleMyLocation(false)}
               activeOpacity={0.85}
             >
               <Ionicons name="navigate" size={15} color={COLORS.primary} />

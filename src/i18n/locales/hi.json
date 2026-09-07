@@ -7,7 +7,12 @@
     "na": "N/A",
     "bookingId": "बुकिंग आईडी",
     "amountPaid": "भुगतान राशि",
-    "notifications": "सूचनाएँ"
+    "notifications": "सूचनाएँ",
+    "seeAll": "सभी देखें",
+    "bookNow": "अभी बुक करें",
+    "viewDetails": "विवरण देखें",
+    "addToCart": "कार्ट में जोड़ें",
+    "loading": "लोड हो रहा है..."
   },
   "tabs": {
     "home": "होम",
@@ -18,8 +23,8 @@
   "cart": {
     "title": "आपकी कार्ट",
     "loading": "कार्ट लोड हो रही है...",
-    "emptyTitle": "आपकी कार्ट खाली है",
-    "emptySub": "सेवाएँ देखें और माप के साथ आइटम जोड़ें।",
+    "emptyTitle": "अभी कुछ नहीं है",
+    "emptySub": "कोई सेवा चुनें, अपने माप दें - हम कपड़ा उठाएंगे, सिलाई करेंगे और घर पहुँचाएंगे।",
     "subtotal": "उप-योग",
     "gst": "जीएसटी",
     "grandTotal": "कुल राशि",
@@ -30,11 +35,52 @@
     "myBookings": "मेरी बुकिंग",
     "active": "सक्रिय",
     "completed": "पूर्ण",
-    "loginTitle": "बुकिंग देखने के लिए लॉगिन करें",
-    "loginSub": "लॉगिन के बाद आपका ऑर्डर इतिहास यहाँ दिखेगा।",
+    "cancelled": "रद्द",
+    "loginTitle": "ऑर्डर देखने के लिए साइन इन करें",
+    "loginSub": "आपकी बुकिंग, ट्रैकिंग और ऑर्डर इतिहास आपका इंतज़ार कर रहे हैं।",
     "emptyActiveTitle": "कोई सक्रिय ऑर्डर नहीं",
-    "emptyActiveSub": "जब आप सेवा बुक करेंगे, सक्रिय ऑर्डर यहाँ दिखेंगे।",
-    "emptyCompletedTitle": "कोई पूर्ण ऑर्डर नहीं",
-    "emptyCompletedSub": "पूर्ण बुकिंग यहाँ दिखाई देंगी।"
+    "emptyActiveSub": "कोई सेवा बुक करें और आपके सक्रिय ऑर्डर यहाँ दिखेंगे - हर कदम पर रियल-टाइम ट्रैकिंग के साथ।",
+    "emptyCompletedTitle": "अभी कोई पूर्ण ऑर्डर नहीं",
+    "emptyCompletedSub": "आपका पहला पूर्ण ऑर्डर आपकी डिलीवरी हिस्ट्री और रेटिंग विकल्प खोलेगा।",
+    "emptyCancelledTitle": "कोई रद्द ऑर्डर नहीं",
+    "emptyCancelledSub": "आपके द्वारा रद्द किए गए ऑर्डर यहाँ दिखाई देंगे।",
+    "loadMore": "और लोड करें"
+  },
+  "profile": {
+    "title": "मेरा अकाउंट",
+    "edit": "प्रोफ़ाइल संपादित करें",
+    "logout": "लॉग आउट",
+    "menu": {
+      "myOrders": "मेरे ऑर्डर",
+      "payments": "भुगतान",
+      "notifications": "सूचनाएँ",
+      "changePassword": "पासवर्ड बदलें",
+      "help": "सहायता",
+      "faq": "सामान्य प्रश्न",
+      "rate": "ऐप को रेट करें",
+      "privacy": "गोपनीयता नीति",
+      "terms": "सेवा की शर्तें",
+      "about": "BookMyDarzi के बारे में"
+    }
+  },
+  "home": {
+    "popularServices": "लोकप्रिय सेवाएँ",
+    "tapToExplore": "टैप करें और कस्टमाइज़ करें",
+    "ourServices": "हमारी सेवाएँ",
+    "tapCategory": "कैटेगरी चुनें",
+    "styleInspiration": "स्टाइल इंस्पिरेशन",
+    "recentOrders": "हाल के ऑर्डर",
+    "needHelp": "मदद चाहिए?",
+    "hereForYou": "हम आपके लिए हैं"
+  },
+  "service": {
+    "aboutService": "इस सेवा के बारे में",
+    "stitchingType": "सिलाई का प्रकार",
+    "selectFinish": "फिनिश और मात्रा चुनें",
+    "customerReviews": "ग्राहक समीक्षाएँ",
+    "addToCart": "कार्ट में जोड़ें",
+    "bookNow": "अभी बुक करें",
+    "details": "सेवा विवरण",
+    "quantity": "मात्रा"
   }
 }

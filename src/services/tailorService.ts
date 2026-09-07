@@ -78,9 +78,16 @@ export async function getTailorOrder(orderId: number): Promise<TailorOrder> {
   return request<TailorOrder>(`/orders/${orderId}`);
 }
 
+/** The 4 stitching stages a tailor may set, in order - matches backend's TAILOR_ALLOWED_TARGETS. */
+export type TailorStitchingStatus =
+  | "stitching_started"
+  | "in_progress"
+  | "final_check"
+  | "ready_for_dispatch";
+
 export async function updateStitchingStatus(
   orderId: number,
-  status: "stitching_in_progress" | "stitching_completed"
+  status: TailorStitchingStatus,
 ): Promise<any> {
   return request<any>(`/orders/${orderId}/status`, {
     method: "PATCH",
@@ -88,17 +95,82 @@ export async function updateStitchingStatus(
   });
 }
 
-export async function listQueueOrders(params: {
-  page?: number;
-  limit?: number;
-} = {}): Promise<TailorOrderListResponse> {
-  const q = new URLSearchParams();
-  if (params.page) q.set("page", String(params.page));
-  if (params.limit) q.set("limit", String(params.limit));
-  const qs = q.toString();
-  return request<TailorOrderListResponse>(`/tailor/orders/queue${qs ? `?${qs}` : ""}`);
+// ─── Broadcast types ──────────────────────────────────────────────────────────
+
+export interface BroadcastOffer {
+  broadcast_id: number;
+  order_id: number;
+  order_code: string;
+  service_name: string;
+  garment_count: number;
+  pickup_area: string;
+  status: string;
+  broadcast_round: number;
+  notified_at: string | null;
+  expires_at: string;
+  // Stitching requirements
+  urgency_level: string | null;
+  expected_delivery_date: string | null;
+  description: string | null;
+  fabric_notes: string | null;
+  customization_notes: string | null;
+  cloth_details: string | null;
+  stitching_preferences: Record<string, string> | null;
 }
 
-export async function claimOrder(orderId: number): Promise<TailorOrder> {
-  return request<TailorOrder>(`/tailor/orders/${orderId}/claim`, { method: "PATCH" });
+// ─── Broadcast API calls ──────────────────────────────────────────────────────
+
+export async function listBroadcastOffers(): Promise<BroadcastOffer[]> {
+  const res = await request<{ broadcasts: BroadcastOffer[] }>("/tailor/orders/broadcasts");
+  return (res as any).broadcasts ?? [];
+}
+
+export async function acceptBroadcast(orderId: number): Promise<any> {
+  return request<any>(`/tailor/orders/${orderId}/broadcast/accept`, { method: "PATCH" });
+}
+
+export async function declineBroadcast(orderId: number): Promise<any> {
+  return request<any>(`/tailor/orders/${orderId}/broadcast/decline`, { method: "PATCH" });
+}
+
+// ─── Tailor own profile ───────────────────────────────────────────────────────
+
+export interface TailorProfile {
+  Id: number;
+  UserId: number;
+  Specialization: string | null;
+  Experience: number;
+  Location: string | null;
+  Bio: string | null;
+  Rating: number;
+  IsAvailable: boolean;
+  IsOnline: boolean;
+  Latitude: number | null;
+  Longitude: number | null;
+  PortfolioImages: string[] | null;
+}
+
+export async function getMyTailorProfile(): Promise<TailorProfile> {
+  return request<TailorProfile>("/tailors/me");
+}
+
+export async function updateMyTailorProfile(data: {
+  specialization?: string;
+  experience?: number;
+  location?: string;
+  bio?: string;
+  is_available?: boolean;
+}): Promise<TailorProfile> {
+  return request<TailorProfile>("/tailors/me", { method: "PATCH", body: data });
+}
+
+export async function updateOnlineStatus(
+  isOnline: boolean,
+  latitude?: number | null,
+  longitude?: number | null,
+): Promise<any> {
+  return request<any>(`/tailors/me/online`, {
+    method: "PATCH",
+    body: { is_online: isOnline, latitude, longitude },
+  });
 }

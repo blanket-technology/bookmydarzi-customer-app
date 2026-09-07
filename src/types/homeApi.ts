@@ -36,8 +36,15 @@ export interface ApiSpecialOffer {
   Id: number;
   Title: string;
   Description: string;
+  // Mirrors app/schemas/home_admin.py OfferListItem — DiscountType selects
+  // which of the two amount fields is meaningful (checkout_service.py's
+  // is_flat/is_percentage checks the same way). Both are always present in
+  // the response; only the one matching DiscountType is > 0.
+  DiscountType?: "percentage" | "flat";
   DiscountPercent: number;
+  DiscountAmount?: number | null;
   ImageUrl: string | null;
+  ValidFrom?: string | null;
   ValidUntil: string;
 }
 

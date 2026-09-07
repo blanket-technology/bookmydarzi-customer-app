@@ -6,32 +6,35 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
+import ScreenHeader from "../src/components/common/ScreenHeader";
 import {
-    confirmRazorpayPayment,
-    PaymentAlreadyCompletedError,
-    resolvePaymentSessionForOrder,
-    isValidOrderId,
-    parsePositiveId,
+  confirmRazorpayPayment,
+  isValidOrderId,
+  parsePositiveId,
+  PaymentAlreadyCompletedError,
+  resolvePaymentSessionForOrder,
 } from "../src/services/paymentService";
 import { useCartStore } from "../src/store/useCartStore";
+import { useCustomerOrdersStore } from "../src/store/useCustomerOrdersStore";
 import { useOrderStore } from "../src/store/useOrderStore";
 import type { RazorpayPaymentSession } from "../src/types/api";
 import { isPaymentSuccess } from "../src/utils/paymentStatus";
 import {
-    DevelopmentBuildRequiredError,
-    EXPO_GO_RAZORPAY_MESSAGE,
-    isRazorpayNativeAvailable,
-    openRazorpayCheckout,
-    PaymentCancelledError,
+  DevelopmentBuildRequiredError,
+  EXPO_GO_RAZORPAY_MESSAGE,
+  isRazorpayNativeAvailable,
+  openRazorpayCheckout,
+  PaymentCancelledError,
+  type RazorpaySuccessData,
 } from "../src/utils/razorpayCheckout";
 import { safeRouterReplace } from "../src/utils/safeNavigation";
 
@@ -40,6 +43,11 @@ type ScreenState =
   | "ready"
   | "paying"
   | "verifying"
+  // Razorpay already charged the customer, but confirming that with our own
+  // backend failed (network/timeout) - never let a retry from here reopen
+  // Razorpay, since that would risk a second charge. Only retries the
+  // idempotent verify call with the same gateway result.
+  | "verification_failed"
   | "error"
   | "dev_build_required";
 
@@ -48,6 +56,7 @@ export default function PaymentScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     orderId?: string;
+    orderCode?: string;
     amount?: string;
     customerName?: string;
     email?: string;
@@ -55,6 +64,7 @@ export default function PaymentScreen() {
   }>();
 
   const orderId = parsePositiveId(params.orderId);
+  const orderCode = params.orderCode?.trim() || undefined;
   const amountRupee = Number(params.amount ?? 0);
   const customerName = params.customerName?.trim() || undefined;
   const email = params.email?.trim() || undefined;
@@ -63,6 +73,9 @@ export default function PaymentScreen() {
   const [state, setState] = useState<ScreenState>("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [session, setSession] = useState<RazorpayPaymentSession | null>(null);
+  // Kept only for the verification_failed recovery path - retrying verify
+  // must reuse the exact gateway result, never a fresh Razorpay session.
+  const [pendingGatewayResult, setPendingGatewayResult] = useState<RazorpaySuccessData | null>(null);
 
   const checkoutStarted = useRef(false);
   const isBusy = useRef(false);
@@ -70,6 +83,7 @@ export default function PaymentScreen() {
 
   const finishSuccess = useCallback((paidAmountRupees?: number) => {
     useOrderStore.getState().invalidateCache();
+    useCustomerOrdersStore.getState().invalidateCache();
     void useCartStore
       .getState()
       .refreshCart({ silent: true, allowCreate: false });
@@ -77,10 +91,11 @@ export default function PaymentScreen() {
       pathname: "/order-success" as any,
       params: {
         orderId: String(orderId),
+        ...(orderCode ? { orderCode } : {}),
         amount: paidAmountRupees != null ? String(paidAmountRupees) : undefined,
       },
     });
-  }, [orderId, router]);
+  }, [orderId, orderCode, router]);
 
   const loadSession = useCallback(async () => {
     if (!razorpayAvailable) {
@@ -95,8 +110,10 @@ export default function PaymentScreen() {
 
     const payAmount = amountRupee > 0 ? amountRupee : 0;
     if (payAmount <= 0) {
-      setErrorMsg("Invalid payment amount.");
-      setState("error");
+      // Nothing to charge upfront (e.g. zero platform fee) - the order was
+      // already placed either way, so treat this as already-settled rather
+      // than a dead-end error screen with no way forward.
+      finishSuccess(0);
       return;
     }
 
@@ -128,6 +145,46 @@ export default function PaymentScreen() {
     loadSession();
   }, [loadSession]);
 
+  /** Confirms an already-obtained Razorpay result with our backend. Shared
+   * by the initial checkout flow and the verification-failed retry, so a
+   * network hiccup on the confirm call never requires reopening Razorpay
+   * (which would risk a second charge). */
+  const confirmWithBackend = useCallback(
+    async (session_: RazorpayPaymentSession, result: RazorpaySuccessData) => {
+      setState("verifying");
+      setErrorMsg(null);
+
+      try {
+        const confirmed = await confirmRazorpayPayment(
+          session_.payment_id,
+          session_.order_id,
+          result,
+        );
+
+        if (!confirmed || !isPaymentSuccess(confirmed.status)) {
+          throw new Error(
+            "Payment could not be confirmed. If amount was deducted, check My Orders.",
+          );
+        }
+
+        setPendingGatewayResult(null);
+        finishSuccess(session_.amount / 100);
+      } catch (err) {
+        // The gateway already charged the customer by this point - never
+        // treat this as "nothing happened, try again from scratch". Keep
+        // the result so a retry only re-verifies, never reopens Razorpay.
+        setPendingGatewayResult(result);
+        setState("verification_failed");
+        setErrorMsg(
+          err instanceof Error
+            ? err.message
+            : "Could not confirm your payment. If amount was deducted, check My Orders.",
+        );
+      }
+    },
+    [finishSuccess],
+  );
+
   const openCheckout = useCallback(async () => {
     if (!session || isBusy.current) return;
     isBusy.current = true;
@@ -140,7 +197,7 @@ export default function PaymentScreen() {
         amount: session.amount,
         currency: session.currency,
         order_id: session.razorpay_order_id,
-        description: `Order #${orderId}`,
+        description: `Order #${orderCode ?? orderId}`,
         prefill: {
           name: customerName,
           email,
@@ -148,21 +205,7 @@ export default function PaymentScreen() {
         },
       });
 
-      setState("verifying");
-
-      const confirmed = await confirmRazorpayPayment(
-        session.payment_id,
-        session.order_id,
-        result,
-      );
-
-      if (!confirmed || !isPaymentSuccess(confirmed.status)) {
-        throw new Error(
-          "Payment could not be confirmed. If amount was deducted, check My Orders.",
-        );
-      }
-
-      finishSuccess(session.amount / 100);
+      await confirmWithBackend(session, result);
     } catch (err) {
       if (err instanceof DevelopmentBuildRequiredError) {
         setState("dev_build_required");
@@ -181,7 +224,17 @@ export default function PaymentScreen() {
     } finally {
       isBusy.current = false;
     }
-  }, [session, orderId, customerName, email, phone, finishSuccess]);
+  }, [session, orderId, orderCode, customerName, email, phone, confirmWithBackend]);
+
+  const retryVerification = useCallback(async () => {
+    if (!session || !pendingGatewayResult || isBusy.current) return;
+    isBusy.current = true;
+    try {
+      await confirmWithBackend(session, pendingGatewayResult);
+    } finally {
+      isBusy.current = false;
+    }
+  }, [session, pendingGatewayResult, confirmWithBackend]);
 
   useEffect(() => {
     if (
@@ -207,22 +260,36 @@ export default function PaymentScreen() {
         { paddingTop: insets.top, paddingBottom: insets.bottom },
       ]}
     >
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => {
-            if (state === "paying" || state === "verifying") return;
-            router.back();
-          }}
-          disabled={state === "paying" || state === "verifying"}
-        >
-          <Ionicons name="arrow-back" size={22} color={COLORS.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Pay Now</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <ScreenHeader
+        title="Pay Now"
+        onBack={() => {
+          if (state === "paying" || state === "verifying") return;
+          router.back();
+        }}
+      />
 
       <View style={styles.body}>
+        {state === "verification_failed" && (
+          <>
+            <Ionicons name="alert-circle-outline" size={48} color="#D97706" />
+            <Text style={styles.devBuildTitle}>Confirming your payment</Text>
+            <Text style={styles.errorText}>{errorMsg}</Text>
+            <Text style={styles.devBuildHint}>
+              Your payment may have already gone through - we just
+              couldn&apos;t confirm it with our server. Tap below to check
+              again; this never charges you a second time.
+            </Text>
+            <TouchableOpacity
+              style={styles.payBtn}
+              onPress={retryVerification}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="refresh" size={20} color={COLORS.white} />
+              <Text style={styles.payBtnText}>Check Payment Status</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
         {state === "loading" && (
           <>
             <ActivityIndicator size="large" color={COLORS.primary} />
@@ -236,7 +303,7 @@ export default function PaymentScreen() {
               <Text style={styles.amountLabel}>Amount to pay</Text>
               <Text style={styles.amountValue}>₹{displayAmount}</Text>
               {orderId ? (
-                <Text style={styles.orderRef}>Order #{orderId}</Text>
+                <Text style={styles.orderRef}>Order #{orderCode ?? orderId}</Text>
               ) : null}
             </View>
 
@@ -281,7 +348,7 @@ export default function PaymentScreen() {
             <Text style={styles.devBuildTitle}>Development build required</Text>
             <Text style={styles.devBuildText}>{EXPO_GO_RAZORPAY_MESSAGE}</Text>
             <Text style={styles.devBuildHint}>
-              Your order #{orderId ?? "-"} is saved. Install the dev build, then
+              Your order #{orderCode ?? orderId ?? "-"} is saved. Install the dev build, then
               open Pay Now again from My Orders or complete payment from this
               screen.
             </Text>
@@ -320,25 +387,6 @@ export default function PaymentScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.offWhite },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.grayBorder,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.grayLight,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { fontSize: 17, fontWeight: "700", color: COLORS.black },
   body: {
     flex: 1,
     padding: SPACING.lg,

@@ -146,6 +146,15 @@ export interface CustomerOrderSummaryPayload {
   delivery_address: OrderSummaryDeliveryAddressBlock;
 }
 
+/** Who's coming to the customer's door for pickup - only present once a
+ * Bridge/employee has actually been assigned and the order has reached a
+ * pickup-relevant status (see backend's _PICKUP_PARTNER_VISIBLE_FROM). */
+export interface PickupPartner {
+  name: string;
+  photo_url: string | null;
+  mobile: string | null;
+}
+
 /** GET /customer/orders/{id}/details - nested API payload */
 export interface OrderDetailsOrderBlock {
   order_code: string | null;
@@ -160,6 +169,7 @@ export interface OrderDetailsOrderBlock {
   image_references?: string[] | null;
   /** Free-text order notes entered at checkout. */
   customization_notes?: string | null;
+  pickup_partner?: PickupPartner | null;
 }
 
 export interface OrderDetailsServiceBlock {

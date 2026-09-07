@@ -3,22 +3,30 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, useRootNavigationState } from "expo-router";
 import { useEffect, useRef } from "react";
 import {
-  ActivityIndicator,
-  Animated,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Animated,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { useAuthStore, type AuthState } from "../store/useAuthStore";
+import { ONBOARDING_VERSION, useOnboardingStore } from "../src/store/useOnboardingStore";
 
 /**
  * App entry - splash until auth store hydrates and root navigation mounts,
  * then declarative <Redirect> (never router.replace during initial mount).
  */
 export default function Index() {
-  const hydrated = useAuthStore((s: AuthState) => s._hasHydrated);
+  const hydrated            = useAuthStore((s: AuthState) => s._hasHydrated);
+  // Reactive selector - re-renders when role changes (e.g. after profile fetch completes).
+  // Previously used getState() inside the if-block which captured a one-shot snapshot
+  // and missed profile-fetch updates that arrived after the 500ms hydration timeout.
+  const role                = useAuthStore((s: AuthState) => s.user?.role);
   const rootNavigationState = useRootNavigationState();
-  const isNavigationReady = rootNavigationState?.key != null;
+  const isNavigationReady   = rootNavigationState?.key != null;
+  const onboardingHydrated  = useOnboardingStore((s) => s._hasHydrated);
+  const completedVersion    = useOnboardingStore((s) => s.completedVersion);
+  const needsOnboarding     = completedVersion !== ONBOARDING_VERSION;
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -31,7 +39,6 @@ export default function Index() {
   }, [fadeAnim]);
 
   if (hydrated && isNavigationReady) {
-    const role = useAuthStore.getState().user?.role;
     if (role === "admin" || role === "superadmin") {
       return <Redirect href="/(admin)" />;
     }
@@ -41,7 +48,16 @@ export default function Index() {
     if (role === "tailor") {
       return <Redirect href="/(tailor)" />;
     }
-    return <Redirect href="/(tabs)" />;
+    // Customer path only (staff roles above skip onboarding entirely).
+    // Falls through to the splash UI below until onboarding's own
+    // AsyncStorage rehydration resolves, so a fresh install can't flash
+    // past onboarding before storage finishes loading.
+    if (onboardingHydrated) {
+      if (needsOnboarding) {
+        return <Redirect href={"/onboarding" as never} />;
+      }
+      return <Redirect href="/(tabs)" />;
+    }
   }
 
   return (

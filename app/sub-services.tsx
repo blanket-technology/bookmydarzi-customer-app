@@ -1,17 +1,16 @@
 /**
- * Category Browse - 3-level drawer layout:
+ * Category Browse - drawer layout:
  *   Left sidebar  → service lines  (Shirt, Blazer, Sherwani…)
- *   Right panel   → shirt types    (Chinese Collar, Formal, Casual…)
- *   Bottom sheet  → quality picker (Normal / Designer) + quantity + Book
+ *   Right panel   → stitching types (Chinese Collar, Formal, Casual…)
+ * Tapping a type navigates to /service-details, which owns quality
+ * selection, quantity, design customization, and Add to Cart / Book Now.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    Modal,
     Platform,
-    Pressable,
     ScrollView,
     StyleSheet,
     Text,
@@ -33,7 +32,6 @@ import type {
     CatalogServiceLine,
     CatalogStitchingType,
 } from "../src/types/catalogApi";
-import type { StitchingPreferences } from "../src/types/cart";
 import { safeRouterPush } from "../src/utils/safeNavigation";
 import { useAuthStore } from "../store/useAuthStore";
 
@@ -41,7 +39,7 @@ const SIDEBAR_W = 112;
 
 // ─── Fallback descriptions ─────────────────────────────────────────────────────
 
-const DESCRIPTIONS: Array<[string, string]> = [
+const DESCRIPTIONS: [string, string][] = [
   ["blazer", "Formal & business style"],
   ["suit", "Full custom-fit formal wear"],
   ["kurta", "Traditional Indian ethnic"],
@@ -237,7 +235,7 @@ function TypeCard({ group, onPress }: { group: StitchGroup; onPress: () => void 
 
 // ─── Direct service panel ──────────────────────────────────────────────────────
 
-const DIRECT_DESCRIPTIONS: Array<[string, string]> = [
+const DIRECT_DESCRIPTIONS: [string, string][] = [
   ["repair",    "Fix and restore damaged garments. Covers torn seams, loose threads, broken zippers, and button replacements."],
   ["resize",    "Adjust the fit of any garment - waist, length, sleeves, and more. Works on all fabrics and styles."],
   ["embroider", "Add custom needlework to any fabric. Choose from patterns, monograms, or traditional designs."],
@@ -337,188 +335,6 @@ function DirectPanel({
   );
 }
 
-// ─── Quality + booking bottom sheet ───────────────────────────────────────────
-
-function BookingSheet({
-  visible,
-  group,
-  selectedId,
-  qty,
-  onSelectId,
-  onQtyChange,
-  onBook,
-  onOrderNow,
-  onClose,
-}: {
-  visible: boolean;
-  group: StitchGroup | null;
-  selectedId: number | null;
-  qty: number;
-  onSelectId: (id: number) => void;
-  onQtyChange: (n: number) => void;
-  onBook: () => void;
-  onOrderNow?: () => void;
-  onClose: () => void;
-}) {
-  if (!group) return null;
-
-  const selectedStitch = group.items.find((i) => i.service_id === selectedId) ?? null;
-  const hasMultiple = group.items.length > 1;
-  const subtotal = (selectedStitch?.base_price ?? 0) * qty;
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      statusBarTranslucent
-      onRequestClose={onClose}
-    >
-      <Pressable style={bs.backdrop} onPress={onClose}>
-        <Pressable style={bs.sheet} onPress={(e) => e.stopPropagation()}>
-          <View style={bs.handle} />
-
-          <Text style={bs.title}>{group.baseName}</Text>
-          {hasMultiple && <Text style={bs.subtitle}>Select stitching quality</Text>}
-
-          <View style={bs.divider} />
-
-          {/* Quality selector - shown only when group has multiple items */}
-          {hasMultiple && (
-            <View style={bs.optionsWrap}>
-              {group.items.map((stitch) => {
-                const sel = stitch.service_id === selectedId;
-                const isDes = stitch.name.toLowerCase().includes("designer");
-                return (
-                  <TouchableOpacity
-                    key={stitch.service_id}
-                    style={[bs.qualCard, sel && bs.qualCardSel]}
-                    onPress={() => onSelectId(stitch.service_id)}
-                    activeOpacity={0.8}
-                  >
-                    <View
-                      style={[bs.qualIcon, { backgroundColor: isDes ? "#F5E6C0" : COLORS.primaryLight }]}
-                    >
-                      <Ionicons
-                        name={isDes ? "diamond-outline" : "shirt-outline"}
-                        size={18}
-                        color={isDes ? "#C9A84C" : COLORS.primaryDark}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[bs.qualName, sel && { color: COLORS.primaryDark }]}>
-                        {isDes ? "Designer" : "Normal"}
-                      </Text>
-                      <Text style={bs.qualDesc}>
-                        {isDes ? "Premium designer finish" : "Classic everyday finish"}
-                      </Text>
-                    </View>
-                    <Text style={[bs.qualPrice, { color: isDes ? "#C9A84C" : COLORS.primaryDark }]}>
-                      ₹{stitch.base_price.toLocaleString("en-IN")}
-                    </Text>
-                    <View style={[bs.radio, sel && bs.radioSel]}>
-                      {sel && <View style={bs.radioDot} />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Single item: just show its info */}
-          {!hasMultiple && selectedStitch && (
-            <View style={bs.singleRow}>
-              <View style={bs.qualIcon}>
-                <Ionicons name="shirt-outline" size={18} color={COLORS.primaryDark} />
-              </View>
-              <Text style={bs.singleName}>{selectedStitch.name}</Text>
-              <Text style={[bs.qualPrice, { color: COLORS.primaryDark }]}>
-                ₹{selectedStitch.base_price.toLocaleString("en-IN")}
-              </Text>
-            </View>
-          )}
-
-          <View style={bs.divider} />
-
-          {/* Quantity stepper */}
-          <View style={bs.qtyRow}>
-            <Text style={bs.qtyLabel}>Quantity</Text>
-            <View style={bs.qtyCtrl}>
-              <TouchableOpacity
-                style={bs.qtyBtn}
-                onPress={() => onQtyChange(qty - 1)}
-                disabled={qty <= 1}
-              >
-                <Ionicons
-                  name="remove"
-                  size={18}
-                  color={qty <= 1 ? COLORS.grayBorder : COLORS.primaryDark}
-                />
-              </TouchableOpacity>
-              <Text style={bs.qtyVal}>{qty}</Text>
-              <TouchableOpacity
-                style={bs.qtyBtn}
-                onPress={() => onQtyChange(qty + 1)}
-                disabled={qty >= 99}
-              >
-                <Ionicons
-                  name="add"
-                  size={18}
-                  color={qty >= 99 ? COLORS.grayBorder : COLORS.primaryDark}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {qty > 1 && selectedStitch && (
-            <View style={bs.subtotalRow}>
-              <Text style={bs.subtotalLabel}>Subtotal ({qty} pieces)</Text>
-              <Text style={bs.subtotalVal}>₹{subtotal.toLocaleString("en-IN")}</Text>
-            </View>
-          )}
-
-          {onOrderNow ? (
-            <>
-              <TouchableOpacity
-                style={[bs.bookBtn, !selectedId && bs.bookBtnDisabled]}
-                onPress={onOrderNow}
-                activeOpacity={0.9}
-                disabled={!selectedId}
-              >
-                <Ionicons name="flash-outline" size={16} color="#fff" />
-                <Text style={bs.bookLabel}>Book Now</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[bs.addToCartBtn, !selectedId && bs.bookBtnDisabled]}
-                onPress={onBook}
-                activeOpacity={0.9}
-                disabled={!selectedId}
-              >
-                <Ionicons name="cart-outline" size={16} color={bs.addToCartText.color as string} />
-                <Text style={bs.addToCartText}>Add to Cart</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity
-              style={[bs.bookBtn, !selectedId && bs.bookBtnDisabled]}
-              onPress={onBook}
-              activeOpacity={0.9}
-              disabled={!selectedId}
-            >
-              <Text style={bs.bookLabel}>Add to Cart</Text>
-              <Ionicons name="arrow-forward" size={16} color="#fff" />
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity style={bs.cancelLink} onPress={onClose}>
-            <Text style={bs.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
 // ─── Main screen ───────────────────────────────────────────────────────────────
 
 export default function SubServicesScreen() {
@@ -551,13 +367,6 @@ export default function SubServicesScreen() {
   const [entries, setEntries] = useState<SidebarEntry[]>([]);
   const [resolvedCategoryId, setResolvedCategoryId] = useState(catalogCategoryId);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [sheetVisible, setSheetVisible] = useState(false);
-  const [sheetGroup, setSheetGroup] = useState<StitchGroup | null>(null);
-  const [sheetSelectedId, setSheetSelectedId] = useState<number | null>(null);
-  const [qty, setQty] = useState(1);
-  const [designStyle, setDesignStyle] = useState<StitchingPreferences["design_style"] | undefined>(undefined);
-  const [embellishmentLevel, setEmbellishmentLevel] = useState<StitchingPreferences["embellishment_level"] | undefined>(undefined);
-  const [designNotes, setDesignNotes] = useState("");
 
   const selectedEntry = useMemo(
     () => entries.find((e) => e.key === selectedKey) ?? null,
@@ -673,91 +482,6 @@ export default function SubServicesScreen() {
       },
     } as never);
   }, [selectedEntry, resolvedCategoryId, categoryName, router]);
-
-  const _buildPending = useCallback(
-    (stitch: CatalogStitchingType, clampedQty: number) => {
-      const line = selectedEntry?.kind === "line" ? selectedEntry.line : undefined;
-      const isDes = stitch.name.toLowerCase().includes("designer");
-      return {
-        bookableServiceId: stitch.service_id,
-        serviceLineId: line?.id,
-        serviceLineName: line?.name ?? (selectedEntry?.name ?? ""),
-        stitchingType: stitch.name,
-        categoryId: resolvedCategoryId,
-        categoryName,
-        basePrice: stitch.base_price,
-        displayName: `${sheetGroup?.baseName ?? stitch.name} · ${isDes ? "Designer" : "Normal"}`,
-        imageUrl: stitch.image_url ?? line?.image_url ?? null,
-        quantity: clampedQty,
-      };
-    },
-    [selectedEntry, resolvedCategoryId, categoryName, sheetGroup],
-  );
-
-  const handleBook = useCallback(() => {
-    if (!sheetSelectedId || !sheetGroup || !selectedEntry) return;
-    setSheetVisible(false);
-
-    const stitch = sheetGroup.items.find((i) => i.service_id === sheetSelectedId);
-    if (!stitch) return;
-
-    const clampedQty = Math.min(99, Math.max(1, qty));
-    const pending = _buildPending(stitch, clampedQty);
-
-    if (!isAuthenticated) {
-      setPendingService(pending);
-      setBookingFlowActive(true);
-      setPendingRoute("/sub-services", {
-        catalogCategoryId: String(resolvedCategoryId),
-        categoryName,
-      });
-      safeRouterPush(router, "/(auth)/login");
-      return;
-    }
-
-    // Measurement is never collected from the customer - go straight to
-    // address selection; measurement is filled later by Bridge/employee at
-    // pickup, or by Admin.
-    setPendingService(pending);
-    setBookingFlowActive(true);
-    safeRouterPush(router, "/address");
-  }, [
-    sheetSelectedId, sheetGroup, selectedEntry, qty, resolvedCategoryId, categoryName,
-    isAuthenticated, setPendingService, setBookingFlowActive,
-    setPendingRoute, router, _buildPending,
-  ]);
-
-  const handleOrderNow = useCallback(() => {
-    if (!sheetSelectedId || !sheetGroup || !selectedEntry) return;
-    setSheetVisible(false);
-
-    const stitch = sheetGroup.items.find((i) => i.service_id === sheetSelectedId);
-    if (!stitch) return;
-
-    const clampedQty = Math.min(99, Math.max(1, qty));
-    const pending = _buildPending(stitch, clampedQty);
-
-    if (!isAuthenticated) {
-      setPendingService(pending);
-      setBuyNowMode(true);
-      setPendingRoute("/sub-services", {
-        catalogCategoryId: String(resolvedCategoryId),
-        categoryName,
-      });
-      safeRouterPush(router, "/(auth)/login");
-      return;
-    }
-
-    // Measurement is never collected from the customer - go straight to
-    // address selection (buy-now mode), then buy-now-review.
-    setPendingService(pending);
-    setBuyNowMode(true);
-    safeRouterPush(router, { pathname: "/address", params: { mode: "buy-now" } } as never);
-  }, [
-    sheetSelectedId, sheetGroup, selectedEntry, qty, resolvedCategoryId, categoryName,
-    isAuthenticated, setPendingService, setBuyNowMode,
-    setPendingRoute, router, _buildPending,
-  ]);
 
   const proceedDirect = useCallback(
     () => {
@@ -918,7 +642,7 @@ export default function SubServicesScreen() {
           onPress={() => router.back()}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="arrow-back" size={22} color={COLORS.black} />
+          <Ionicons name="arrow-back" size={22} color={COLORS.black} style={{ marginRight: 1.5 }} />
         </TouchableOpacity>
         <View style={scr.headerMid}>
           <View style={[scr.headerIcon, { backgroundColor: cs.bg }]}>
@@ -982,18 +706,6 @@ export default function SubServicesScreen() {
           </>
         )}
       </View>
-
-      <BookingSheet
-        visible={sheetVisible}
-        group={sheetGroup}
-        selectedId={sheetSelectedId}
-        qty={qty}
-        onSelectId={setSheetSelectedId}
-        onQtyChange={(n) => setQty(Math.min(99, Math.max(1, n)))}
-        onBook={handleBook}
-        onOrderNow={handleOrderNow}
-        onClose={() => setSheetVisible(false)}
-      />
     </View>
   );
 }
@@ -1137,83 +849,6 @@ const rp = StyleSheet.create({
   emptyText: { fontSize: 13, color: COLORS.gray, textAlign: "center" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   gridItem: { width: "47.5%" },
-});
-
-const bs = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  sheet: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: SPACING.md, paddingBottom: SPACING.lg, paddingTop: SPACING.md,
-  },
-  handle: {
-    width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.grayBorder,
-    alignSelf: "center", marginBottom: SPACING.md,
-  },
-  title: { fontSize: 17, fontWeight: "800", color: COLORS.black, letterSpacing: -0.3 },
-  subtitle: { fontSize: 13, color: COLORS.gray, marginTop: 2, marginBottom: SPACING.sm },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: COLORS.grayBorder, marginVertical: SPACING.md },
-  optionsWrap: { gap: 8 },
-  qualCard: {
-    flexDirection: "row", alignItems: "center", gap: 10, padding: 12,
-    borderRadius: RADIUS.lg, borderWidth: 1.5, borderColor: COLORS.grayBorder, backgroundColor: COLORS.white,
-  },
-  qualCardSel: { borderColor: COLORS.primaryDark, backgroundColor: "#f0fafb" },
-  qualIcon: {
-    width: 38, height: 38, borderRadius: RADIUS.md,
-    backgroundColor: COLORS.primaryLight, alignItems: "center", justifyContent: "center",
-  },
-  qualName: { fontSize: 15, fontWeight: "700", color: COLORS.black },
-  qualDesc: { fontSize: 11, color: COLORS.gray, marginTop: 2 },
-  qualPrice: { fontSize: 14, fontWeight: "800" },
-  radio: {
-    width: 20, height: 20, borderRadius: 10,
-    borderWidth: 2, borderColor: COLORS.grayBorder, alignItems: "center", justifyContent: "center",
-  },
-  radioSel: { borderColor: COLORS.primaryDark },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.primaryDark },
-  singleRow: {
-    flexDirection: "row", alignItems: "center", gap: 10, padding: 12,
-    borderRadius: RADIUS.lg, backgroundColor: COLORS.primaryLight,
-  },
-  singleName: { flex: 1, fontSize: 15, fontWeight: "700", color: COLORS.primaryDark },
-  qtyRow: {
-    flexDirection: "row", alignItems: "center",
-    justifyContent: "space-between", marginBottom: SPACING.sm,
-  },
-  qtyLabel: { fontSize: 15, fontWeight: "700", color: COLORS.black },
-  qtyCtrl: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: COLORS.offWhite, borderRadius: RADIUS.full,
-    borderWidth: 1, borderColor: COLORS.grayBorder, paddingHorizontal: 4,
-  },
-  qtyBtn: { width: 38, height: 38, alignItems: "center", justifyContent: "center" },
-  qtyVal: { minWidth: 32, textAlign: "center", fontSize: 16, fontWeight: "800", color: COLORS.black },
-  subtotalRow: {
-    flexDirection: "row", justifyContent: "space-between",
-    paddingVertical: SPACING.sm,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.grayBorder, marginBottom: SPACING.sm,
-  },
-  subtotalLabel: { fontSize: 13, color: COLORS.gray },
-  subtotalVal: { fontSize: 15, fontWeight: "800", color: COLORS.primaryDark },
-  bookBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, height: 52, borderRadius: RADIUS.md, backgroundColor: COLORS.primaryDark, marginBottom: SPACING.sm,
-    ...Platform.select({
-      ios: { shadowColor: "#0c6c75", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 10 },
-      android: { elevation: 5 },
-    }),
-  },
-  bookBtnDisabled: { opacity: 0.5 },
-  bookLabel: { fontSize: 16, fontWeight: "800", color: "#fff" },
-  addToCartBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, height: 48, borderRadius: RADIUS.md,
-    borderWidth: 1.5, borderColor: COLORS.primaryDark, marginBottom: SPACING.sm,
-  },
-  addToCartText: { fontSize: 15, fontWeight: "700", color: COLORS.primaryDark },
-  cancelLink: { alignItems: "center", paddingVertical: SPACING.sm },
-  cancelText: { fontSize: 14, fontWeight: "600", color: COLORS.gray },
 });
 
 const sk = StyleSheet.create({

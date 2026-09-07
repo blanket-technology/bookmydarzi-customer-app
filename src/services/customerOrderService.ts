@@ -25,6 +25,7 @@ import type {
   OrderDetailsPricingBlock,
   OrderDetailsServiceBlock,
   OrderDetailsTimelineItem,
+  PickupPartner,
   OrderSummaryBillingBlock,
   OrderSummaryDatesBlock,
   OrderSummaryDeliveryAddressBlock,
@@ -507,6 +508,17 @@ export function mapCustomerOrderSummaryPayload(
   };
 }
 
+function mapPickupPartner(raw: Record<string, unknown>): PickupPartner | null {
+  const partner = block(raw, "pickup_partner", "pickupPartner");
+  const name = nullableStr(partner.name);
+  if (!name) return null;
+  return {
+    name,
+    photo_url: nullableStr(partner.photo_url ?? partner.photoUrl),
+    mobile: nullableStr(partner.mobile),
+  };
+}
+
 function mapDetailsOrderBlock(raw: Record<string, unknown>): OrderDetailsOrderBlock {
   const order = block(raw, "order", "Order");
   return {
@@ -522,6 +534,7 @@ function mapDetailsOrderBlock(raw: Record<string, unknown>): OrderDetailsOrderBl
       ? ((order.image_references ?? order.ImageReferences) as unknown[]).map(String)
       : null,
     customization_notes: nullableStr(order.customization_notes ?? order.CustomizationNotes),
+    pickup_partner: mapPickupPartner(order),
   };
 }
 

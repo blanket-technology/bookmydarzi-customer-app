@@ -28,6 +28,7 @@ import {
   maskToken,
 } from "../services/api";
 import { getUserMobile, mergeUserMobile } from "../src/utils/userPhone";
+import { useSessionStore } from "../src/store/useSessionStore";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -396,6 +397,7 @@ registerLogoutCallback(async () => {
       loading: false,
       error: null,
     });
+    useSessionStore.getState().markExpired();
     if (__DEV__) {
       console.log("[AuthStore] forced logout - session cleared");
     }
@@ -404,11 +406,21 @@ registerLogoutCallback(async () => {
   }
 });
 
+// Safety fallback only - unlocks the splash screen if the rehydrate profile
+// fetch (onRehydrateStorage above) never settles at all, so the app doesn't
+// stay stuck on the splash forever. Must stay comfortably above the
+// backend's real response time (observed 700-1100ms) - a shorter timeout
+// routinely fires BEFORE the real profile lands, unlocking index.tsx's
+// role-based redirect with whatever stale role was persisted from a
+// previous session on this device (e.g. an old admin login), sending the
+// user into a route group they no longer have access to and firing
+// forbidden API calls before AuthGuard's defence-in-depth effect corrects
+// the route a moment later.
 setTimeout(() => {
   if (!useAuthStore.getState()._hasHydrated) {
     useAuthStore.getState().setHasHydrated(true);
   }
-}, 500);
+}, 4000);
 
 export const isLoggedIn = (state: AuthState) => state.isAuthenticated;
 

@@ -27,6 +27,7 @@ export function isRazorpayNativeAvailable(): boolean {
   if (isExpoGo()) return false;
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { NativeModules } = require("react-native");
     const hasNative =
       NativeModules.RNRazorpayCheckout != null ||

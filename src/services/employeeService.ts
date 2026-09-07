@@ -93,7 +93,7 @@ function normalizeOrder(raw: any): EmployeeOrder {
       raw.CustomerMobile ??
       raw.customer_mobile ??
       null,
-    address: addrParts.length ? addrParts.join(", ") : null,
+    address: addrParts.length ? addrParts.join(", ") : undefined,
     tailor_name: raw.TailorName ?? raw.tailor_name ?? null,
     total_amount:
       raw.FinalAmount ?? raw.final_amount ?? raw.total_amount ?? null,
@@ -166,6 +166,42 @@ export async function acceptOrder(
   });
 }
 
+/**
+ * Pending pickup-broadcast offers for this employee (Rapido-style FCFS). The
+ * order is auto-broadcast to nearby online employees when it reaches
+ * order_placed; the first to accept claims the pickup. Manual acceptOrder()
+ * from the queue remains a valid fallback.
+ */
+export async function listPickupBroadcastOffers(): Promise<any> {
+  return request<any>(`/employee/pickup-broadcasts`);
+}
+
+export async function acceptPickupBroadcast(
+  orderId: number,
+): Promise<EmployeeActionResponse> {
+  return request<EmployeeActionResponse>(
+    `/employee/orders/${orderId}/pickup-broadcast/accept`,
+    { method: "PATCH" },
+  );
+}
+
+export async function declinePickupBroadcast(
+  orderId: number,
+): Promise<{ message: string }> {
+  return request<{ message: string }>(
+    `/employee/orders/${orderId}/pickup-broadcast/decline`,
+    { method: "PATCH" },
+  );
+}
+
+/**
+ * @deprecated Backend docs mark this admin-only ("Not part of the employee
+ * pickup flow" - app/api/v1/endpoints/employee.py). Tailor assignment now
+ * happens via broadcast acceptance (see tailorService.ts's
+ * listBroadcastOffers/acceptBroadcast). Employees hand off collected cloth
+ * to whichever tailor accepted, via handToTailor(). Remove the employee
+ * tailor-selector UI that calls this once confirmed unused.
+ */
 export async function assignTailor(
   orderId: number,
   tailorId: number,
@@ -187,22 +223,16 @@ export async function rejectOrder(
 export async function schedulePickup(
   orderId: number,
   pickupType?: "instant" | "scheduled",
+  scheduledPickupAt?: string,
+  pickupTimeSlot?: string,
 ): Promise<EmployeeActionResponse> {
-  const body: Record<string, unknown> | undefined = pickupType
-    ? { pickup_type: pickupType }
-    : undefined;
+  const body: Record<string, unknown> = {};
+  if (pickupType) body.pickup_type = pickupType;
+  if (scheduledPickupAt) body.scheduled_pickup_at = scheduledPickupAt;
+  if (pickupTimeSlot) body.pickup_time_slot = pickupTimeSlot;
   return request<EmployeeActionResponse>(
     `/employee/orders/${orderId}/schedule-pickup`,
-    { method: "PATCH", body },
-  );
-}
-
-export async function markClothAtHub(
-  orderId: number,
-): Promise<EmployeeActionResponse> {
-  return request<EmployeeActionResponse>(
-    `/employee/orders/${orderId}/cloth-at-hub`,
-    { method: "PATCH" },
+    { method: "PATCH", body: Object.keys(body).length ? body : undefined },
   );
 }
 
@@ -214,20 +244,16 @@ export async function confirmPickup(
   });
 }
 
-export async function startStitching(
+/**
+ * Transitions picked_up → cloth_received_by_tailor. Requires a tailor to
+ * already be assigned (via broadcast acceptance) - this is the handover
+ * step, not tailor assignment itself (assign-tailor is now admin-only).
+ */
+export async function handToTailor(
   orderId: number,
 ): Promise<EmployeeActionResponse> {
   return request<EmployeeActionResponse>(
-    `/employee/orders/${orderId}/start-stitching`,
-    { method: "PATCH" },
-  );
-}
-
-export async function completeStitching(
-  orderId: number,
-): Promise<EmployeeActionResponse> {
-  return request<EmployeeActionResponse>(
-    `/employee/orders/${orderId}/complete-stitching`,
+    `/employee/orders/${orderId}/hand-to-tailor`,
     { method: "PATCH" },
   );
 }
@@ -256,6 +282,36 @@ export async function collectMeasurement(
 ): Promise<EmployeeActionResponse> {
   return request<EmployeeActionResponse>(
     `/employee/orders/${orderId}/measurement`,
+    { method: "POST", body: data as unknown as Record<string, unknown> },
+  );
+}
+
+export interface CollectPaymentInput {
+  method: "qr" | "cash";
+  amount: number;
+  notes?: string;
+}
+
+export interface CollectPaymentResponse {
+  message: string;
+  order_id: number;
+  order_code: string | null;
+  amount_collected: number;
+  payment_method: string;
+  remaining_amount: number;
+}
+
+/**
+ * Records balance payment collected at delivery. Once remaining_amount
+ * reaches 0, /complete will succeed - it hard-fails otherwise, no bypass
+ * (app/api/v1/endpoints/employee.py: complete_employee_order).
+ */
+export async function collectDeliveryPayment(
+  orderId: number,
+  data: CollectPaymentInput,
+): Promise<CollectPaymentResponse> {
+  return request<CollectPaymentResponse>(
+    `/employee/orders/${orderId}/collect-payment`,
     { method: "POST", body: data as unknown as Record<string, unknown> },
   );
 }

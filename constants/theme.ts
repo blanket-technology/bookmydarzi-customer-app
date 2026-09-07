@@ -1,3 +1,32 @@
+/**
+ * Typography scale - use these instead of hardcoding fontSize/fontWeight.
+ * Keeps the visual hierarchy consistent across every screen.
+ */
+export const TYPOGRAPHY = {
+  display: {
+    lg:  { fontSize: 28, fontWeight: "800" as const, lineHeight: 34, letterSpacing: -0.6 },
+    md:  { fontSize: 22, fontWeight: "800" as const, lineHeight: 28, letterSpacing: -0.4 },
+    sm:  { fontSize: 18, fontWeight: "800" as const, lineHeight: 24, letterSpacing: -0.3 },
+  },
+  heading: {
+    h1:  { fontSize: 24, fontWeight: "700" as const, lineHeight: 30, letterSpacing: -0.4 },
+    h2:  { fontSize: 20, fontWeight: "700" as const, lineHeight: 26, letterSpacing: -0.3 },
+    h3:  { fontSize: 17, fontWeight: "700" as const, lineHeight: 22, letterSpacing: -0.2 },
+  },
+  body: {
+    lg:  { fontSize: 16, fontWeight: "400" as const, lineHeight: 25 },
+    md:  { fontSize: 14, fontWeight: "400" as const, lineHeight: 21 },
+    sm:  { fontSize: 12, fontWeight: "400" as const, lineHeight: 17 },
+  },
+  label: {
+    lg:  { fontSize: 13, fontWeight: "700" as const, lineHeight: 18, letterSpacing: -0.1 },
+    md:  { fontSize: 11, fontWeight: "700" as const, lineHeight: 14, letterSpacing: 0.2 },
+    sm:  { fontSize: 9,  fontWeight: "700" as const, lineHeight: 12, letterSpacing: 0.5 },
+    caps:{ fontSize: 10, fontWeight: "700" as const, lineHeight: 13, letterSpacing: 1.4,
+           textTransform: "uppercase" as const },
+  },
+} as const;
+
 export const COLORS = {
   primary: "#1aa3b0",
   primaryDark: "#0c6c75",
@@ -29,11 +58,13 @@ export const FONTS = {
 };
 
 export const RADIUS = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 22,
-  full: 999,
+  xs:   4,    // tags, small badges
+  sm:   8,    // inputs, icon buttons
+  md:   12,   // list items, content cards
+  lg:   16,   // feature cards
+  xl:   22,   // large cards
+  xxl:  28,   // hero cards, bottom sheets
+  full: 999,  // pills, circles
 };
 
 export const SPACING = {

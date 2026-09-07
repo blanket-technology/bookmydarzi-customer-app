@@ -22,7 +22,17 @@ module.exports = {
   },
   android: {
     package: "com.darziapp.mobile",
-    googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ?? "",
+    // Must be nested under config.googleMaps.apiKey - Expo's prebuild plugin
+    // only injects the com.google.android.geo.API_KEY manifest meta-data
+    // from this exact path. A top-level android.googleMapsApiKey is silently
+    // ignored, so the native Google Maps SDK has no key in a release build
+    // and crashes on MapView inflate (works in Expo Go/dev-client only
+    // because those don't go through this same native manifest step).
+    config: {
+      googleMaps: {
+        apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ?? "",
+      },
+    },
     adaptiveIcon: {
       backgroundColor: "#E6F4FE",
       foregroundImage: "./assets/images/android-icon-foreground.png",

@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import ErrorState from "../src/components/common/ErrorState";
+import ScreenHeader from "../src/components/common/ScreenHeader";
 import { useAppLanguage } from "../src/i18n/useAppLanguage";
 import {
     fetchCatalogTree,
@@ -36,7 +37,6 @@ import {
     type ServiceRatings,
 } from "../src/services/catalogService";
 import { useCartStore } from "../src/store/useCartStore";
-import { useToastStore } from "../src/store/useToastStore";
 import type {
     CatalogDirectService,
     CatalogServiceLine,
@@ -139,7 +139,6 @@ export default function ServiceDetailsScreen() {
   const [serviceRatings, setServiceRatings] = useState<ServiceRatings | null>(null);
 
   const { t } = useAppLanguage();
-  const showToast = useToastStore((s) => s.show);
 
   const getQuantityForStitching = useCallback(
     (stitchingId: number) => {
@@ -295,8 +294,6 @@ export default function ServiceDetailsScreen() {
     [
       catalogCategoryId,
       categoryName,
-      paramBasePrice,
-      paramBookableId,
       paramSelectedStitchingId,
       serviceName,
       filterBaseName,
@@ -359,8 +356,6 @@ export default function ServiceDetailsScreen() {
     );
   }, [selectedStitching, paramDescription, serviceLine, directService]);
 
-  const unitPrice = selectedStitching?.base_price ?? paramBasePrice;
-
   const lowestPrice = useMemo(
     () =>
       stitchingTypes.length > 0
@@ -420,7 +415,7 @@ export default function ServiceDetailsScreen() {
     },
     [
       buildReturnParams, catalogCategoryId, categoryName,
-      directService?.name, getQuantityForStitching, isAuthenticated, router,
+      directService?.name, displayImage, getQuantityForStitching, isAuthenticated, router,
       selectedStitching, serviceLine, serviceName,
       setBookingFlowActive, setBuyNowMode, setPendingRoute, setPendingService,
       designStyle, embellishmentLevel, designNotes,
@@ -437,6 +432,27 @@ export default function ServiceDetailsScreen() {
     [_buildPendingAndNavigate],
   );
 
+  const navigateToRelatedLine = useCallback(
+    (relatedLine: CatalogServiceLine) => {
+      const firstStitch = relatedLine.stitching_types[0];
+      if (!firstStitch) return;
+      safeRouterPush(router, {
+        pathname: "/service-details",
+        params: {
+          catalogCategoryId: String(catalogCategoryId),
+          categoryName,
+          serviceName: relatedLine.name,
+          serviceLineId: String(relatedLine.id),
+          bookableServiceId: String(firstStitch.service_id),
+          basePrice: String(relatedLine.starting_price),
+          imageUrl: relatedLine.image_url ?? "",
+          description: relatedLine.description ?? "",
+        },
+      } as never);
+    },
+    [router, catalogCategoryId, categoryName],
+  );
+
   return (
     <View style={styles.root}>
       <ScrollView
@@ -446,22 +462,7 @@ export default function ServiceDetailsScreen() {
           { paddingTop: insets.top, paddingBottom: insets.bottom + 32 },
         ]}
       >
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => router.back()}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="arrow-back" size={22} color={COLORS.black} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {filterBaseName ?? serviceLine?.name ?? serviceName}
-          </Text>
-          {/* Wishlist heart removed. Transparent spacer (NOT styles.backBtn -
-              that draws a white circle) balances the back button so the title
-              stays centered in the 3-column header row. */}
-          <View style={styles.headerSpacer} />
-        </View>
+        <ScreenHeader title={filterBaseName ?? serviceLine?.name ?? serviceName} />
 
         <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, { height: heroHeight }]}>
           {displayImage ? (
@@ -854,6 +855,40 @@ export default function ServiceDetailsScreen() {
                 <Text style={styles.bookNowBtnText}>{t("service.bookNow")}</Text>
               </TouchableOpacity>
             </View>
+
+            {relatedLines.length > 0 ? (
+              <View style={styles.relatedSection}>
+                <Text style={styles.sectionTitle}>You might also like</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.relatedRow}
+                >
+                  {relatedLines.map((related) => (
+                    <TouchableOpacity
+                      key={related.id}
+                      style={styles.relatedCard}
+                      activeOpacity={0.85}
+                      onPress={() => navigateToRelatedLine(related)}
+                    >
+                      <Image
+                        source={{ uri: normalizeServiceImageUrl(related.image_url) ?? undefined }}
+                        style={styles.relatedCardImage}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        transition={150}
+                      />
+                      <Text style={styles.relatedCardName} numberOfLines={1}>
+                        {related.name}
+                      </Text>
+                      <Text style={styles.relatedCardPrice}>
+                        From ₹{related.starting_price}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -868,30 +903,6 @@ const styles = StyleSheet.create({
   // add their own marginBottom (it would stack on top of the gap) or
   // marginHorizontal (the padding here already sets the gutter).
   scroll: { paddingHorizontal: SPACING.md, gap: SPACING.md },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: SPACING.sm,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.white,
-    alignItems: "center",
-    justifyContent: "center",
-    ...SHADOW.card,
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: "center",
-    marginHorizontal: SPACING.sm,
-    fontSize: 16,
-    fontWeight: "800",
-    color: COLORS.black,
-  },
-  headerSpacer: { width: 36, height: 36 },
   heroCard: {
     borderRadius: RADIUS.xl,
     overflow: "hidden",
@@ -961,6 +972,40 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     marginBottom: SPACING.md,
     lineHeight: 18,
+  },
+  relatedSection: {
+    marginTop: SPACING.lg,
+  },
+  relatedRow: {
+    gap: SPACING.sm,
+    paddingRight: SPACING.md,
+  },
+  relatedCard: {
+    width: 132,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+  },
+  relatedCardImage: {
+    width: "100%",
+    height: 96,
+    backgroundColor: COLORS.grayLight,
+  },
+  relatedCardName: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.black,
+    marginTop: 6,
+    marginHorizontal: 8,
+  },
+  relatedCardPrice: {
+    fontSize: 11,
+    color: COLORS.gray,
+    marginTop: 2,
+    marginHorizontal: 8,
+    marginBottom: 8,
   },
   description: {
     fontSize: 15,

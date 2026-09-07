@@ -26,9 +26,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import CodConfirmModal from "../src/components/cart/CodConfirmModal";
+import { CouponSection, type AppliedOffer } from "../src/components/cart/CouponSection";
 import SlideToConfirm from "../src/components/cart/SlideToConfirm";
 import StyleReferencePicker from "../src/components/cart/StyleReferencePicker";
 import PickupDateCalendarModal from "../src/components/common/PickupDateCalendarModal";
+import ScreenHeader from "../src/components/common/ScreenHeader";
 import PaymentMethodSelector from "../src/components/orders/PaymentMethodSelector";
 import {
   createDirectOrder,
@@ -39,6 +41,7 @@ import { useAddressStore } from "../src/store/useAddressStore";
 import { useCartStore } from "../src/store/useCartStore";
 import { useCheckoutPreferencesStore } from "../src/store/useCheckoutPreferencesStore";
 import { useCustomerOrdersStore } from "../src/store/useCustomerOrdersStore";
+import { useHomeStore } from "../src/store/useHomeStore";
 import { useOrderStore } from "../src/store/useOrderStore";
 import type { ApiAddress } from "../src/types/api";
 import { PAYMENT_ACTION_LABELS, type PaymentMethodOption } from "../src/types/payment";
@@ -107,6 +110,15 @@ export default function BuyNowReviewScreen() {
   const [billing, setBilling] = useState<BillingEstimate | null>(null);
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingError, setBillingError] = useState("");
+
+  // Own local state, deliberately independent of useCartStore's applied-
+  // offer fields - Book Now bypasses the cart entirely (direct_order_service.py
+  // never touches CART/CART_ENTRIES), so it has no business reading or
+  // writing cart-domain state. specialOffers is the same homepage-payload
+  // list the cart screen already browses (useHomeStore, populated by
+  // GET /home) - no separate fetch needed here.
+  const specialOffers = useHomeStore((s) => s.specialOffers);
+  const [appliedOffer, setAppliedOffer] = useState<AppliedOffer | null>(null);
 
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
   const [pickupType, setPickupType] = useState<"instant" | "scheduled">("instant");
@@ -201,6 +213,21 @@ export default function BuyNowReviewScreen() {
   const cgstDisplay = billing ? `₹${Math.round(billing.cgst_amount).toLocaleString("en-IN")}` : "₹0";
   const sgstDisplay = billing ? `₹${Math.round(billing.sgst_amount).toLocaleString("en-IN")}` : "₹0";
 
+  // Client-side discount estimate for display only - create_direct_order
+  // recomputes and validates the real discount server-side from offer_id
+  // (same "the backend is authoritative" contract as cart.tsx). Applied on
+  // the full bill (after GST + platform fee), capped at the bill total so a
+  // flat discount larger than the order can never show a negative "you pay"
+  // amount.
+  const estimatedDiscount =
+    appliedOffer && billing && appliedOffer.discountValue > 0
+      ? appliedOffer.discountType === "flat"
+        ? Math.min(Math.round(appliedOffer.discountValue), billing.total_amount)
+        : Math.round(billing.total_amount * (appliedOffer.discountValue / 100) * 100) / 100
+      : 0;
+  const displayTotal = billing ? Math.max(billing.total_amount - estimatedDiscount, 1) : 0;
+  const displayTotalText = `₹${Math.round(displayTotal).toLocaleString("en-IN")}`;
+
   const canProceed =
     !!selectedAddressId &&
     !billingLoading &&
@@ -227,6 +254,7 @@ export default function BuyNowReviewScreen() {
         pickup_type: pickupType,
         payment_method: paymentMethod,
         stitching_preferences: pendingService.stitchingPreferences,
+        ...(appliedOffer ? { offer_id: appliedOffer.offerId } : {}),
         ...(scheduledPickupAt
           ? { scheduled_pickup_at: scheduledPickupAt, pickup_time_slot: scheduledSlot! }
           : {}),
@@ -303,8 +331,9 @@ export default function BuyNowReviewScreen() {
       setPlacing(false);
     }
   }, [
-    pendingService, selectedAddressId, billing,
+    pendingService, selectedAddressId, billing, appliedOffer,
     pickupType, scheduledDate, scheduledSlot, pickupTimeSlots, paymentMethod,
+    orderNotes, styleReferenceUri,
     clearPendingService, clearBuyNowMode, user, router,
   ]);
 
@@ -347,17 +376,7 @@ export default function BuyNowReviewScreen() {
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
       {/* Header */}
-      <View style={s.header}>
-        <TouchableOpacity
-          style={s.backBtn}
-          onPress={() => router.back()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="arrow-back" size={22} color={COLORS.black} />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>Bill Details</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <ScreenHeader title="Bill Details" />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
         {/* ── Service card ──────────────────────────────────── */}
@@ -431,8 +450,11 @@ export default function BuyNowReviewScreen() {
                   value={`₹${Math.round(billing.penalty_amount).toLocaleString("en-IN")}`}
                 />
               ) : null}
+              {estimatedDiscount > 0 ? (
+                <BillingRow label="Offer discount (est.)" value={`-₹${Math.round(estimatedDiscount).toLocaleString("en-IN")}`} />
+              ) : null}
               <View style={s.divider} />
-              <BillingRow label="Total" value={billing.total_amount_display} bold />
+              <BillingRow label="Total" value={estimatedDiscount > 0 ? displayTotalText : billing.total_amount_display} bold />
 
               {/* Payment method folded into the bill (matches Booking Details) -
                   no separate section, no redundant "Pay now / Pay on delivery"
@@ -448,6 +470,10 @@ export default function BuyNowReviewScreen() {
             </>
           ) : null}
         </View>
+
+        {/* ── Available offers + coupon code (matches cart, previously
+              missing entirely from Book Now) ───────────────────────── */}
+        <CouponSection offers={specialOffers} appliedOffer={appliedOffer} onChange={setAppliedOffer} />
 
         {/* ── Pickup type ───────────────────────────────────── */}
         <View style={s.card}>
@@ -561,7 +587,7 @@ export default function BuyNowReviewScreen() {
         <View style={s.footerInfo}>
           <Text style={s.footerLabel}>{paymentMethod === "cod" ? "Amount due" : "Pay now"}</Text>
           <Text style={s.footerAmt}>
-            {billing ? billing.total_amount_display : "-"}
+            {billing ? (estimatedDiscount > 0 ? displayTotalText : billing.total_amount_display) : "-"}
           </Text>
         </View>
         <View style={s.slideWrap}>
@@ -652,18 +678,6 @@ export default function BuyNowReviewScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.offWhite },
-  header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.grayBorder,
-    ...SHADOW.card,
-  },
-  backBtn: {
-    width: 36, height: 36, borderRadius: RADIUS.full,
-    alignItems: "center", justifyContent: "center",
-    backgroundColor: COLORS.grayLight,
-  },
-  headerTitle: { fontSize: 16, fontWeight: "700", color: COLORS.black },
   scroll: { padding: SPACING.md, gap: SPACING.md },
   card: {
     backgroundColor: COLORS.white, borderRadius: RADIUS.lg,

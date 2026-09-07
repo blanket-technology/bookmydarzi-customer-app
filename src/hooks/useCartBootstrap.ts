@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useCartStore } from "../store/useCartStore";
 
-/** Ensures an active cart exists — only for customer (user) role. */
+/** Ensures an active cart exists - only for customer (user) role. */
 export function useCartBootstrap() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const userRole = useAuthStore((s) => s.user?.role);

@@ -43,31 +43,7 @@ export interface DeviceTokenResult {
   created_at: string;
 }
 
-// ── Wishlist (/api/v1/wishlist) ─────────────────────────────────────────────
-
-export type WishlistItemType = "service" | "tailor";
-
-export interface WishlistItem {
-  id: number;
-  item_type: WishlistItemType;
-  service_id?: number | null;
-  tailor_id?: number | null;
-  name?: string | null;
-  image_url?: string | null;
-  price?: number | null;
-  created_at: string;
-}
-
-export interface WishlistCheckResult {
-  is_wishlisted: boolean;
-  wishlist_id?: number | null;
-}
-
-export interface WishlistAddPayload {
-  item_type: WishlistItemType;
-  service_id?: number;
-  tailor_id?: number;
-}
+// Wishlist types removed (Bug Report cycle 1, item 1.1 - feature removed).
 
 // ── Support (/api/v1/support) ───────────────────────────────────────────────
 

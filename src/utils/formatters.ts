@@ -6,6 +6,15 @@ export function formatPrice(amount: number): string {
   return `₹${amount.toLocaleString("en-IN")}`;
 }
 
+/** Exact amount with thousands separators, never compacted - use for order
+ * totals, billing breakdowns, and anywhere the precise figure matters.
+ * Prefer this over raw `${amount}` interpolation or ad-hoc .toFixed() calls. */
+export function formatCurrency(amount: number | string | null | undefined): string {
+  const n = typeof amount === "string" ? parseFloat(amount) : amount;
+  if (n == null || Number.isNaN(n)) return "₹0";
+  return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
 export function formatRelativeTime(isoTimestamp: string): string {
   const diffMs = Date.now() - new Date(isoTimestamp).getTime();
   const diffMins = Math.floor(diffMs / 60000);

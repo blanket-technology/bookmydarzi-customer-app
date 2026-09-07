@@ -15,8 +15,12 @@ export function getPaymentStatusVisual(
   if (norm === "fullypaid" || norm === "paid" || norm === "success" || norm === "completed") {
     return { label: "Fully Paid", color: "#065F46", bg: "#D1FAE5" };
   }
+  // Legacy status strings from before the full-upfront-payment change - the
+  // amount actually collected under either was the full order total, not a
+  // partial advance, so they're labeled the same as "Paid" rather than
+  // resurrecting advance/partial terminology.
   if (norm === "advancepaid" || norm === "partiallypaid") {
-    return { label: "Advance Paid", color: "#1E40AF", bg: "#DBEAFE" };
+    return { label: "Paid", color: "#065F46", bg: "#D1FAE5" };
   }
   if (norm === "balancepending" || norm === "balancedue") {
     return { label: "Balance Due", color: "#92400E", bg: "#FEF3C7" };
@@ -29,6 +33,9 @@ export function getPaymentStatusVisual(
   }
   if (norm === "refunded") {
     return { label: "Refunded", color: "#4B5563", bg: "#F3F4F6" };
+  }
+  if (norm === "codpending" || norm === "cod" || norm === "payondelivery") {
+    return { label: "Pay on Delivery", color: "#0c6c75", bg: "#e0f7f8" };
   }
   const label = (status ?? "")
     .replace(/_/g, " ")

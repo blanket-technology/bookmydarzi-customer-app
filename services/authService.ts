@@ -31,6 +31,7 @@ export interface User {
   last_name: string;
   name: string;
   email: string;
+  gender?: string;
   phone?: string;
   mobile?: string;
   phone_number?: string;
@@ -273,6 +274,14 @@ export async function logoutRequest(): Promise<void> {
     method: "POST",
     body: body as Record<string, unknown> | undefined,
     skipAuth: true,
+    // Best-effort server-side revoke - the caller already clears local
+    // session state regardless of outcome, so this doesn't need the full
+    // 3s/6s/10s retry backoff. But it does need ONE fast retry: logout is
+    // often the first request after the session sat idle, which is exactly
+    // when Railway's sleeping container fails the first request instantly
+    // ("Network request failed" in ~300ms, not a timeout) before waking up -
+    // a single short retry almost always lands once it's awake.
+    retryOverride: { maxRetries: 1, delayMs: 1500 },
   }).catch((e) => {
     if (__DEV__) {
       console.warn("[AuthService] logout request failed (ignored):", e?.message);
@@ -376,6 +385,7 @@ export async function fetchProfileRequest(): Promise<User | null> {
     phone: mobileDigits || undefined,
     mobile: mobileDigits || undefined,
     phone_number: mobileDigits || undefined,
+    gender: raw?.Gender ?? raw?.gender ?? undefined,
     address: raw?.Address ?? raw?.address ?? undefined,
     profile_image: normalizeProfileImageUrl(
       raw?.ProfileImageUrl ??

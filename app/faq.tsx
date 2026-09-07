@@ -2,22 +2,23 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, {
-  FadeIn,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
+    FadeIn,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
+import ScreenHeader from "../src/components/common/ScreenHeader";
 
 // ─── Static FAQ data ──────────────────────────────────────────────────────────
 
@@ -96,16 +97,16 @@ const FAQS: FaqItem[] = [
   {
     id: 6,
     category: "payments",
-    question: "What is the advance payment?",
+    question: "When do I need to pay for my order?",
     answer:
-      "We collect a small convenience fee (₹99) upfront to confirm your booking. The remaining balance is collected only after the service is completed and you are satisfied.",
+      "The full order amount is charged when you book, if paying online, or collected as a single payment at delivery if you choose Cash on Delivery. There's no separate advance or balance payment to track.",
   },
   {
     id: 7,
     category: "payments",
-    question: "When do I pay the remaining balance?",
+    question: "Can I pay a Cash on Delivery order online instead?",
     answer:
-      "Once your order is ready and handed over, you can pay the remaining balance through the app via the 'Pay Remaining Balance' button on the Order Details screen.",
+      "Yes - open the order from Order Details and choose to pay the full amount online any time before delivery, instead of paying cash when it arrives.",
   },
   {
     id: 8,
@@ -304,17 +305,7 @@ export default function FaqScreen() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => router.back()}
-          hitSlop={12}
-        >
-          <Ionicons name="arrow-back" size={22} color={COLORS.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>FAQs</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <ScreenHeader title="FAQs" />
 
       {/* Hero banner */}
       <View style={styles.hero}>
@@ -349,7 +340,7 @@ export default function FaqScreen() {
         ) : null}
       </View>
 
-      {/* Category chips — 3-per-row equal-width grid */}
+      {/* Category chips - 3-per-row equal-width grid */}
       <View style={styles.categoryGrid}>
         {categories.map((cat) => {
           const active = activeCategory === cat;
@@ -454,26 +445,6 @@ export default function FaqScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.offWhite },
-
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.grayBorder,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.offWhite,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { fontSize: 18, fontWeight: "800", color: COLORS.black },
 
   hero: {
     alignItems: "center",
