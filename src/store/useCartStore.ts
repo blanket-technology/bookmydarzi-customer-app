@@ -30,6 +30,7 @@ import type {
   CartCheckoutPayload,
   CartCheckoutResult,
   CartServiceEntry,
+  SelectedAddon,
   StitchingPreferences,
 } from "../types/cart";
 
@@ -49,6 +50,9 @@ export interface PendingCartItem {
   quantity?: number;
   /** Designer design brief - only collected when stitchingType is Designer. */
   stitchingPreferences?: StitchingPreferences;
+  /** Extras selected on the service detail screen (e.g. Button Replacement)
+   * before add-to-cart/book-now - see AddonPicker. */
+  addons?: SelectedAddon[];
 }
 
 interface CartState {

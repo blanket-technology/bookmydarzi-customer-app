@@ -59,3 +59,22 @@ export interface CatalogCategory {
 export interface CatalogCategoriesTreeResponse {
   categories: CatalogCategory[];
 }
+
+// ============================================================================
+// GET /catalog/services/{service_id}/addons
+// ============================================================================
+
+/** Optional per-service extra (e.g. Button Replacement, Shoulder Adjustment
+ * for a shirt repair) - mirrors ServiceAddonResponse in
+ * app/schemas/service_catalog.py. Selecting one folds its price additively
+ * into the service's price at checkout (see SelectedAddon in
+ * src/types/cart.ts). */
+export interface ServiceAddon {
+  id: number;
+  service_id: number;
+  name: string;
+  description?: string | null;
+  price: number;
+  display_order: number;
+  is_active: boolean;
+}

@@ -112,6 +112,21 @@ export default function CartItemCard({
         </View>
       ) : null}
 
+      {/* Selected extras (e.g. Button Replacement) - price already folded
+          into unitPrice/lineTotal below, shown here purely for a readable
+          breakdown of what's included. */}
+      {item.addons && item.addons.length > 0 ? (
+        <View style={styles.chipsRow}>
+          {item.addons.map((addon, idx) => (
+            <View key={addon.addonId || idx} style={[styles.chip, styles.addonChip]}>
+              <Text style={[styles.chipText, styles.addonChipText]}>
+                + {addon.name} (₹{addon.price.toLocaleString("en-IN")})
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
       {/* Design brief (Designer-tier stitching preferences) */}
       {hasDesignBrief ? (
         <View style={styles.designBriefWrap}>
@@ -277,6 +292,8 @@ const styles = StyleSheet.create({
   },
   chipMore: { backgroundColor: COLORS.grayLight, borderColor: COLORS.grayBorder },
   chipText: { fontSize: 9.5, fontWeight: "600", color: COLORS.primaryDark },
+  addonChip: { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" },
+  addonChipText: { color: "#92400E" },
 
   designBriefWrap: {
     paddingHorizontal: SPACING.sm + 2,
