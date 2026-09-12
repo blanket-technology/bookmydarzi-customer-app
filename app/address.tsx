@@ -673,6 +673,7 @@ export default function AddressScreen() {
         service_id: pendingService.bookableServiceId,
         quantity: pendingService.quantity ?? 1,
         tailor_id: pendingService.tailorId,
+        addons: pendingService.addons,
       };
 
       await addServiceEntry(payload, {

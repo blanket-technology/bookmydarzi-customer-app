@@ -7,6 +7,7 @@ import type {
   CartCheckoutResult,
   CartServiceEntry,
   CheckoutLineItem,
+  SelectedAddon,
   UpdateCartServiceEntryPayload,
 } from "../types/cart";
 import { EMPTY_CART } from "../types/cart";
@@ -27,6 +28,20 @@ function str(value: unknown, fallback = ""): string {
   return value == null ? fallback : String(value);
 }
 
+function mapSelectedAddons(raw: unknown): SelectedAddon[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    const r = asRecord(item);
+    return {
+      addonId: num(r.addon_id),
+      name: str(r.name, "Addon"),
+      price: num(r.price),
+      priceDisplay: r.price_display != null ? str(r.price_display) : undefined,
+      note: r.note != null ? str(r.note) : undefined,
+    };
+  });
+}
+
 function mapCartEntry(raw: Record<string, unknown>): CartServiceEntry {
   return {
     id: num(raw.entry_id ?? raw.id),
@@ -43,6 +58,7 @@ function mapCartEntry(raw: Record<string, unknown>): CartServiceEntry {
     lineTotalDisplay: str(raw.line_total_display, "₹0"),
     notes: raw.notes != null ? str(raw.notes) : null,
     stitchingPreferences: (raw.stitching_preferences as CartServiceEntry["stitchingPreferences"]) ?? null,
+    addons: mapSelectedAddons(raw.addons),
   };
 }
 
@@ -182,6 +198,12 @@ export async function addCartServiceEntry(
   }
   if (payload.stitching_preferences) {
     body.stitching_preferences = payload.stitching_preferences;
+  }
+  if (payload.addons?.length) {
+    body.addons = payload.addons.map((a) => ({
+      addon_id: a.addonId,
+      ...(a.note?.trim() ? { note: a.note.trim() } : {}),
+    }));
   }
 
   const res = await request<unknown>(`${BASE}/service-entry`, {

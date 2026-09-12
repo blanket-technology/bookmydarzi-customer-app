@@ -185,7 +185,8 @@ export default function BuyNowReviewScreen() {
     if (!pendingService?.bookableServiceId) return;
     setBillingLoading(true);
     setBillingError("");
-    getBillingEstimate(pendingService.bookableServiceId, 1)
+    const addonIds = (pendingService.addons ?? []).map((a) => a.addonId);
+    getBillingEstimate(pendingService.bookableServiceId, 1, addonIds)
       .then(setBilling)
       .catch((err) => {
         setBillingError(
@@ -193,7 +194,11 @@ export default function BuyNowReviewScreen() {
         );
       })
       .finally(() => setBillingLoading(false));
-  }, [pendingService?.bookableServiceId]);
+    // Same reasoning as service-details.tsx's addon fetch effect - depend on
+    // the ids themselves (joined), not the array reference, since
+    // pendingService.addons is a new array identity on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingService?.bookableServiceId, (pendingService?.addons ?? []).map((a) => a.addonId).join(",")]);
 
   const selectedAddress = addresses.find((a) => a.id === selectedAddressId);
 
@@ -254,6 +259,7 @@ export default function BuyNowReviewScreen() {
         pickup_type: pickupType,
         payment_method: paymentMethod,
         stitching_preferences: pendingService.stitchingPreferences,
+        ...(pendingService.addons?.length ? { addons: pendingService.addons } : {}),
         ...(appliedOffer ? { offer_id: appliedOffer.offerId } : {}),
         ...(scheduledPickupAt
           ? { scheduled_pickup_at: scheduledPickupAt, pickup_time_slot: scheduledSlot! }
@@ -412,6 +418,18 @@ export default function BuyNowReviewScreen() {
               </Text>
             </View>
           </LinearGradient>
+          {pendingService.addons && pendingService.addons.length > 0 ? (
+            <View style={s.addonsSummary}>
+              {pendingService.addons.map((a) => (
+                <View key={a.addonId} style={s.addonSummaryRow}>
+                  <Text style={s.addonSummaryName}>+ {a.name}</Text>
+                  <Text style={s.addonSummaryPrice}>
+                    ₹{a.price.toLocaleString("en-IN")}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
         </View>
 
         {/* ── Reference style image (matches cart, item 4.1) ─── */}
@@ -699,6 +717,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 4,
   },
   priceText: { fontSize: 15, fontWeight: "800", color: "#fff" },
+  addonsSummary: {
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.sm, paddingTop: 2,
+    gap: 4,
+  },
+  addonSummaryRow: { flexDirection: "row", justifyContent: "space-between" },
+  addonSummaryName: { fontSize: 12, color: COLORS.gray, flexShrink: 1 },
+  addonSummaryPrice: { fontSize: 12, fontWeight: "700", color: COLORS.gray },
   tagRow: {
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: SPACING.md, paddingVertical: 8,

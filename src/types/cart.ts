@@ -11,6 +11,19 @@ export interface StitchingPreferences {
   reference_photo_url?: string;
 }
 
+/** One optional extra selected for a service (e.g. Button Replacement for a
+ * shirt repair) - mirrors SelectedAddonSchema/SelectedAddonResponseSchema in
+ * app/schemas/cart.py. `name`/`price` are snapshotted at selection time on
+ * the backend (see ServiceAddon docstring), so they stay accurate for
+ * display even if the admin later edits or removes the underlying addon. */
+export interface SelectedAddon {
+  addonId: number;
+  name: string;
+  price: number;
+  priceDisplay?: string;
+  note?: string;
+}
+
 /** One line in `service_entries` on the cart payload. Measurement is never
  * supplied or shown by the customer - it's collected later by Bridge/employee
  * at pickup or by Admin. */
@@ -29,6 +42,10 @@ export interface CartServiceEntry {
   lineTotalDisplay: string;
   notes: string | null;
   stitchingPreferences: StitchingPreferences | null;
+  /** Selected extras, already folded additively into unitPrice/lineTotal by
+   * the backend (see cart_service.py's _resolve_addons) - kept separately
+   * here purely for display (e.g. "+ Button Replacement" under the item). */
+  addons: SelectedAddon[];
 }
 
 /** Maps 1:1 to the `billing` object on the cart payload. */
@@ -106,6 +123,9 @@ export interface AddCartServiceEntryPayload {
   tailor_id?: number;
   customization_notes?: string;
   stitching_preferences?: StitchingPreferences;
+  /** Selected extras for this entry - see SelectedAddon above. Must belong
+   * to the same service_id (enforced server-side). */
+  addons?: SelectedAddon[];
 }
 
 export interface UpdateCartServiceEntryPayload {

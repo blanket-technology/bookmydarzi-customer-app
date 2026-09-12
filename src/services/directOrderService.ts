@@ -1,5 +1,5 @@
 import { request } from "../../services/api";
-import type { CartCheckoutResult, StitchingPreferences } from "../types/cart";
+import type { CartCheckoutResult, SelectedAddon, StitchingPreferences } from "../types/cart";
 import { generateIdempotencyKey } from "../utils/idempotencyKey";
 
 export interface BillingEstimate {
@@ -37,6 +37,8 @@ export interface DirectOrderPayload {
   customization_notes?: string;
   /** Reference style image URLs. */
   image_references?: string[];
+  /** Extras selected on the service detail screen - see AddonPicker. */
+  addons?: SelectedAddon[];
 }
 
 function asRecord(raw: unknown): Record<string, unknown> {
@@ -55,10 +57,11 @@ function str(v: unknown, fallback = ""): string {
 export async function getBillingEstimate(
   serviceId: number,
   quantity = 1,
+  addonIds: number[] = [],
 ): Promise<BillingEstimate> {
-  const raw = await request<unknown>(
-    `/orders/billing-estimate?service_id=${serviceId}&quantity=${quantity}`,
-  );
+  const qs = new URLSearchParams({ service_id: String(serviceId), quantity: String(quantity) });
+  if (addonIds.length > 0) qs.set("addon_ids", addonIds.join(","));
+  const raw = await request<unknown>(`/orders/billing-estimate?${qs.toString()}`);
   const r = asRecord(raw);
   return {
     service_id: num(r.service_id, serviceId),
@@ -122,6 +125,9 @@ export async function createDirectOrder(
       scheduled_pickup_at: payload.scheduled_pickup_at,
       pickup_time_slot: payload.pickup_time_slot,
       stitching_preferences: payload.stitching_preferences,
+      ...(payload.addons?.length
+        ? { addons: payload.addons.map((a) => ({ addon_id: a.addonId, ...(a.note?.trim() ? { note: a.note.trim() } : {}) })) }
+        : {}),
     },
     // Same reasoning as cart checkout - makes the request wrapper's built-in
     // network-failure retry (and an accidental double-tap) safe.

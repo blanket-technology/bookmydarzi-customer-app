@@ -5,6 +5,7 @@ import type {
     CatalogDirectService,
     CatalogServiceLine,
     CatalogStitchingType,
+    ServiceAddon,
 } from "../types/catalogApi";
 import { extractImageUrlFromRecord } from "../utils/serviceImage";
 
@@ -139,6 +140,33 @@ export async function fetchCatalogTree(): Promise<CatalogCategoriesTreeResponse>
     });
 
   return _catalogTreePromise;
+}
+
+function mapServiceAddon(raw: Record<string, unknown>): ServiceAddon {
+  return {
+    id: Number(raw.id ?? 0),
+    service_id: Number(raw.service_id ?? 0),
+    name: String(raw.name ?? ""),
+    description: (raw.description ?? null) as string | null,
+    price: Number(raw.price ?? 0),
+    display_order: Number(raw.display_order ?? 0),
+    is_active: Boolean(raw.is_active ?? true),
+  };
+}
+
+/** GET /catalog/services/{service_id}/addons - optional per-service extras
+ * (e.g. Button Replacement for a shirt repair), shown on the service detail
+ * screen between the price and Add to Cart/Book Now buttons. Non-fatal on
+ * failure, matching bookmydarzi-web-final's getServiceAddons - the picker
+ * simply doesn't render rather than blocking the whole screen. */
+export async function fetchServiceAddons(serviceId: number): Promise<ServiceAddon[]> {
+  if (serviceId <= 0) return [];
+  try {
+    const res = await request<unknown>(`/catalog/services/${serviceId}/addons`, { skipAuth: true });
+    return Array.isArray(res) ? res.map((raw) => mapServiceAddon(raw as Record<string, unknown>)) : [];
+  } catch {
+    return [];
+  }
 }
 
 /** GET /catalog/categories/{categoryId} (fallback when tree lookup is empty) */

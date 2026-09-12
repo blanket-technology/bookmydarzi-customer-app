@@ -24,11 +24,13 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
+import AddonPicker from "../src/components/service/AddonPicker";
 import ErrorState from "../src/components/common/ErrorState";
 import ScreenHeader from "../src/components/common/ScreenHeader";
 import { useAppLanguage } from "../src/i18n/useAppLanguage";
 import {
     fetchCatalogTree,
+    fetchServiceAddons,
     fetchServiceRatings,
     findDirectServiceByName,
     findServiceLine,
@@ -41,11 +43,12 @@ import type {
     CatalogDirectService,
     CatalogServiceLine,
     CatalogStitchingType,
+    ServiceAddon,
 } from "../src/types/catalogApi";
 import { safeRouterPush } from "../src/utils/safeNavigation";
 import { normalizeServiceImageUrl } from "../src/utils/serviceImage";
 import { useAuthStore } from "../store/useAuthStore";
-import type { StitchingPreferences } from "../src/types/cart";
+import type { SelectedAddon, StitchingPreferences } from "../src/types/cart";
 
 const CATEGORY_ICONS: Record<string, { icon: string; color: string; bg: string }> = {
   mens: { icon: "shirt-outline", color: "#0c6c75", bg: "#e0f7f8" },
@@ -137,6 +140,8 @@ export default function ServiceDetailsScreen() {
     Record<number, number>
   >({});
   const [serviceRatings, setServiceRatings] = useState<ServiceRatings | null>(null);
+  const [addons, setAddons] = useState<ServiceAddon[]>([]);
+  const [selectedAddons, setSelectedAddons] = useState<SelectedAddon[]>([]);
 
   const { t } = useAppLanguage();
 
@@ -329,6 +334,33 @@ export default function ServiceDetailsScreen() {
     [selectedStitchingId, stitchingTypes],
   );
 
+  // Add-ons are per-service (see ServiceAddon.ServiceId) - refetch and clear
+  // any prior selection whenever the customer switches stitching type
+  // (Normal/Designer), since one variant's extras don't apply to another.
+  useEffect(() => {
+    setSelectedAddons([]);
+    if (!selectedStitching || selectedStitching.service_id <= 0) {
+      setAddons([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchServiceAddons(selectedStitching.service_id).then((result) => {
+      if (!cancelled) setAddons(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Deliberately keyed on service_id alone, not the whole selectedStitching
+    // object (a new object identity on every catalog refetch would otherwise
+    // re-fetch addons and wipe the customer's selection for no reason).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStitching?.service_id]);
+
+  const addonsTotal = useMemo(
+    () => selectedAddons.reduce((sum, a) => sum + a.price, 0),
+    [selectedAddons],
+  );
+
   // Selected variant's own photo (e.g. Designer Kurti's actual photo) wins
   // over the shared line image, so the hero updates when the customer
   // switches quality - falls back to the line/param/category image only
@@ -392,6 +424,7 @@ export default function ServiceDetailsScreen() {
               design_notes: designNotes.trim() || undefined,
             }
           : undefined,
+        addons: selectedAddons.length > 0 ? selectedAddons : undefined,
       };
       if (!isAuthenticated) {
         setPendingService(pendingItem);
@@ -418,7 +451,7 @@ export default function ServiceDetailsScreen() {
       directService?.name, displayImage, getQuantityForStitching, isAuthenticated, router,
       selectedStitching, serviceLine, serviceName,
       setBookingFlowActive, setBuyNowMode, setPendingRoute, setPendingService,
-      designStyle, embellishmentLevel, designNotes,
+      designStyle, embellishmentLevel, designNotes, selectedAddons,
     ],
   );
 
@@ -701,9 +734,20 @@ export default function ServiceDetailsScreen() {
                           <Text style={styles.stitchDesc}>{stitchDesc}</Text>
                         ) : null}
                         <View style={styles.stitchMeta}>
-                          <Text style={styles.stitchPrice}>
-                            {formatMoney(stitching.base_price)}
-                          </Text>
+                          <View>
+                            <Text style={styles.stitchPrice}>
+                              {formatMoney(
+                                selected && addonsTotal > 0
+                                  ? stitching.base_price + addonsTotal
+                                  : stitching.base_price,
+                              )}
+                            </Text>
+                            {selected && addonsTotal > 0 ? (
+                              <Text style={styles.stitchPriceBase}>
+                                {formatMoney(stitching.base_price)} + extras
+                              </Text>
+                            ) : null}
+                          </View>
                           <View style={styles.deliveryBadge}>
                             <Ionicons name="time-outline" size={11} color="#065F46" />
                             <Text style={styles.deliveryBadgeText}>{deliveryDays}d</Text>
@@ -772,6 +816,12 @@ export default function ServiceDetailsScreen() {
                             />
                           </TouchableOpacity>
                         </View>
+                      </View>
+                    ) : null}
+
+                    {selected && addons.length > 0 ? (
+                      <View style={styles.addonsWrap}>
+                        <AddonPicker addons={addons} onChange={setSelectedAddons} />
                       </View>
                     ) : null}
 
@@ -1113,6 +1163,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     color: COLORS.primaryDark,
+  },
+  stitchPriceBase: {
+    fontSize: 10.5,
+    fontWeight: "600",
+    color: COLORS.gray,
+  },
+  addonsWrap: {
+    marginTop: SPACING.md,
+    paddingTop: SPACING.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(12, 108, 117, 0.12)",
   },
   deliveryBadge: {
     flexDirection: "row",
