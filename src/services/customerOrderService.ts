@@ -636,6 +636,20 @@ function mapDetailsLineItems(raw: Record<string, unknown>): OrderDetailsLineItem
         row.stitching_preferences && typeof row.stitching_preferences === "object"
           ? (row.stitching_preferences as OrderDetailsLineItem["stitching_preferences"])
           : null,
+      addons: mapLineItemAddons(row.addons),
+    };
+  });
+}
+
+function mapLineItemAddons(raw: unknown): OrderDetailsLineItem["addons"] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((entry) => {
+    const row = entry as Record<string, unknown>;
+    return {
+      addon_id: nullableNum(row.addon_id ?? row.addonId),
+      name: nullableStr(row.name) ?? "Addon",
+      price: nullableNum(row.price) ?? 0,
+      note: nullableStr(row.note),
     };
   });
 }

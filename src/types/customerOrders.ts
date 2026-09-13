@@ -232,6 +232,15 @@ export interface OrderDetailsTimelineItem {
  * line_items[]). A direct/buy-now order always has exactly one; a
  * cart-checkout order can have several (e.g. Men's Shirt + Kids Clothing +
  * Alteration in the same booking), each with its own measurement. */
+/** One extra selected for a line item, at booking or added later by
+ * Bridge/employee at pickup (e.g. Button Replacement). */
+export interface OrderDetailsLineItemAddon {
+  addon_id: number | null;
+  name: string;
+  price: number;
+  note: string | null;
+}
+
 export interface OrderDetailsLineItem {
   order_item_id: number | null;
   person_name: string | null;
@@ -252,6 +261,7 @@ export interface OrderDetailsLineItem {
     design_notes?: string;
     reference_photo_url?: string;
   } | null;
+  addons: OrderDetailsLineItemAddon[];
 }
 
 export interface CustomerOrderDetailsPayload {
