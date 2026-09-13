@@ -1002,6 +1002,7 @@ export default function OrderDetailsScreen() {
                   unit_price: payload.service.base_price,
                   line_total: null,
                   measurement: null,
+                  addons: [],
                 },
               ]
           ).map((item, idx, arr) => (
@@ -1035,6 +1036,15 @@ export default function OrderDetailsScreen() {
                 label="Base price"
                 value={detailsMoney(item.unit_price)}
               />
+              {item.addons.map((addon, ai) => (
+                <React.Fragment key={addon.addon_id ?? ai}>
+                  <RowDivider />
+                  <InfoRow
+                    label={`+ ${addon.name}`}
+                    value={detailsMoney(addon.price)}
+                  />
+                </React.Fragment>
+              ))}
               {item.quantity > 1 ? (
                 <>
                   <RowDivider />
