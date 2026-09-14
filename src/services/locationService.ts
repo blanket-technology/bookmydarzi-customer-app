@@ -8,6 +8,7 @@
  */
 import * as Location from "expo-location";
 import { buildApiV1Url } from "../config/api";
+import { request } from "../../services/api";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,7 +30,12 @@ export interface ReverseGeocodeResult {
 
 export interface ServiceabilityResult {
   serviceable: boolean;
+  // Serviceable branch: the covered area the point falls inside.
   city: string | null;
+  // Unserviceable branch: the nearest area we DO cover (see the backend's
+  // ServiceabilityResponseSchema - this used to be silently dropped by a
+  // schema/field-name mismatch, now fixed).
+  nearest_city?: string | null;
   distance_km: number | null;
   estimated_pickup_hours: number | null;
   message: string;
@@ -540,4 +546,30 @@ export async function checkServiceabilityByAddress(fields: {
   const res = await fetch(url, { method: "GET" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<ServiceabilityResult>;
+}
+
+// ---------------------------------------------------------------------------
+// "Notify me" capture for unserviceable areas
+// ---------------------------------------------------------------------------
+
+/**
+ * Registers a customer's interest in an area we don't yet serve - shown as
+ * a "Notify me" action wherever a serviceability check fails (see
+ * app/address.tsx's serviceability badge, app/buy-now-review.tsx's place-
+ * order error). Coordinates are optional - the backend best-effort forward-
+ * geocodes city/pincode server-side when omitted. Requires the customer to
+ * be logged in (uses the authenticated `request()` wrapper), which is
+ * already true everywhere this is called from.
+ */
+export async function registerServiceAreaInterest(payload: {
+  latitude?: number | null;
+  longitude?: number | null;
+  city?: string | null;
+  pincode?: string | null;
+  address_text?: string | null;
+}): Promise<{ message: string }> {
+  return request<{ message: string }>("/location/service-area-interest", {
+    method: "POST",
+    body: payload,
+  });
 }

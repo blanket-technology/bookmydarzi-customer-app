@@ -46,6 +46,7 @@ import {
     ServiceabilityResult,
     checkServiceability,
     getCurrentGpsCoords,
+    registerServiceAreaInterest,
     reverseGeocodeCoords,
 } from "../src/services/locationService";
 import { useAddressStore } from "../src/store/useAddressStore";
@@ -206,6 +207,9 @@ export default function AddressScreen() {
   const [serviceability, setServiceability] =
     useState<ServiceabilityResult | null>(null);
   const [mapPickerVisible, setMapPickerVisible] = useState(false);
+  // "Notify me" capture for the unserviceable-area badge below - see
+  // registerServiceAreaInterest.
+  const [interestState, setInterestState] = useState<"idle" | "submitting" | "done">("idle");
 
   useFocusEffect(
     useCallback(() => {
@@ -469,6 +473,7 @@ export default function AddressScreen() {
       try {
         const svc = await checkServiceability(coords.latitude, coords.longitude);
         setServiceability(svc);
+        setInterestState("idle");
         if (!svc.serviceable) {
           Alert.alert(
             "Not serviceable yet",
@@ -512,6 +517,7 @@ export default function AddressScreen() {
       try {
         const svc = await checkServiceability(picked.latitude, picked.longitude);
         setServiceability(svc);
+        setInterestState("idle");
         if (!svc.serviceable) {
           Alert.alert(
             "Not serviceable yet",
@@ -566,6 +572,23 @@ export default function AddressScreen() {
       return editAddress(editingId, payload);
     }
     return saveAddress(payload);
+  };
+
+  const handleRegisterInterest = async () => {
+    if (!gpsCoords) return;
+    setInterestState("submitting");
+    try {
+      await registerServiceAreaInterest({
+        latitude: gpsCoords.latitude,
+        longitude: gpsCoords.longitude,
+        city: city || null,
+        pincode: pincode || null,
+        address_text: [line1, city].filter(Boolean).join(", ") || null,
+      });
+      setInterestState("done");
+    } catch {
+      setInterestState("idle");
+    }
   };
 
   const handleSaveAddress = async (): Promise<ApiAddress | null> => {
@@ -860,27 +883,55 @@ export default function AddressScreen() {
                       : styles.svcBadgeFail,
                   ]}
                 >
-                  <Ionicons
-                    name={
-                      serviceability.serviceable
-                        ? "checkmark-circle-outline"
-                        : "close-circle-outline"
-                    }
-                    size={16}
-                    color={serviceability.serviceable ? "#059669" : "#dc2626"}
-                  />
-                  <Text
-                    style={[
-                      styles.svcBadgeText,
-                      serviceability.serviceable
-                        ? styles.svcBadgeTextOk
-                        : styles.svcBadgeTextFail,
-                    ]}
-                  >
-                    {serviceability.serviceable
-                      ? `We deliver here${serviceability.city ? ` · ${serviceability.city}` : ""}${serviceability.distance_km != null ? ` · ${serviceability.distance_km} km away` : ""}`
-                      : serviceability.message || "We don't deliver to this area yet"}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+                    <Ionicons
+                      name={
+                        serviceability.serviceable
+                          ? "checkmark-circle-outline"
+                          : "close-circle-outline"
+                      }
+                      size={16}
+                      color={serviceability.serviceable ? "#059669" : "#dc2626"}
+                      style={{ marginTop: 1 }}
+                    />
+                    <Text
+                      style={[
+                        styles.svcBadgeText,
+                        serviceability.serviceable
+                          ? styles.svcBadgeTextOk
+                          : styles.svcBadgeTextFail,
+                      ]}
+                    >
+                      {serviceability.serviceable
+                        ? `We deliver here${serviceability.city ? ` · ${serviceability.city}` : ""}${serviceability.distance_km != null ? ` · ${serviceability.distance_km} km away` : ""}`
+                        : serviceability.message || "We don't deliver to this area yet"}
+                    </Text>
+                  </View>
+                  {!serviceability.serviceable ? (
+                    <TouchableOpacity
+                      onPress={handleRegisterInterest}
+                      disabled={interestState === "submitting" || interestState === "done"}
+                      style={{
+                        marginTop: 8,
+                        alignSelf: "flex-start",
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: "#dc2626",
+                        opacity: interestState === "submitting" ? 0.6 : 1,
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#dc2626" }}>
+                        {interestState === "done"
+                          ? "Thanks! We'll notify you 🎉"
+                          : interestState === "submitting"
+                            ? "Submitting..."
+                            : "I'm interested — notify me"}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               ) : null}
 
