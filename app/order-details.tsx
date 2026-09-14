@@ -889,6 +889,20 @@ export default function OrderDetailsScreen() {
   const isDelivered =
     (payload?.order.status ?? "").toLowerCase() === "delivered";
 
+  // pricing.base_amount already has any selected add-ons folded into it
+  // (backend: unit_price = base + addons) - shown alone as one "Base
+  // amount" row it didn't reconcile with the per-item add-on tags shown
+  // higher up on this same screen. Split it back out purely for display so
+  // the two sections agree instead of looking like conflicting numbers.
+  const addonsTotal =
+    payload?.line_items.reduce(
+      (sum, item) =>
+        sum +
+        (item.addons ?? []).reduce((s, a) => s + a.price * item.quantity, 0),
+      0,
+    ) ?? 0;
+  const serviceSubtotal = (Number(payload?.pricing.base_amount) || 0) - addonsTotal;
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <ScreenHeader title="Booking details" />
@@ -1180,10 +1194,26 @@ export default function OrderDetailsScreen() {
           ))}
 
           <AccordionSection title="Price breakdown" defaultOpen>
-            <BillRow
-              label="Base amount"
-              value={detailsMoney(payload.pricing.base_amount)}
-            />
+            {addonsTotal > 0 ? (
+              <>
+                <BillRow
+                  label="Service subtotal"
+                  value={detailsMoney(serviceSubtotal)}
+                />
+                <RowDivider />
+                <BillRow label="Add-ons" value={detailsMoney(addonsTotal)} />
+                <RowDivider />
+                <BillRow
+                  label="Base amount"
+                  value={detailsMoney(payload.pricing.base_amount)}
+                />
+              </>
+            ) : (
+              <BillRow
+                label="Base amount"
+                value={detailsMoney(payload.pricing.base_amount)}
+              />
+            )}
             {Number(payload.pricing.discount_amount) > 0 ? (
               <>
                 <RowDivider />
