@@ -37,6 +37,7 @@ import {
   getBillingEstimate,
   type BillingEstimate,
 } from "../src/services/directOrderService";
+import { registerServiceAreaInterest } from "../src/services/locationService";
 import { useAddressStore } from "../src/store/useAddressStore";
 import { useCartStore } from "../src/store/useCartStore";
 import { useCheckoutPreferencesStore } from "../src/store/useCheckoutPreferencesStore";
@@ -329,10 +330,33 @@ export default function BuyNowReviewScreen() {
         },
       } as never);
     } catch (err) {
-      Alert.alert(
-        "Could not place order",
-        err instanceof Error ? err.message : "Something went wrong. Please try again.",
-      );
+      const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      if (/outside our current service area/i.test(message) && selectedAddress) {
+        Alert.alert("Could not place order", message, [
+          {
+            text: "I'm interested — notify me",
+            onPress: () => {
+              registerServiceAreaInterest({
+                latitude: selectedAddress.latitude ?? null,
+                longitude: selectedAddress.longitude ?? null,
+                city: selectedAddress.city ?? null,
+                pincode: selectedAddress.pincode ?? null,
+                address_text: [selectedAddress.address_line_1, selectedAddress.city]
+                  .filter(Boolean)
+                  .join(", "),
+              }).catch(() => {
+                // Best-effort - the customer already saw the "could not
+                // place order" message either way, don't chain a second
+                // error alert on top of it if this fails silently.
+              });
+              Alert.alert("Thanks!", "We'll notify you when we launch in your area.");
+            },
+          },
+          { text: "OK", style: "cancel" },
+        ]);
+      } else {
+        Alert.alert("Could not place order", message);
+      }
     } finally {
       setPlacing(false);
     }
