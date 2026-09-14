@@ -15,13 +15,17 @@ module.exports = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: "com.darziapp.mobile",
+    buildNumber: "1",
     infoPlist: {
       NSPhotoLibraryUsageDescription:
         "Allow BookMyDarzi to access your photos to update your profile picture.",
+      NSCameraUsageDescription:
+        "Allow BookMyDarzi to use your camera to capture order progress photos.",
     },
   },
   android: {
     package: "com.darziapp.mobile",
+    versionCode: 1,
     // Must be nested under config.googleMaps.apiKey - Expo's prebuild plugin
     // only injects the com.google.android.geo.API_KEY manifest meta-data
     // from this exact path. A top-level android.googleMapsApiKey is silently
@@ -44,6 +48,7 @@ module.exports = {
     permissions: [
       "android.permission.ACCESS_FINE_LOCATION",
       "android.permission.ACCESS_COARSE_LOCATION",
+      "android.permission.CAMERA",
     ],
   },
   web: {
@@ -99,12 +104,14 @@ module.exports = {
       {
         photosPermission:
           "Allow BookMyDarzi to access your photos to update your profile picture.",
-        cameraPermission: false,
+        cameraPermission:
+          "Allow BookMyDarzi to use your camera to capture order progress photos.",
         microphonePermission: false,
       },
     ],
     "./plugins/withCleartextTraffic.js",
     "./plugins/withRazorpayGradle.js",
+    "@sentry/react-native",
   ],
   experiments: {
     typedRoutes: true,
