@@ -48,7 +48,11 @@ export type OrderStatus =
   | "out_for_delivery"
   | "delivered"
   | "completed"
-  | "cancelled";
+  | "cancelled"
+  | "return_pending"
+  | "return_scheduled"
+  | "return_in_transit"
+  | "returned";
 
 export type StatusVisualTone = "success" | "warning" | "neutral" | "error" | "info";
 
@@ -386,6 +390,66 @@ export const ORDER_STATUS_META: Record<OrderStatus, OrderStatusMeta> = {
     customerLabel: "Cancelled",
     employeeLabel: "Cancelled",
     tailorLabel: "Cancelled",
+    // See lib/orderStatus.ts (website)'s identical note: an order cancelled
+    // after the tailor already had custody continues into return_pending/...
+    // rather than stopping here, but "cancelled, nothing more happens" is
+    // still the end state for most cancelled orders.
+    terminal: true,
+  },
+  return_pending: {
+    status: "return_pending",
+    title: "Return pending",
+    description: "This order was cancelled after your fabric/garment reached the tailor, so it needs to be returned to you.",
+    nextStep: "We're arranging pickup from the tailor to bring it back to you.",
+    tone: "warning",
+    icon: "return-up-back-outline",
+    progress: 0,
+    customerFacing: true,
+    customerLabel: "Return Pending",
+    employeeLabel: "Return Pending",
+    tailorLabel: "Return Pending",
+    terminal: false,
+  },
+  return_scheduled: {
+    status: "return_scheduled",
+    title: "Return pickup scheduled",
+    description: "A pickup has been scheduled to collect your item from the tailor for return.",
+    nextStep: "It'll be on its way to you once collected.",
+    tone: "warning",
+    icon: "calendar-outline",
+    progress: 0,
+    customerFacing: true,
+    customerLabel: "Return Scheduled",
+    employeeLabel: "Return Scheduled",
+    tailorLabel: "Return Scheduled",
+    terminal: false,
+  },
+  return_in_transit: {
+    status: "return_in_transit",
+    title: "Return in transit",
+    description: "Your item has been collected from the tailor and is on its way back to you.",
+    nextStep: "Keep your phone handy - our team may call before arriving.",
+    tone: "info",
+    icon: "bicycle-outline",
+    progress: 0,
+    customerFacing: true,
+    customerLabel: "Return In Transit",
+    employeeLabel: "Return In Transit",
+    tailorLabel: "Return In Transit",
+    terminal: false,
+  },
+  returned: {
+    status: "returned",
+    title: "Item returned",
+    description: "Your item has been returned to you.",
+    nextStep: "If a payment was made, any refund follows our cancellation policy.",
+    tone: "success",
+    icon: "checkmark-done-outline",
+    progress: 0,
+    customerFacing: true,
+    customerLabel: "Returned",
+    employeeLabel: "Returned",
+    tailorLabel: "Returned",
     terminal: true,
   },
 };
@@ -453,7 +517,6 @@ export const CUSTOMER_CANCELLABLE_STATUSES = new Set<OrderStatus>([
   "order_accepted",
   "searching_tailor",
   "broadcasted",
-  "tailor_assigned",
   "pickup_scheduled",
   "pickup_pending",
   "picked_up",
