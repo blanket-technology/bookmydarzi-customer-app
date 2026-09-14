@@ -18,7 +18,11 @@ configureReanimatedLogger({
 });
 import { Ionicons } from "@expo/vector-icons";
 import AppToast from "../src/components/common/AppToast";
+import { ErrorBoundary } from "../src/components/common/ErrorBoundary";
 import SessionExpiredModal from "../src/components/common/SessionExpiredModal";
+import { initSentry } from "../src/services/sentryService";
+
+initSentry();
 import AppSplashScreen from "./splash";
 import OfflineBanner from "../components/OfflineBanner";
 import { useAuthStore } from "../store/useAuthStore";
@@ -388,6 +392,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
       <SafeAreaProvider>
         <AuthGuard />
         <WebSocketSetup />
@@ -435,6 +440,7 @@ export default function RootLayout() {
           <AppSplashScreen onComplete={() => setShowSplash(false)} />
         )}
       </SafeAreaProvider>
+      </ErrorBoundary>
     </GestureHandlerRootView>
   );
 }

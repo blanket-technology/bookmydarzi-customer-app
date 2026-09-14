@@ -29,7 +29,7 @@
         "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       }
     },
     "staging": {
@@ -40,18 +40,16 @@
         "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       }
     },
     "production": {
       "env": {
         "EXPO_PUBLIC_API_URL": "https://web-production-efff7.up.railway.app",
-        "EXPO_PUBLIC_RAZORPAY_KEY": "rzp_live_StuWokz46xtkzp",
-        "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis",
-        "EXPO_PUBLIC_GOOGLE_MAPS_KEY": "AIzaSyAEA_VhfhrrC-ZKsyz3XPd3QfYLXzuQ59E"
+        "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       }
     }
   },

@@ -38,6 +38,14 @@ export async function updateProfile(
   return { savedPhone: parseMobileFromProfileApi(raw), raw };
 }
 
+/** Soft-deletes the current user's own account (DELETE /users/me - backend
+ * sets IsDeleted=True, IsActive=False; see delete_own_account in
+ * app/services/users/user_management_service.py). Irreversible from the
+ * customer's side - the caller must log the user out immediately after. */
+export async function deleteAccount(): Promise<void> {
+  await request<unknown>("/users/me", { method: "DELETE" });
+}
+
 export async function updateMeasurements(
   _userId: string,
   measurements: Measurements,

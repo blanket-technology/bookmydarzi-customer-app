@@ -20,6 +20,7 @@ import { COLORS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
 import { UserAvatar } from "../../src/components/common/UserAvatar";
 import { useAppLanguage } from "../../src/i18n/useAppLanguage";
 import {
+    deleteAccount,
     updateProfile,
     uploadProfileAvatar,
 } from "../../src/services/profileService";
@@ -78,6 +79,7 @@ export default function ProfileScreen() {
   const [gender, setGender] = useState<string>(normalizeGender(user?.gender));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [avatarPreviewUri, setAvatarPreviewUri] = useState<string | null>(null);
 
   const displayEmail = getProfileDisplayEmail(user?.email);
@@ -175,6 +177,50 @@ export default function ProfileScreen() {
         },
       },
     ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete account",
+      "This permanently deletes your BookMyDarzi account. You'll lose access to your order history, addresses and saved measurements. This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            // Second confirmation for a destructive, irreversible action -
+            // matches the weight of what's being done, unlike Logout which
+            // is reversible by logging back in.
+            Alert.alert(
+              "Are you absolutely sure?",
+              "Your account and all associated data will be deleted immediately.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Delete my account",
+                  style: "destructive",
+                  onPress: async () => {
+                    setDeletingAccount(true);
+                    try {
+                      await deleteAccount();
+                      await logout();
+                      router.replace("/(tabs)");
+                    } catch (err) {
+                      const msg =
+                        err instanceof Error ? err.message : "Couldn't delete your account. Please try again.";
+                      Alert.alert("Delete failed", msg);
+                    } finally {
+                      setDeletingAccount(false);
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
   };
 
   const validateForm = () => {
@@ -514,6 +560,26 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </Animated.View>
 
+        {/* Delete account - own row below Logout, same destructive styling,
+            but plain text (no filled background) so it doesn't visually
+            compete with Logout as the primary destructive action. */}
+        <Animated.View
+          entering={FadeInDown.delay(220).duration(400)}
+          style={styles.deleteAccountWrap}
+        >
+          <TouchableOpacity
+            style={styles.deleteAccountBtn}
+            onPress={handleDeleteAccount}
+            disabled={deletingAccount}
+          >
+            {deletingAccount ? (
+              <ActivityIndicator size="small" color={COLORS.gray} />
+            ) : (
+              <Text style={styles.deleteAccountText}>Delete my account</Text>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+
         {/* Trimmed from xxl (48) to lg (24) - removes the extra gap below
             Logout (Bug Report cycle 1, item 1.4) while keeping the button
             clear of the bottom tab bar. */}
@@ -717,6 +783,14 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   logoutText: { fontSize: 15, fontWeight: "700", color: COLORS.error },
+  deleteAccountWrap: { paddingHorizontal: SPACING.md, marginTop: SPACING.sm },
+  deleteAccountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: SPACING.sm,
+  },
+  deleteAccountText: { fontSize: 13, fontWeight: "600", color: COLORS.gray },
   guestContainer: {
     flex: 1,
     alignItems: "center",
