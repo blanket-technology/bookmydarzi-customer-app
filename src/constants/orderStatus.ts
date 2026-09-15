@@ -522,6 +522,19 @@ export const CUSTOMER_CANCELLABLE_STATUSES = new Set<OrderStatus>([
   "picked_up",
 ]);
 
+/** Mirrors the backend's actual RESCHEDULABLE_FROM
+ * (app/services/orders/admin_reschedule_service.py) - a pickup can only be
+ * MOVED once one has already been scheduled, which only happens after a
+ * Bridge/employee has been assigned and made the first scheduling call
+ * (employee_order_service.schedule_pickup_employee_order). Before that
+ * there's no ScheduledPickupAt yet to reschedule - the backend hard-rejects
+ * every other status with a 400. Deliberately narrower than the
+ * cancellable set above. */
+export const RESCHEDULABLE_STATUSES = new Set<OrderStatus>([
+  "pickup_scheduled",
+  "pickup_pending",
+]);
+
 /** Statuses during which a tailor may upload progress photos (matches backend's _PHOTO_UPLOAD_STAGES). */
 export const PHOTO_UPLOAD_STAGES = new Set<OrderStatus>([
   "stitching_started",
