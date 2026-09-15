@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_BASE_URL } from "../src/config/api";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import { CancelOrderSection } from "../src/components/orders/CancelOrderSection";
+import { RescheduleOrderSection } from "../src/components/orders/RescheduleOrderSection";
 import OrderScreenSection from "../src/components/orders/OrderScreenSection";
 import OrderStatusModal, {
     type OrderCelebrationKind,
@@ -39,6 +40,7 @@ import ProgressGallery from "../src/components/orders/ProgressGallery";
 import {
     CUSTOMER_CANCELLABLE_STATUSES,
     PHOTO_VISIBLE_STAGES,
+    RESCHEDULABLE_STATUSES,
     normalizeOrderStatus,
     type OrderStatus,
 } from "../src/constants/orderStatus";
@@ -862,6 +864,12 @@ export default function OrderDetailsScreen() {
   const canCancelOrder = CUSTOMER_CANCELLABLE_STATUSES.has(
     normalizeOrderStatus(orderStatusRaw),
   );
+  // Only reschedulable AFTER a pickup has already been scheduled once (see
+  // RESCHEDULABLE_STATUSES's own comment) - the backend independently
+  // re-validates this, this is just the display gate.
+  const canRescheduleOrder = RESCHEDULABLE_STATUSES.has(
+    normalizeOrderStatus(orderStatusRaw),
+  );
 
   const handleSubmitRating = async () => {
     if (orderId === null || ratingValue < 1 || ratingBusy || alreadyRated)
@@ -1472,6 +1480,17 @@ export default function OrderDetailsScreen() {
 
             {/* "Report an issue" removed (Bug Report cycle 1, item 8.1);
                 Quick chat is the single support entry point now. */}
+
+            {orderId !== null && canRescheduleOrder && (
+              <RescheduleOrderSection
+                orderId={orderId}
+                currentPickupAt={payload?.order.scheduled_pickup_at ?? null}
+                onRescheduled={() => {
+                  useCustomerOrdersStore.getState().invalidateCache();
+                  load();
+                }}
+              />
+            )}
 
             {orderId !== null && canCancelOrder && (
               <CancelOrderSection
