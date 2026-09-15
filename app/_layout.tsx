@@ -34,6 +34,7 @@ import { useAuthStore } from "../store/useAuthStore";
 import { useToastStore } from "../src/store/useToastStore";
 import {
   isPushAvailable,
+  loadNotifications,
   registerForPushNotifications,
   unregisterFromPushNotifications,
 } from "../src/services/pushService";
@@ -249,7 +250,7 @@ function PushNotificationSetup() {
   useEffect(() => {
     if (!isPushAvailable) return;
     let sub: { remove: () => void } | undefined;
-    import("expo-notifications").then((Notifications) => {
+    loadNotifications().then((Notifications) => {
       sub = Notifications.addNotificationReceivedListener((notification) => {
         const title = notification.request.content.title ?? "";
         const body  = notification.request.content.body  ?? "";
@@ -267,7 +268,7 @@ function PushNotificationSetup() {
   useEffect(() => {
     if (!isPushAvailable) return;
     let sub: { remove: () => void } | undefined;
-    import("expo-notifications").then((Notifications) => {
+    loadNotifications().then((Notifications) => {
       const handleResponse = (response: NotificationsType.NotificationResponse) => {
         const data = response.notification.request.content.data as
           | Record<string, unknown>

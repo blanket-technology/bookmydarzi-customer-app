@@ -13,8 +13,16 @@ import { registerDeviceToken, unregisterDeviceToken } from "./notificationServic
 export const isPushAvailable =
   Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
 
-if (isPushAvailable) {
-  import("expo-notifications").then((Notifications) => {
+let handlerConfigured = false;
+
+/** Lazily loads expo-notifications and configures its notification handler
+ * exactly once - shared by registerForPushNotifications below and
+ * app/_layout.tsx's listener setup, so both paths funnel through the same
+ * single dynamic import rather than each racing their own. */
+export async function loadNotifications() {
+  const Notifications = await import("expo-notifications");
+  if (!handlerConfigured) {
+    handlerConfigured = true;
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
@@ -24,7 +32,8 @@ if (isPushAvailable) {
         shouldShowList: true,
       }),
     });
-  });
+  }
+  return Notifications;
 }
 
 export async function registerForPushNotifications(): Promise<string | null> {
@@ -32,7 +41,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
     if (__DEV__) console.log("[Push] Not available in Expo Go - skipping registration");
     return null;
   }
-  const Notifications = await import("expo-notifications");
+  const Notifications = await loadNotifications();
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
