@@ -1,24 +1,29 @@
 import { Platform } from "react-native";
-import * as Notifications from "expo-notifications";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { registerDeviceToken, unregisterDeviceToken } from "./notificationService";
 
 /** Remote push (and most of expo-notifications) was removed from Expo Go
  * entirely as of SDK 53 - it only works in a development/production build.
- * Every push-related call in this module must check this first, since even
- * `setNotificationHandler` throws when invoked inside Expo Go on Android. */
+ * `expo-notifications` must never be statically imported anywhere in this
+ * app: the native module throws just from being imported inside Expo Go on
+ * Android, before any isPushAvailable check around a call site could ever
+ * run. Every consumer must check this flag first and dynamic-import the
+ * module only when it's true (see registerForPushNotifications below and
+ * app/_layout.tsx's PushNotificationSetup). */
 export const isPushAvailable =
   Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
 
 if (isPushAvailable) {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
+  import("expo-notifications").then((Notifications) => {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
   });
 }
 
@@ -27,6 +32,8 @@ export async function registerForPushNotifications(): Promise<string | null> {
     if (__DEV__) console.log("[Push] Not available in Expo Go - skipping registration");
     return null;
   }
+  const Notifications = await import("expo-notifications");
+
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 
