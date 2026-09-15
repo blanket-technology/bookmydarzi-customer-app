@@ -9,17 +9,16 @@ import {
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../../../constants/theme";
-import { fetchApiOrderTracking } from "../../services/apiOrderService";
+import { fetchOrderTrackingPayload } from "../../services/apiOrderService";
 import {
     getPaymentByOrderId,
     isValidOrderId,
 } from "../../services/paymentService";
 import {
-    mapTrackingStepForDisplay,
     orderDisplayValue,
     type ApiOrder,
-    type ApiOrderTracking,
     type ApiPayment,
+    type OrderTimelineStage,
 } from "../../types/api";
 
 interface Props {
@@ -30,7 +29,7 @@ interface Props {
 
 const OrderCard = memo(({ item, index, onCancel }: Props) => {
   const [expanded, setExpanded] = useState(false);
-  const [tracking, setTracking] = useState<ApiOrderTracking[]>([]);
+  const [tracking, setTracking] = useState<OrderTimelineStage[]>([]);
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [trackingLoaded, setTrackingLoaded] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState<ApiPayment | null>(null);
@@ -57,8 +56,8 @@ const OrderCard = memo(({ item, index, onCancel }: Props) => {
     if (trackingLoaded || !isValidOrderId(item.id)) return;
     setTrackingLoading(true);
     try {
-      const data = await fetchApiOrderTracking(item.id);
-      setTracking(data);
+      const payload = await fetchOrderTrackingPayload(item.id);
+      setTracking(payload.timeline);
     } catch {
       setTracking([]);
     } finally {
@@ -177,35 +176,32 @@ const OrderCard = memo(({ item, index, onCancel }: Props) => {
             ) : tracking.length === 0 ? (
               <Text style={styles.sectionEmpty}>-</Text>
             ) : (
-              tracking.map((step, i) => {
-                const display = mapTrackingStepForDisplay(step);
-                return (
-                  <View key={step.id ?? i} style={styles.timelineItem}>
-                    <View style={styles.timelineDotCol}>
-                      <View
-                        style={[
-                          styles.timelineDot,
-                          i === 0 && styles.timelineDotActive,
-                        ]}
-                      />
-                      {i < tracking.length - 1 && (
-                        <View style={styles.timelineLine} />
-                      )}
-                    </View>
-                    <View style={styles.timelineContent}>
-                      <Text style={styles.timelineStatus}>
-                        {orderDisplayValue(display.statusLabel)}
-                      </Text>
-                      <Text style={styles.timelineNote}>
-                        {orderDisplayValue(display.note)}
-                      </Text>
-                      <Text style={styles.timelineTime}>
-                        {orderDisplayValue(display.timeLabel)}
-                      </Text>
-                    </View>
+              tracking.map((stage, i) => (
+                <View key={`${stage.status}-${i}`} style={styles.timelineItem}>
+                  <View style={styles.timelineDotCol}>
+                    <View
+                      style={[
+                        styles.timelineDot,
+                        stage.completed && styles.timelineDotActive,
+                      ]}
+                    />
+                    {i < tracking.length - 1 && (
+                      <View style={styles.timelineLine} />
+                    )}
                   </View>
-                );
-              })
+                  <View style={styles.timelineContent}>
+                    <Text style={styles.timelineStatus}>{stage.title}</Text>
+                    {stage.description ? (
+                      <Text style={styles.timelineNote}>
+                        {stage.description}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.timelineTime}>
+                      {orderDisplayValue(stage.timestamp)}
+                    </Text>
+                  </View>
+                </View>
+              ))
             )}
           </View>
         )}
