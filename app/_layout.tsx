@@ -4,7 +4,12 @@ import { Stack, usePathname, useRouter, useSegments } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
-import * as Notifications from "expo-notifications";
+// expo-notifications must never be statically imported - the native module
+// throws just from being imported inside Expo Go on Android (SDK 53+
+// removed remote push there entirely) - see pushService.ts's isPushAvailable
+// doc comment. Only its TYPES are imported here; every runtime use below is
+// gated on isPushAvailable and dynamic-imports the module.
+import type * as NotificationsType from "expo-notifications";
 
 // Reanimated's "strict mode" render-time `.value` read warning fires from
 // its own internal entering/exiting animation builders (FadeInDown etc.)
@@ -243,13 +248,16 @@ function PushNotificationSetup() {
 
   useEffect(() => {
     if (!isPushAvailable) return;
-    const sub = Notifications.addNotificationReceivedListener((notification) => {
-      const title = notification.request.content.title ?? "";
-      const body  = notification.request.content.body  ?? "";
-      const text  = [title, body].filter(Boolean).join("\n");
-      if (text) useToastStore.getState().show(text, "info");
+    let sub: { remove: () => void } | undefined;
+    import("expo-notifications").then((Notifications) => {
+      sub = Notifications.addNotificationReceivedListener((notification) => {
+        const title = notification.request.content.title ?? "";
+        const body  = notification.request.content.body  ?? "";
+        const text  = [title, body].filter(Boolean).join("\n");
+        if (text) useToastStore.getState().show(text, "info");
+      });
     });
-    return () => sub.remove();
+    return () => sub?.remove();
   }, []);
 
   // Deep-link on tap - foreground, background, and killed-app cold-start
@@ -258,20 +266,23 @@ function PushNotificationSetup() {
   // development/production build.
   useEffect(() => {
     if (!isPushAvailable) return;
-    const handleResponse = (response: Notifications.NotificationResponse) => {
-      const data = response.notification.request.content.data as
-        | Record<string, unknown>
-        | undefined;
-      const route = routeForNotification(data);
-      if (route) router.push(route as any);
-    };
+    let sub: { remove: () => void } | undefined;
+    import("expo-notifications").then((Notifications) => {
+      const handleResponse = (response: NotificationsType.NotificationResponse) => {
+        const data = response.notification.request.content.data as
+          | Record<string, unknown>
+          | undefined;
+        const route = routeForNotification(data);
+        if (route) router.push(route as any);
+      };
 
-    Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (response) handleResponse(response);
+      Notifications.getLastNotificationResponseAsync().then((response) => {
+        if (response) handleResponse(response);
+      });
+
+      sub = Notifications.addNotificationResponseReceivedListener(handleResponse);
     });
-
-    const sub = Notifications.addNotificationResponseReceivedListener(handleResponse);
-    return () => sub.remove();
+    return () => sub?.remove();
   }, [router]);
 
   return null;
