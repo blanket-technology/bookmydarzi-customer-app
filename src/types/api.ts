@@ -276,6 +276,9 @@ export interface OrderTimelineStage {
   current: boolean;
   /** ISO-8601 when this stage was reached, null if not yet reached. */
   timestamp: string | null;
+  /** Extra context for this step - currently only set on the "cancelled"
+   * step, carrying the real cancellation reason. */
+  note?: string | null;
 }
 
 export interface OrderCurrentStage {
