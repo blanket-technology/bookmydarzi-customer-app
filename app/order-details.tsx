@@ -109,28 +109,59 @@ function RowDivider() {
   return <View style={styles.infoDivider} />;
 }
 
-function PickupPartnerCard({
+/** Shared by both the pickup and delivery partner cards - same shape, just a
+ * different title/subtitle so the customer knows which leg this person is
+ * handling (a delivery broadcast can hand the order to someone different
+ * than whoever did the pickup). Shows a star rating when the Bridge
+ * employee has one (BridgeProfile.Rating, rolled up from real customer
+ * ratings) - doorstep trust/safety: name + photo to confirm identity, phone
+ * to call ahead, rating as a quick trust signal, matching the pattern any
+ * rider-facing delivery app already uses. */
+function BridgePartnerCard({
+  title,
+  subtitle,
   partner,
 }: {
-  partner: { name: string; photo_url: string | null; mobile: string | null };
+  title: string;
+  subtitle: string;
+  partner: { name: string; photo_url: string | null; mobile: string | null; rating?: number | null };
 }) {
+  // Tap the avatar to see the full photo - same fullscreen-viewer pattern
+  // as ReferenceImagesSection below, so a customer can actually make out
+  // the person's face for doorstep verification instead of just a tiny
+  // thumbnail circle.
+  const [viewerOpen, setViewerOpen] = useState(false);
+
   return (
-    <OrderScreenSection title="Your pickup partner">
+    <OrderScreenSection title={title}>
       <View style={styles.pickupPartnerRow}>
-        {partner.photo_url ? (
-          <Image
-            source={{ uri: partner.photo_url }}
-            style={styles.pickupPartnerAvatar}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={[styles.pickupPartnerAvatar, styles.pickupPartnerAvatarFallback]}>
-            <Ionicons name="person" size={24} color={COLORS.gray} />
-          </View>
-        )}
+        <TouchableOpacity
+          onPress={() => partner.photo_url && setViewerOpen(true)}
+          disabled={!partner.photo_url}
+          activeOpacity={0.8}
+          accessibilityLabel={partner.photo_url ? `View full photo of ${partner.name}` : undefined}
+        >
+          {partner.photo_url ? (
+            <Image
+              source={{ uri: partner.photo_url }}
+              style={styles.pickupPartnerAvatar}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={[styles.pickupPartnerAvatar, styles.pickupPartnerAvatarFallback]}>
+              <Ionicons name="person" size={24} color={COLORS.gray} />
+            </View>
+          )}
+        </TouchableOpacity>
         <View style={styles.pickupPartnerInfo}>
           <Text style={styles.pickupPartnerName}>{partner.name}</Text>
-          <Text style={styles.pickupPartnerSub}>Coming to your doorstep for pickup</Text>
+          <Text style={styles.pickupPartnerSub}>{subtitle}</Text>
+          {partner.rating != null ? (
+            <View style={styles.pickupPartnerRatingRow}>
+              <Ionicons name="star" size={13} color="#F59E0B" />
+              <Text style={styles.pickupPartnerRatingText}>{partner.rating.toFixed(1)}</Text>
+            </View>
+          ) : null}
         </View>
         {partner.mobile ? (
           <TouchableOpacity
@@ -142,6 +173,30 @@ function PickupPartnerCard({
           </TouchableOpacity>
         ) : null}
       </View>
+
+      {partner.photo_url ? (
+        <Modal
+          visible={viewerOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setViewerOpen(false)}
+        >
+          <View style={styles.imageViewerOverlay}>
+            <TouchableOpacity
+              style={styles.imageViewerClose}
+              onPress={() => setViewerOpen(false)}
+              hitSlop={12}
+            >
+              <Ionicons name="close" size={26} color="#fff" />
+            </TouchableOpacity>
+            <Image
+              source={{ uri: partner.photo_url }}
+              style={styles.imageViewerImg}
+              contentFit="contain"
+            />
+          </View>
+        </Modal>
+      ) : null}
     </OrderScreenSection>
   );
 }
@@ -972,7 +1027,22 @@ export default function OrderDetailsScreen() {
               Only present once the backend has an assigned employee AND the
               order has reached a pickup-relevant status (never earlier). */}
           {payload.order.pickup_partner ? (
-            <PickupPartnerCard partner={payload.order.pickup_partner} />
+            <BridgePartnerCard
+              title="Your pickup partner"
+              subtitle="Coming to your doorstep for pickup"
+              partner={payload.order.pickup_partner}
+            />
+          ) : null}
+
+          {/* Delivery-leg equivalent - a different employee may deliver
+              than picked up (delivery broadcast), so this is deliberately
+              a separate card, not a reuse of the pickup partner's data. */}
+          {payload.order.delivery_partner ? (
+            <BridgePartnerCard
+              title="Your delivery partner"
+              subtitle="Bringing your order to your doorstep"
+              partner={payload.order.delivery_partner}
+            />
           ) : null}
 
           {/* Reference style images the customer attached at order time. */}
@@ -1727,6 +1797,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     marginTop: 2,
+  },
+  pickupPartnerRatingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginTop: 4,
+  },
+  pickupPartnerRatingText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#92400E",
   },
   pickupPartnerCallBtn: {
     width: 40,
