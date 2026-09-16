@@ -194,7 +194,7 @@ export default function ProfileScreen() {
             // is reversible by logging back in.
             Alert.alert(
               "Are you absolutely sure?",
-              "Your account and all associated data will be deleted immediately.",
+              "Your account will be deactivated immediately and you'll be signed out everywhere. Your order, payment and tax records are retained as required by law; see our Privacy Policy for details.",
               [
                 { text: "Cancel", style: "cancel" },
                 {

@@ -25,12 +25,12 @@ export default function PrivacyScreen() {
         {
           heading: "Data retention",
           body:
-            "We keep your order history, measurements, and address book for as long as your account is active, so you don't have to re-enter them for future orders. You can request deletion of your account and associated data at any time by contacting support.",
+            "We keep your order history, measurements, and address book for as long as your account is active, so you don't have to re-enter them for future orders. When you delete your account, it is deactivated immediately - you're signed out everywhere and your profile, saved addresses, and measurements are no longer visible to you or to staff. Order, payment, and tax records tied to your account are retained for the period required by Indian tax and consumer-protection law, and to prevent fraud, even after deletion.",
         },
         {
           heading: "Your choices",
           body:
-            "You can update or delete your saved addresses and measurement profiles at any time from your account. You can also request a copy of your data, or full account deletion, through the Support section of the app.",
+            "You can update or delete your saved addresses and measurement profiles at any time from your account. You can permanently delete your account yourself from Profile at any time - no need to contact support. You can also request a copy of your data by reaching out through Support.",
         },
         {
           heading: "Contact us",
