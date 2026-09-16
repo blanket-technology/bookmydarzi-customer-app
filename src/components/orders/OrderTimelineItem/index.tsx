@@ -59,6 +59,11 @@ const OrderTimelineItem = memo(({ stage, isLast = false }: OrderTimelineItemProp
           </Text>
         ) : null}
         {timeLabel ? <Text style={styles.time}>{timeLabel}</Text> : null}
+        {stage.note ? (
+          <Text style={styles.note} numberOfLines={4}>
+            {stage.note}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -130,5 +135,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textTransform: "none",
     letterSpacing: 0,
+  },
+  note: {
+    ...TYPOGRAPHY.body.sm,
+    color: COLORS.error,
+    marginTop: 4,
   },
 });
