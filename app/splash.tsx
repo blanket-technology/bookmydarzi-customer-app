@@ -15,7 +15,7 @@
  *   2.60s  → App
  */
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import Animated, {
   Easing,
@@ -55,6 +55,18 @@ export default function SplashScreen({ onComplete }: Props) {
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
+  // runOnJS requires a stable, top-level function reference - it captures/
+  // schedules this closure to run back on the JS thread from the UI/worklet
+  // thread. Passing an inline arrow defined *inside* the withTiming callback
+  // (itself already running as a worklet) instead of a hoisted function is
+  // what produced the "isHostFunction(runtime)" native crash: the callback
+  // fires via Choreographer once the UI thread believes the exit animation
+  // finished, but the ad hoc closure was never a valid, correctly-bound host
+  // function against the JS runtime, so invoking it later aborts natively.
+  const runOnComplete = useCallback(() => {
+    onCompleteRef.current();
+  }, []);
+
   // Big and responsive: width sized off the smaller screen dimension so it
   // reads as generous on a phone without ballooning past a sane cap on a
   // tablet; height derives from the cropped asset's real 909:840 aspect
@@ -77,7 +89,7 @@ export default function SplashScreen({ onComplete }: Props) {
     rootO.value = withDelay(
       EXIT_DELAY,
       withTiming(0, { duration: EXIT_MS, easing: EXT }, (finished) => {
-        if (finished) runOnJS(() => onCompleteRef.current())();
+        if (finished) runOnJS(runOnComplete)();
       }),
     );
   // Reanimated shared values (logoO, logoScale, footerO, rootO) are stable
