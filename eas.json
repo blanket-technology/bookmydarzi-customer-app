@@ -21,6 +21,23 @@
         "buildConfiguration": "Debug"
       }
     },
+    "development-railway": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "development",
+        "EXPO_PUBLIC_API_URL": "https://web-production-efff7.up.railway.app",
+        "EXPO_PUBLIC_RAZORPAY_KEY": "rzp_test_T89VuoTdxvTzi1",
+        "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Debug"
+      }
+    },
     "preview": {
       "distribution": "internal",
       "env": {
