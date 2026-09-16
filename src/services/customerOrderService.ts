@@ -508,14 +508,15 @@ export function mapCustomerOrderSummaryPayload(
   };
 }
 
-function mapPickupPartner(raw: Record<string, unknown>): PickupPartner | null {
-  const partner = block(raw, "pickup_partner", "pickupPartner");
+function mapBridgePartner(raw: Record<string, unknown>, ...keys: string[]): PickupPartner | null {
+  const partner = block(raw, ...keys);
   const name = nullableStr(partner.name);
   if (!name) return null;
   return {
     name,
     photo_url: nullableStr(partner.photo_url ?? partner.photoUrl),
     mobile: nullableStr(partner.mobile),
+    rating: nullableNum(partner.rating),
   };
 }
 
@@ -534,7 +535,8 @@ function mapDetailsOrderBlock(raw: Record<string, unknown>): OrderDetailsOrderBl
       ? ((order.image_references ?? order.ImageReferences) as unknown[]).map(String)
       : null,
     customization_notes: nullableStr(order.customization_notes ?? order.CustomizationNotes),
-    pickup_partner: mapPickupPartner(order),
+    pickup_partner: mapBridgePartner(order, "pickup_partner", "pickupPartner"),
+    delivery_partner: mapBridgePartner(order, "delivery_partner", "deliveryPartner"),
   };
 }
 

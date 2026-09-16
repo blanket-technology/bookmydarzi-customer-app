@@ -153,7 +153,14 @@ export interface PickupPartner {
   name: string;
   photo_url: string | null;
   mobile: string | null;
+  /** This Bridge employee's average customer rating, 0-5. Null if never rated yet. */
+  rating: number | null;
 }
+
+/** Delivery-leg equivalent of PickupPartner - a different employee may
+ * deliver than picked up (delivery broadcast), so this is never assumed
+ * to be the same person as pickup_partner. */
+export type DeliveryPartner = PickupPartner;
 
 /** GET /customer/orders/{id}/details - nested API payload */
 export interface OrderDetailsOrderBlock {
@@ -170,6 +177,7 @@ export interface OrderDetailsOrderBlock {
   /** Free-text order notes entered at checkout. */
   customization_notes?: string | null;
   pickup_partner?: PickupPartner | null;
+  delivery_partner?: DeliveryPartner | null;
 }
 
 export interface OrderDetailsServiceBlock {
