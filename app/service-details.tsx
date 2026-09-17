@@ -124,6 +124,13 @@ export default function ServiceDetailsScreen() {
   const filterBaseName = params.filterBaseName?.trim() || null;
 
   const catStyle = getCategoryStyle(categoryName);
+  // "Custom Alterations" services are repair/resize/adjustment work, not
+  // stitching a new garment from scratch - the picker below lists things
+  // like "Sleeve Repair"/"Button replacement", so "Alteration type" is the
+  // accurate label here, not "Stitching type" (which still applies to
+  // every other category, e.g. Men/Women/Kids Clothing's Normal/Designer
+  // stitching quality picker).
+  const isAlterationsCategory = categoryName.toLowerCase().includes("alteration");
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -687,8 +694,12 @@ export default function ServiceDetailsScreen() {
               entering={FadeInDown.delay(100).duration(400)}
               style={styles.stitchingSection}
             >
-              <Text style={styles.sectionTitle}>{t("service.stitchingType")}</Text>
-              <Text style={styles.sectionSub}>{t("service.selectFinish")}</Text>
+              <Text style={styles.sectionTitle}>
+                {isAlterationsCategory ? "Alteration type" : t("service.stitchingType")}
+              </Text>
+              <Text style={styles.sectionSub}>
+                {isAlterationsCategory ? "Select the work you need" : t("service.selectFinish")}
+              </Text>
               {stitchingTypes.map((stitching) => {
                 const selected = stitching.service_id === selectedStitchingId;
                 const isPremium = stitching.is_premium ?? false;
