@@ -405,15 +405,24 @@ export default function ServiceDetailsScreen() {
 
   const canContinue = selectedStitching != null && selectedStitching.service_id > 0;
 
-  const _buildPendingAndNavigate = useCallback(
-    (bookNow: boolean) => {
-      if (!selectedStitching) {
-        Alert.alert("Select stitching type", "Please choose a stitching type to continue.");
-        return;
-      }
+  const [addingToCart, setAddingToCart] = useState(false);
+
+  // Add to Cart never needs an address - nothing ships yet, the item just
+  // joins the cart (address is only resolved once at actual checkout, see
+  // app/(tabs)/cart.tsx's resolveCheckoutAddressId). Previously this routed
+  // through the same /address screen "Book Now" uses, interrupting
+  // browsing on every single add - stays on this page instead, matching
+  // the same no-navigation pattern already used for the home screen's
+  // popular-service shortcut (src/utils/popularCartAdd.ts).
+  const handleContinue = useCallback(async () => {
+    if (!selectedStitching) {
+      Alert.alert("Select stitching type", "Please choose a stitching type to continue.");
+      return;
+    }
+    if (!isAuthenticated) {
       const qty = getQuantityForStitching(selectedStitching.service_id);
       const isPremiumSelected = selectedStitching.is_premium ?? false;
-      const pendingItem = {
+      setPendingService({
         bookableServiceId: selectedStitching.service_id,
         serviceLineId: serviceLine?.id,
         serviceLineName: serviceLine?.name ?? directService?.name ?? serviceName,
@@ -432,45 +441,90 @@ export default function ServiceDetailsScreen() {
             }
           : undefined,
         addons: selectedAddons.length > 0 ? selectedAddons : undefined,
-      };
-      if (!isAuthenticated) {
-        setPendingService(pendingItem);
-        setBuyNowMode(bookNow);
-        setPendingRoute("/service-details", buildReturnParams());
-        safeRouterPush(router, "/(auth)/login");
-        return;
-      }
+      });
+      setBuyNowMode(false);
+      setPendingRoute("/service-details", buildReturnParams());
+      safeRouterPush(router, "/(auth)/login");
+      return;
+    }
+
+    const isPremiumSelected = selectedStitching.is_premium ?? false;
+    setAddingToCart(true);
+    try {
+      await useCartStore.getState().addServiceEntry({
+        service_id: selectedStitching.service_id,
+        quantity: getQuantityForStitching(selectedStitching.service_id),
+        stitching_preferences: isPremiumSelected
+          ? {
+              design_style: designStyle,
+              embellishment_level: embellishmentLevel,
+              design_notes: designNotes.trim() || undefined,
+            }
+          : undefined,
+        addons: selectedAddons.length > 0 ? selectedAddons : undefined,
+      });
+    } catch {
+      // addServiceEntry already surfaces its own error via useCartStore's
+      // error state / a caller-visible throw - nothing further to do here
+      // beyond not leaving the button stuck in a loading state.
+    } finally {
+      setAddingToCart(false);
+    }
+  }, [
+    selectedStitching, isAuthenticated, getQuantityForStitching,
+    serviceLine, directService?.name, serviceName, catalogCategoryId, categoryName,
+    displayImage, designStyle, embellishmentLevel, designNotes, selectedAddons,
+    setPendingService, setBuyNowMode, setPendingRoute, buildReturnParams, router,
+  ]);
+
+  const handleBookNow = useCallback(() => {
+    if (!selectedStitching) {
+      Alert.alert("Select stitching type", "Please choose a stitching type to continue.");
+      return;
+    }
+    const qty = getQuantityForStitching(selectedStitching.service_id);
+    const isPremiumSelected = selectedStitching.is_premium ?? false;
+    const pendingItem = {
+      bookableServiceId: selectedStitching.service_id,
+      serviceLineId: serviceLine?.id,
+      serviceLineName: serviceLine?.name ?? directService?.name ?? serviceName,
+      stitchingType: selectedStitching.name,
+      categoryId: catalogCategoryId,
+      categoryName,
+      basePrice: selectedStitching.base_price,
+      displayName: `${serviceLine?.name ?? serviceName} · ${selectedStitching.name}`,
+      imageUrl: displayImage,
+      quantity: qty,
+      stitchingPreferences: isPremiumSelected
+        ? {
+            design_style: designStyle,
+            embellishment_level: embellishmentLevel,
+            design_notes: designNotes.trim() || undefined,
+          }
+        : undefined,
+      addons: selectedAddons.length > 0 ? selectedAddons : undefined,
+    };
+    if (!isAuthenticated) {
       setPendingService(pendingItem);
-      setBuyNowMode(bookNow);
-      // Measurement is never collected from the customer - go straight to
-      // address selection; measurement is filled later by Bridge/employee at
-      // pickup, or by Admin.
-      setBookingFlowActive(!bookNow);
-      safeRouterPush(
-        router,
-        bookNow
-          ? ({ pathname: "/address", params: { mode: "buy-now" } } as never)
-          : ("/address" as never),
-      );
-    },
-    [
-      buildReturnParams, catalogCategoryId, categoryName,
-      directService?.name, displayImage, getQuantityForStitching, isAuthenticated, router,
-      selectedStitching, serviceLine, serviceName,
-      setBookingFlowActive, setBuyNowMode, setPendingRoute, setPendingService,
-      designStyle, embellishmentLevel, designNotes, selectedAddons,
-    ],
-  );
-
-  const handleContinue = useCallback(
-    () => _buildPendingAndNavigate(false),
-    [_buildPendingAndNavigate],
-  );
-
-  const handleBookNow = useCallback(
-    () => _buildPendingAndNavigate(true),
-    [_buildPendingAndNavigate],
-  );
+      setBuyNowMode(true);
+      setPendingRoute("/service-details", buildReturnParams());
+      safeRouterPush(router, "/(auth)/login");
+      return;
+    }
+    setPendingService(pendingItem);
+    setBuyNowMode(true);
+    // Book Now skips the cart entirely, so (unlike Add to Cart) it does
+    // need an address right away - measurement is still never collected
+    // from the customer here; that's filled later by Bridge/employee at
+    // pickup, or by Admin.
+    setBookingFlowActive(false);
+    safeRouterPush(router, { pathname: "/address", params: { mode: "buy-now" } } as never);
+  }, [
+    selectedStitching, getQuantityForStitching, serviceLine, directService?.name, serviceName,
+    catalogCategoryId, categoryName, displayImage, designStyle, embellishmentLevel, designNotes,
+    selectedAddons, isAuthenticated, setPendingService, setBuyNowMode, setPendingRoute,
+    buildReturnParams, router, setBookingFlowActive,
+  ]);
 
   const navigateToRelatedLine = useCallback(
     (relatedLine: CatalogServiceLine) => {
@@ -898,13 +952,19 @@ export default function ServiceDetailsScreen() {
 
             <View style={styles.ctaRow}>
               <TouchableOpacity
-                style={[styles.addToCartBtn, !canContinue && styles.continueBtnDisabled]}
+                style={[styles.addToCartBtn, (!canContinue || addingToCart) && styles.continueBtnDisabled]}
                 onPress={handleContinue}
-                disabled={!canContinue}
+                disabled={!canContinue || addingToCart}
                 activeOpacity={0.9}
               >
-                <Ionicons name="cart-outline" size={18} color={COLORS.primaryDark} />
-                <Text style={styles.addToCartBtnText}>{t("service.addToCart")}</Text>
+                {addingToCart ? (
+                  <ActivityIndicator size="small" color={COLORS.primaryDark} />
+                ) : (
+                  <>
+                    <Ionicons name="cart-outline" size={18} color={COLORS.primaryDark} />
+                    <Text style={styles.addToCartBtnText}>{t("service.addToCart")}</Text>
+                  </>
+                )}
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.bookNowBtn, !canContinue && styles.continueBtnDisabled]}
