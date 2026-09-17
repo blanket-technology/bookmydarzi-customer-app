@@ -25,7 +25,11 @@ export default function SupportIssuePickerScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!orderId) return;
+    if (!orderId) {
+      setLoading(false);
+      setError("No order was selected. Please go back and pick an order.");
+      return;
+    }
     setLoading(true);
     setError(null);
     fetchApiOrderById(Number(orderId))

@@ -29,6 +29,9 @@ export async function validateCouponCode(code: string): Promise<ApiSpecialOffer>
     DiscountType: raw.discount_type === "flat" ? "flat" : "percentage",
     DiscountPercent: Number(raw.discount_percent ?? 0),
     DiscountAmount: raw.discount_amount != null ? Number(raw.discount_amount) : null,
+    MinOrderValue: raw.min_order_value != null ? Number(raw.min_order_value) : 0,
+    MaxDiscountAmount:
+      raw.max_discount_amount != null ? Number(raw.max_discount_amount) : null,
     ImageUrl: raw.image_url != null ? String(raw.image_url) : null,
     ValidFrom: raw.valid_from != null ? String(raw.valid_from) : null,
     ValidUntil: raw.valid_until != null ? String(raw.valid_until) : "",

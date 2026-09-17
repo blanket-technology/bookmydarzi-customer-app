@@ -903,7 +903,9 @@ export default function OrderDetailsScreen() {
       }
       Alert.alert(
         "Payment failed",
-        err instanceof Error ? err.message : "Could not complete the payment.",
+        err instanceof Error
+          ? err.message
+          : "Could not complete the payment. If any amount was deducted, it will be refunded automatically - we never double-charge you. Please try again in a moment.",
       );
     } finally {
       setBusy(null);

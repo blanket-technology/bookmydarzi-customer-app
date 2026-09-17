@@ -89,7 +89,26 @@ export default function SupportTicketScreen() {
           <Text style={styles.errorTitle}>Invalid ticket reference.</Text>
         </View>
       ) : (
-        <ScrollView
+        <>
+          {!isClosed ? (
+            // This legacy ticket thread predates chat_v2 and can still be
+            // replied to below, but new support requests now go through
+            // Help & Support's chat instead - nudge here rather than
+            // disabling reply outright, since a customer already mid-
+            // conversation with staff on this ticket shouldn't be stranded.
+            <TouchableOpacity
+              style={styles.chatNudge}
+              onPress={() => router.push("/support" as never)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="chatbubbles-outline" size={16} color={COLORS.primaryDark} />
+              <Text style={styles.chatNudgeText}>
+                For faster help on a new issue, start a chat from Help &amp; Support
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={COLORS.primaryDark} />
+            </TouchableOpacity>
+          ) : null}
+          <ScrollView
           contentContainerStyle={{ padding: SPACING.lg, paddingBottom: SPACING.lg }}
           showsVerticalScrollIndicator={false}
         >
@@ -112,6 +131,7 @@ export default function SupportTicketScreen() {
           })}
           {error ? <Text style={styles.errorTitle}>{error}</Text> : null}
         </ScrollView>
+        </>
       )}
 
       {!isClosed && ticketId !== null ? (
@@ -222,6 +242,18 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.grayBorder,
   },
   closedText: { fontSize: 13, color: COLORS.gray, textAlign: "center" },
+  chatNudge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: RADIUS.md,
+  },
+  chatNudgeText: { flex: 1, fontSize: 12.5, fontWeight: "600", color: COLORS.primaryDark },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: SPACING.xl, gap: SPACING.sm },
   errorTitle: { fontSize: 14, color: COLORS.error, textAlign: "center" },
 });

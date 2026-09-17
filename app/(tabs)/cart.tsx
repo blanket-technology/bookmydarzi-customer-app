@@ -53,6 +53,7 @@ import {
   resolveCheckoutAddressId,
 } from "../../src/utils/checkoutNavigation";
 import { buildPickupTimeSlots } from "../../src/utils/pickupTimeSlots";
+import { estimateCouponDiscount } from "../../src/utils/couponDiscount";
 
 // ─── Scheduled-pickup helpers ─────────────────────────────────────────────────
 
@@ -171,18 +172,20 @@ function BillRow({
 function OfferRow({
   offer,
   applied,
+  eligible,
   onApply,
   onRemove,
 }: {
   offer: ApiSpecialOffer;
   applied: boolean;
+  eligible: boolean;
   onApply: () => void;
   onRemove: () => void;
 }) {
   return (
     <View style={offerStyles.row}>
       <View style={offerStyles.left}>
-        <View style={offerStyles.badge}>
+        <View style={[offerStyles.badge, !eligible && offerStyles.badgeDisabled]}>
           <Text style={offerStyles.badgeText}>
             {offer.DiscountType === "flat"
               ? formatCurrency(offer.DiscountAmount)
@@ -190,10 +193,14 @@ function OfferRow({
           </Text>
         </View>
         <View style={offerStyles.textWrap}>
-          <Text style={offerStyles.title} numberOfLines={1}>
+          <Text style={[offerStyles.title, !eligible && offerStyles.titleDisabled]} numberOfLines={1}>
             {offer.Title}
           </Text>
-          {offer.Description ? (
+          {!eligible ? (
+            <Text style={offerStyles.desc} numberOfLines={1}>
+              Min. order {formatCurrency(offer.MinOrderValue)}
+            </Text>
+          ) : offer.Description ? (
             <Text style={offerStyles.desc} numberOfLines={1}>
               {offer.Description}
             </Text>
@@ -201,10 +208,11 @@ function OfferRow({
         </View>
       </View>
       <TouchableOpacity
-        style={[offerStyles.applyBtn, applied && offerStyles.applyBtnActive]}
+        style={[offerStyles.applyBtn, applied && offerStyles.applyBtnActive, !eligible && offerStyles.applyBtnDisabled]}
         onPress={applied ? onRemove : onApply}
         activeOpacity={0.8}
         hitSlop={8}
+        disabled={!eligible && !applied}
       >
         {applied ? (
           <Ionicons name="checkmark" size={14} color={offerStyles.applyTextActive.color} style={{ marginRight: 3 }} />
@@ -268,6 +276,7 @@ export default function CartScreen() {
   const appliedOfferId = useCartStore((s) => s.appliedOfferId);
   const appliedOfferDiscountType = useCartStore((s) => s.appliedOfferDiscountType);
   const appliedOfferDiscountValue = useCartStore((s) => s.appliedOfferDiscountValue);
+  const appliedOfferMaxDiscountAmount = useCartStore((s) => s.appliedOfferMaxDiscountAmount);
   const setAppliedOffer = useCartStore((s) => s.setAppliedOffer);
   const clearAppliedOffer = useCartStore((s) => s.clearAppliedOffer);
 
@@ -497,12 +506,15 @@ export default function CartScreen() {
                   key={offer.Id}
                   offer={offer}
                   applied={appliedOfferId === offer.Id}
+                  eligible={billing.totalAmount >= (offer.MinOrderValue ?? 0)}
                   onApply={() =>
                     setAppliedOffer(
                       offer.Id,
                       offer.DiscountType === "flat" ? "flat" : "percentage",
                       offer.DiscountType === "flat" ? (offer.DiscountAmount ?? 0) : offer.DiscountPercent,
                       offer.Title,
+                      offer.MaxDiscountAmount ?? null,
+                      offer.MinOrderValue ?? 0,
                     )
                   }
                   onRemove={clearAppliedOffer}
@@ -533,8 +545,16 @@ export default function CartScreen() {
               browse list uses, so checkoutNavigation.ts's existing
               cart.appliedOfferId read-path needs no changes. */}
           <CouponCodeInput
+            orderTotal={billing.totalAmount}
             onApply={(offer) =>
-              setAppliedOffer(offer.offerId, offer.discountType, offer.discountValue, offer.title)
+              setAppliedOffer(
+                offer.offerId,
+                offer.discountType,
+                offer.discountValue,
+                offer.title,
+                offer.maxDiscountAmount,
+                offer.minOrderValue,
+              )
             }
           />
         </View>
@@ -659,16 +679,18 @@ export default function CartScreen() {
 
   // Client-side discount estimate for display only; backend is authoritative
   // (checkout only ever sends offer_id, recomputes the real discount server
-  // -side - see checkout_service.py). Discount is applied on the full bill
-  // (after GST + platform fee), same as the backend's calculation, and
-  // capped at the bill total so a flat discount larger than the order can
-  // never show a negative "you pay" amount.
-  const estimatedDiscount =
-    appliedOfferId && appliedOfferDiscountValue > 0
-      ? appliedOfferDiscountType === "flat"
-        ? Math.min(Math.round(appliedOfferDiscountValue), billing.totalAmount)
-        : Math.round(billing.totalAmount * (appliedOfferDiscountValue / 100) * 100) / 100
-      : 0;
+  // -side - see checkout_service.py). Shared with buy-now-review.tsx via
+  // estimateCouponDiscount() so the two screens can't drift again.
+  const estimatedDiscount = appliedOfferId
+    ? estimateCouponDiscount(
+        {
+          discountType: appliedOfferDiscountType,
+          discountValue: appliedOfferDiscountValue,
+          maxDiscountAmount: appliedOfferMaxDiscountAmount,
+        },
+        billing.totalAmount,
+      )
+    : 0;
 
   // Derive GST split percentages from actual amounts so labels always match config
   const taxableBase = billing.itemTotal - (billing.discount || 0);
@@ -683,7 +705,7 @@ export default function CartScreen() {
 
   const displayTotal =
     estimatedDiscount > 0
-      ? `₹${(billing.totalAmount - estimatedDiscount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
+      ? `₹${Math.max(billing.totalAmount - estimatedDiscount, 1).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
       : billing.totalAmountDisplay;
 
   const isEmpty = !loading && entries.length === 0;
@@ -831,7 +853,7 @@ export default function CartScreen() {
                   accessibilityState={{ expanded: breakdownExpanded }}
                 >
                   <View style={styles.totalRowLeft}>
-                    <Text style={styles.totalRowLabel}>To Pay</Text>
+                    <Text style={styles.totalRowLabel}>Total</Text>
                     <View style={styles.totalRowHintRow}>
                       <Text style={styles.totalRowHint}>
                         {breakdownExpanded ? "Hide breakdown" : "Tap to view breakdown"}
@@ -905,7 +927,7 @@ export default function CartScreen() {
                       <View style={styles.breakdownDivider} />
                     </>
                   ) : null}
-                  <BillRow label="Grand total" value={displayTotal} bold accent />
+                  <BillRow label="Total" value={displayTotal} bold accent />
 
                   {/* COD: a short "pay in cash on delivery" note adds real info.
                       Online: the full amount IS the grand total (no advance/
@@ -1473,8 +1495,10 @@ const offerStyles = StyleSheet.create({
     alignItems: "center",
   },
   badgeText: { fontSize: 11, fontWeight: "800", color: COLORS.white },
+  badgeDisabled: { backgroundColor: COLORS.grayBorder },
   textWrap: { flex: 1 },
   title: { fontSize: 12.5, fontWeight: "700", color: COLORS.black },
+  titleDisabled: { color: COLORS.gray },
   desc: { fontSize: 10.5, color: COLORS.gray, marginTop: 1 },
   applyBtn: {
     flexDirection: "row",
@@ -1489,6 +1513,7 @@ const offerStyles = StyleSheet.create({
   applyBtnActive: {
     backgroundColor: COLORS.primaryDark,
   },
+  applyBtnDisabled: { borderColor: COLORS.grayBorder, opacity: 0.5 },
   applyText: { fontSize: 11, fontWeight: "700", color: COLORS.primaryDark },
   applyTextActive: { color: COLORS.white },
 });

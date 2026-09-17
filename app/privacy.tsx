@@ -20,7 +20,7 @@ export default function PrivacyScreen() {
         {
           heading: "Who we share it with",
           body:
-            "Tailors only see the measurements and instructions needed to stitch your order - never your full contact details. Payment information is handled directly by Razorpay, our payment gateway partner; we do not store your card or UPI details. We never sell your personal information to third parties.",
+            "Tailors only see the measurements and instructions needed to stitch your order - never your full contact details. Payment information is handled directly by Razorpay, our payment gateway partner; we do not store your card or UPI details. When you enter or confirm an address, your location is sent to Google's or OpenStreetMap's mapping services to look up and display it accurately. We use Sentry, a crash-reporting service, to detect and fix app errors - it receives technical details about the error (like device type and what the app was doing) but not your account data. We never sell your personal information to third parties.",
         },
         {
           heading: "Data retention",

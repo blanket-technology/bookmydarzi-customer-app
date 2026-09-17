@@ -1103,7 +1103,15 @@ export default function HomeScreen() {
   // while typing.
   const [catalogTree, setCatalogTree] = useState<Awaited<ReturnType<typeof fetchCatalogTree>> | null>(null);
   useEffect(() => {
-    fetchCatalogTree().then(setCatalogTree).catch(() => {});
+    let cancelled = false;
+    fetchCatalogTree()
+      .then((tree) => {
+        if (!cancelled) setCatalogTree(tree);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleToggleSearch = useCallback(() => {

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { Alert, Modal, View, Text, TouchableOpacity, StyleSheet } from "react-native";
 
 interface Props {
   visible: boolean;
@@ -31,7 +31,18 @@ export function CsatModal({ visible, onSubmit, onDismiss }: Props) {
           >
             <Text style={styles.submitText}>Submit</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={onDismiss} style={styles.skipBtn}>
+          <TouchableOpacity
+            onPress={() => {
+              // Once dismissed there's no way to bring this prompt back for
+              // this session - confirm first so an accidental tap doesn't
+              // silently lose the only chance to leave a rating.
+              Alert.alert("Skip rating?", "You won't be able to rate this conversation later.", [
+                { text: "Keep rating", style: "cancel" },
+                { text: "Skip", style: "destructive", onPress: onDismiss },
+              ]);
+            }}
+            style={styles.skipBtn}
+          >
             <Text style={styles.skipText}>Skip</Text>
           </TouchableOpacity>
         </View>

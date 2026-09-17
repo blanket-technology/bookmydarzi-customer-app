@@ -184,7 +184,7 @@ export default function OrderSuccessScreen() {
             <View style={styles.infoDivider} />
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>
-                {isCod ? "Amount Due" : "Order Amount"}
+                {isCod ? "Amount Due" : "Total"}
               </Text>
               <Text style={styles.infoValue}>{orderAmountDisplay}</Text>
             </View>

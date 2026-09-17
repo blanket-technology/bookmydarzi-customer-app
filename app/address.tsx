@@ -58,6 +58,7 @@ import type { AddCartServiceEntryPayload } from "../src/types/cart";
 import { executeCheckoutFromCart } from "../src/utils/checkoutNavigation";
 import { safeRouterReplace } from "../src/utils/safeNavigation";
 import { useAuthStore } from "../store/useAuthStore";
+import ErrorState from "../src/components/common/ErrorState";
 
 const ADDRESS_TYPES: { key: AddressType; label: string; icon: string }[] = [
   { key: "home", label: "Home", icon: "home-outline" },
@@ -1133,6 +1134,8 @@ export default function AddressScreen() {
               <ActivityIndicator color={COLORS.primary} />
               <Text style={styles.loadingText}>Loading addresses...</Text>
             </View>
+          ) : error && addresses.length === 0 ? (
+            <ErrorState message={error} onRetry={() => fetchAddresses()} />
           ) : addresses.length > 0 ? (
             <Animated.View
               entering={FadeInDown.delay(80).duration(400)}

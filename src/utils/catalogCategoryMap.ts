@@ -105,7 +105,7 @@ export async function resolveCatalogCategoryId(
     homeCategories,
   );
   if (fromHome > 0) {
-    console.log(`[catalogCategoryMap] ${needle} | ${fromHome} | Success`);
+    if (__DEV__) console.log(`[catalogCategoryMap] ${needle} | ${fromHome} | Success`);
     return fromHome;
   }
 
@@ -116,17 +116,21 @@ export async function resolveCatalogCategoryId(
       tree.categories,
     );
     if (fromTree > 0) {
-      console.log(`[catalogCategoryMap] ${needle} | ${fromTree} | Success`);
+      if (__DEV__) console.log(`[catalogCategoryMap] ${needle} | ${fromTree} | Success`);
       return fromTree;
     }
   } catch (err) {
-    console.warn(
-      `[catalogCategoryMap] catalog tree lookup failed for "${needle}":`,
-      err instanceof Error ? err.message : err,
-    );
+    if (__DEV__) {
+      console.warn(
+        `[catalogCategoryMap] catalog tree lookup failed for "${needle}":`,
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
 
-  console.warn(`[catalogCategoryMap] category not found: "${needle}"`);
-  console.log(`[catalogCategoryMap] ${needle} | 0 | Failed`);
+  if (__DEV__) {
+    console.warn(`[catalogCategoryMap] category not found: "${needle}"`);
+    console.log(`[catalogCategoryMap] ${needle} | 0 | Failed`);
+  }
   return 0;
 }

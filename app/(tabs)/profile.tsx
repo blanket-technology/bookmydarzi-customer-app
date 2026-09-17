@@ -337,6 +337,9 @@ export default function ProfileScreen() {
                 style={styles.avatarEditBtn}
                 onPress={handlePickProfilePhoto}
                 disabled={uploadingPhoto}
+                accessibilityRole="button"
+                accessibilityLabel="Change profile photo"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 {uploadingPhoto ? (
                   <ActivityIndicator size="small" color={COLORS.white} />
@@ -428,7 +431,11 @@ export default function ProfileScreen() {
         >
           <View style={styles.sectionHeader}>
             <Text style={styles.cardTitle}>Saved Addresses</Text>
-            <TouchableOpacity onPress={() => router.push("/address" as any)}>
+            <TouchableOpacity
+              onPress={() => router.push("/address" as any)}
+              accessibilityRole="button"
+              accessibilityLabel="Manage saved addresses"
+            >
               <Text style={styles.sectionLink}>Manage</Text>
             </TouchableOpacity>
           </View>
@@ -471,7 +478,11 @@ export default function ProfileScreen() {
         >
           <View style={styles.sectionHeader}>
             <Text style={styles.cardTitle}>Measurements</Text>
-            <TouchableOpacity onPress={() => router.push("/measurements" as any)}>
+            <TouchableOpacity
+              onPress={() => router.push("/measurements" as any)}
+              accessibilityRole="button"
+              accessibilityLabel="Manage measurements"
+            >
               <Text style={styles.sectionLink}>Manage</Text>
             </TouchableOpacity>
           </View>
@@ -530,6 +541,8 @@ export default function ProfileScreen() {
                 if (item.key === "terms") router.push("/terms" as any);
                 if (item.key === "about") router.push("/about" as any);
               }}
+              accessibilityRole="button"
+              accessibilityLabel={t(item.labelKey)}
             >
               <View style={styles.menuIconBox}>
                 <Ionicons
@@ -554,7 +567,12 @@ export default function ProfileScreen() {
           entering={FadeInDown.delay(200).duration(400)}
           style={styles.logoutWrap}
         >
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            onPress={handleLogout}
+            accessibilityRole="button"
+            accessibilityLabel={t("profile.logout")}
+          >
             <Ionicons name="log-out-outline" size={20} color={COLORS.error} />
             <Text style={styles.logoutText}>{t("profile.logout")}</Text>
           </TouchableOpacity>
@@ -571,6 +589,8 @@ export default function ProfileScreen() {
             style={styles.deleteAccountBtn}
             onPress={handleDeleteAccount}
             disabled={deletingAccount}
+            accessibilityRole="button"
+            accessibilityLabel="Delete my account"
           >
             {deletingAccount ? (
               <ActivityIndicator size="small" color={COLORS.gray} />

@@ -247,6 +247,26 @@ function PushNotificationSetup() {
     }
   }, [isAuthenticated]);
 
+  // The OS can roll the underlying device push token while the app is
+  // already running (documented by expo-notifications as rare but real) -
+  // without re-registering, the backend keeps sending to a now-invalid
+  // Expo push token until the user logs out/in again. This re-derives the
+  // Expo push token (not the raw device token this listener actually
+  // fires with) the same way registerForPushNotifications does, and
+  // re-registers it with the backend.
+  useEffect(() => {
+    if (!isPushAvailable || !isAuthenticated) return;
+    let sub: { remove: () => void } | undefined;
+    loadNotifications().then((Notifications) => {
+      sub = Notifications.addPushTokenListener(() => {
+        registerForPushNotifications().then((token) => {
+          if (token) tokenRef.current = token;
+        });
+      });
+    });
+    return () => sub?.remove();
+  }, [isAuthenticated]);
+
   useEffect(() => {
     if (!isPushAvailable) return;
     let sub: { remove: () => void } | undefined;

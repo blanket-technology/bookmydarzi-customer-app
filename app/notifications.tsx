@@ -79,7 +79,7 @@ export default function NotificationsScreen() {
   );
 
   const handlePress = (n: AppNotification) => {
-    if (!n.is_read) markRead(n.id);
+    if (!n.is_read) markRead(n.id).catch(() => {});
     const data = (n.data ?? {}) as Record<string, unknown>;
     const orderId = data.order_id ?? data.orderId;
     // "chat" notifications are always chat_v2 support conversations (see
@@ -134,7 +134,7 @@ export default function NotificationsScreen() {
         title="Notifications"
         right={
           unreadCount > 0 ? (
-            <TouchableOpacity onPress={() => markAllRead()} hitSlop={8} style={{ width: 56 }}>
+            <TouchableOpacity onPress={() => markAllRead().catch(() => {})} hitSlop={8} style={{ width: 56 }}>
               <Text style={styles.markAll}>Mark all</Text>
             </TouchableOpacity>
           ) : undefined

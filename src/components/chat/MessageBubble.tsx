@@ -3,6 +3,9 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import type { LocalChatMessage } from "../../store/useSupportChatStore";
 import { AttachmentPreview } from "./AttachmentPreview";
+import { renderMarkdown } from "./renderMarkdown";
+
+const KNOWN_MESSAGE_TYPES = new Set(["text", "image"]);
 
 interface Props {
   message: LocalChatMessage;
@@ -19,14 +22,19 @@ interface Props {
    * messages - there is no per-message read flag, so this is derived by
    * the caller from the session's peerReadUpToSeq. */
   isRead?: boolean;
+  /** Real name of the agent currently on this session, if any - shown on
+   * their message bubbles instead of the generic "Support Agent" label
+   * once known, matching what the header/typing indicator already show. */
+  agentName?: string | null;
 }
 
-export function MessageBubble({ message, isOwn, onRetry, showSenderMeta = true, isRead = false }: Props) {
+export function MessageBubble({ message, isOwn, onRetry, showSenderMeta = true, isRead = false, agentName }: Props) {
   const isSystem = message.sender_type === "system";
   const isAI = message.sender_type === "ai";
   const isPending = isOwn && message.deliveryStatus === "pending";
   const isFailed = isOwn && message.deliveryStatus === "failed";
   const imageUrl = message.message_type === "image" ? message.metadata?.attachment_id : undefined;
+  const isUnsupportedType = !KNOWN_MESSAGE_TYPES.has(message.message_type) && !imageUrl;
 
   if (isSystem) {
     return (
@@ -54,21 +62,35 @@ export function MessageBubble({ message, isOwn, onRetry, showSenderMeta = true, 
         >
           {!isOwn && showSenderMeta && (
             <Text style={[styles.senderLabel, isAI ? styles.aiLabel : styles.agentLabel]}>
-              {isAI ? "BookMyDarzi AI" : "Support Agent"}
+              {isAI ? "BookMyDarzi AI" : agentName || "Support Agent"}
             </Text>
           )}
           {imageUrl ? (
             <AttachmentPreview uri={imageUrl} status={isFailed ? "failed" : isPending ? "uploading" : "success"} />
           ) : null}
           {message.body ? (
-            <Text
-              style={[
-                styles.bodyText,
-                isOwn ? styles.bodyTextOwn : styles.bodyTextOther,
-                imageUrl && { marginTop: 6 },
-              ]}
-            >
-              {message.body}
+            !isOwn && (isAI || message.sender_type === "agent") ? (
+              // AI/agent replies commonly include basic markdown (**bold**,
+              // lists) - render it instead of showing literal asterisks.
+              // Customer's own messages are always plain text (never
+              // markdown-authored), so they skip this entirely.
+              <View style={[imageUrl && { marginTop: 6 }]}>
+                {renderMarkdown(message.body, [styles.bodyText, styles.bodyTextOther])}
+              </View>
+            ) : (
+              <Text
+                style={[
+                  styles.bodyText,
+                  isOwn ? styles.bodyTextOwn : styles.bodyTextOther,
+                  imageUrl && { marginTop: 6 },
+                ]}
+              >
+                {message.body}
+              </Text>
+            )
+          ) : isUnsupportedType ? (
+            <Text style={[styles.bodyText, isOwn ? styles.bodyTextOwn : styles.bodyTextOther, styles.unsupportedText]}>
+              This message type isn&apos;t supported yet. Please check the app for updates.
             </Text>
           ) : null}
           <View style={styles.metaRow}>
@@ -129,9 +151,14 @@ const styles = StyleSheet.create({
   senderLabel: { fontSize: 10, fontWeight: "700", marginBottom: 2 },
   aiLabel: { color: "#7c3aed" },
   agentLabel: { color: "#0a8c8c" },
-  bodyText: { fontSize: 14, lineHeight: 20 },
+  // flexShrink lets the bubble's Text actually shrink to the parent's
+  // maxWidth for a single very long unbroken token (long URL, base64-like
+  // string) - without it such a token could push the bubble/row wider than
+  // intended instead of wrapping within the 75%-max-width container.
+  bodyText: { fontSize: 14, lineHeight: 20, flexShrink: 1 },
   bodyTextOwn: { color: "#fff" },
   bodyTextOther: { color: "#1a1a1a" },
+  unsupportedText: { fontStyle: "italic", opacity: 0.7 },
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 3, gap: 3 },
   metaIcon: { marginRight: 1 },
   timestamp: { fontSize: 10 },

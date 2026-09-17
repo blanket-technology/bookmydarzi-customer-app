@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 12.0.0",
-    "appVersionSource": "local",
+    "appVersionSource": "remote",
     "requireCommit": false
   },
   "build": {
@@ -61,12 +61,19 @@
       }
     },
     "production": {
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://web-production-efff7.up.railway.app",
         "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis"
       },
       "android": {
         "buildType": "app-bundle"
+      }
+    },
+    "production-apk": {
+      "extends": "production",
+      "android": {
+        "buildType": "apk"
       }
     }
   },
