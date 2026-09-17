@@ -64,7 +64,9 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://web-production-efff7.up.railway.app",
-        "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis"
+        "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD": "true"
       },
       "android": {
         "buildType": "app-bundle"
