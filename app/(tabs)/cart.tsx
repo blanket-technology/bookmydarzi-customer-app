@@ -827,12 +827,13 @@ export default function CartScreen() {
               Slide to Confirm. Pickup, scheduled date/slot, style
               reference, and the full price breakdown are all collapsed
               or minimal by default so the cart items stay primary. */}
-          <View
-            style={[
-              styles.sheet,
-              { paddingBottom: Math.max(insets.bottom, SPACING.sm) },
-            ]}
-          >
+          {/* No insets.bottom padding here - the persistent tab bar
+              (app/_layout.tsx's PersistentTabBar, always visible on this
+              screen) already reserves the home-indicator safe area right
+              below this sheet. Adding it again here double-reserved that
+              space and left a large empty gap between "Slide to Pay" and
+              the tab bar. */}
+          <View style={[styles.sheet, { paddingBottom: SPACING.sm }]}>
             <View style={styles.sheetGrabber} />
 
             <View
