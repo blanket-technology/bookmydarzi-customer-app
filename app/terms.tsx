@@ -43,9 +43,9 @@ export default function TermsScreen() {
             "Please ensure someone is available at the scheduled pickup and delivery windows, and that the address and contact details you provide are accurate. Fabric or garments handed over for stitching should be free of concealed valuables. Providing false information, abusing our staff or delivery partners, or misusing the app (e.g. placing orders you don't intend to honor) may result in your account being suspended or terminated.",
         },
         {
-          heading: "Cancellations and refunds",
+          heading: "Cancellation and return policy",
           body:
-            "Orders can be cancelled before stitching begins, subject to the cancellation policy shown at the time of cancellation - this may include a partial refund or a cancellation charge depending on how far the order has progressed. Once stitching has started, cancellations are handled on a case-by-case basis through Support. Approved refunds are processed within 5-7 business days to your original payment method.",
+            "Cancellation: Orders can be cancelled free of charge before stitching begins. Once stitching has started, cancellation is still possible but may carry a cancellation charge shown to you before you confirm it. If we cancel an order ourselves (e.g. your address is outside our service area, or no tailor is available), any charge is automatically waived and you get a full refund. Returns: Since garments are custom-stitched to your measurements, we do not accept returns for a change of mind. If a finished garment doesn't match what was ordered, has a genuine defect, or arrived damaged, contact Support within 7 days of delivery for a free alteration, re-stitch, or refund. Refunds: Approved refunds are processed within 5-7 business days to your original payment method.",
         },
         {
           heading: "Order disputes",

@@ -33,6 +33,11 @@ export default function PrivacyScreen() {
             "You can update or delete your saved addresses and measurement profiles at any time from your account. You can permanently delete your account yourself from Profile at any time - no need to contact support. You can also request a copy of your data by reaching out through Support.",
         },
         {
+          heading: "Data governance",
+          body:
+            "We collect data only for the purposes described above and don't repurpose it for unrelated uses without telling you. Access within our team is role-based - only staff who need a piece of data to do their job can see it. We don't use your personal data to train third-party AI models, and we don't share it with data brokers or advertisers. If a data breach occurs that risks your personal data, we will notify affected users and, where required, the relevant authority, in line with applicable Indian data protection law.",
+        },
+        {
           heading: "Governing law",
           body:
             "This policy is governed by the laws of India, with the courts of Noida, Uttar Pradesh having exclusive jurisdiction over any related dispute.",
