@@ -156,7 +156,16 @@ module.exports = {
     ],
     ...(isLocalDevBuild ? ["./plugins/withCleartextTraffic.js"] : []),
     "./plugins/withRazorpayGradle.js",
-    "@sentry/react-native",
+    [
+      "@sentry/react-native",
+      // No Sentry org/project/auth-token configured yet, so the release
+      // build's automatic source-map upload step has nothing to auth
+      // against - sentry-cli was exiting non-zero and failing the whole
+      // Gradle build. Sentry error reporting itself (sentryService.ts)
+      // still works via EXPO_PUBLIC_SENTRY_DSN; only the build-time upload
+      // is disabled. Re-enable once SENTRY_AUTH_TOKEN/org/project are set.
+      { disableNativeDebugUpload: true, autoUploadSourceMaps: false },
+    ],
   ],
   experiments: {
     typedRoutes: true,
