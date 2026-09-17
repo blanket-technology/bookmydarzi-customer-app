@@ -10,7 +10,7 @@ export default function TermsScreen() {
         {
           heading: "Our service",
           body:
-            "BookMyDarzi is a doorstep tailoring service. We pick up your fabric or garment, have it stitched or altered by one of our tailors, and deliver it back to you. Turnaround times shown in the app are estimates and may vary based on the service and tailor availability. The company operating BookMyDarzi is [FILL IN: LEGAL ENTITY NAME], registered in [FILL IN: JURISDICTION / STATE].",
+            "BookMyDarzi is a doorstep tailoring service. We pick up your fabric or garment, have it stitched or altered by one of our tailors, and deliver it back to you. Turnaround times shown in the app are estimates and may vary based on the service and tailor availability. The company operating BookMyDarzi is Blanket Technologies Pvt Ltd., a company registered in Noida, Uttar Pradesh, India. Blanket Technologies Pvt Ltd. is the parent company of BookMyDarzi.",
         },
         {
           heading: "Accounts and verification",
@@ -60,12 +60,12 @@ export default function TermsScreen() {
         {
           heading: "Intellectual property",
           body:
-            "The BookMyDarzi app, its design, logo, and content are owned by [FILL IN: LEGAL ENTITY NAME] and may not be copied, reproduced, or used without permission. You retain ownership of any photos or reference images you upload, and grant us a limited license to use them only to fulfil your order.",
+            "The BookMyDarzi app, its design, logo, and content are owned by Blanket Technologies Pvt Ltd. and may not be copied, reproduced, or used without permission. You retain ownership of any photos or reference images you upload, and grant us a limited license to use them only to fulfil your order.",
         },
         {
           heading: "Governing law",
           body:
-            "These terms are governed by the laws of [FILL IN: COUNTRY/STATE], and any disputes arising from them are subject to the jurisdiction of the courts in [FILL IN: CITY].",
+            "These terms are governed by the laws of India, and any disputes arising from them are subject to the exclusive jurisdiction of the courts in Noida, Uttar Pradesh.",
         },
         {
           heading: "Changes to these terms",

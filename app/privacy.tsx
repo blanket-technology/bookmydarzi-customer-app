@@ -10,7 +10,7 @@ export default function PrivacyScreen() {
         {
           heading: "Information we collect",
           body:
-            "We collect the information you give us directly - your name, phone number, email, delivery addresses, and body measurements - so we can schedule pickups, deliver garments, and get the fit right. We also collect order and payment details needed to process your bookings.",
+            "BookMyDarzi is operated by Blanket Technologies Pvt Ltd. (the parent company of BookMyDarzi). We collect the information you give us directly - your name, phone number, email, delivery addresses, and body measurements - so we can schedule pickups, deliver garments, and get the fit right. We also collect order and payment details needed to process your bookings, and device/location data needed to show serviceability and enable pickup/delivery.",
         },
         {
           heading: "How we use your information",
@@ -31,6 +31,11 @@ export default function PrivacyScreen() {
           heading: "Your choices",
           body:
             "You can update or delete your saved addresses and measurement profiles at any time from your account. You can permanently delete your account yourself from Profile at any time - no need to contact support. You can also request a copy of your data by reaching out through Support.",
+        },
+        {
+          heading: "Governing law",
+          body:
+            "This policy is governed by the laws of India, with the courts of Noida, Uttar Pradesh having exclusive jurisdiction over any related dispute.",
         },
         {
           heading: "Contact us",
