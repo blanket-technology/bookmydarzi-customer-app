@@ -315,9 +315,15 @@ export async function fetchServiceRatings(serviceId: number): Promise<ServiceRat
 export interface CatalogServiceLookup {
   serviceLineName: string;
   stitchingTypeName: string | null;
+  /** The tier's own photo, falling back to its parent line's photo - same
+   * fallback chain used elsewhere in the app (e.g. sub-services.tsx's
+   * stitch-group image resolution) so a tier with no photo of its own
+   * still shows something representative rather than a blank/icon box. */
+  imageUrl: string | null;
 }
 
-/** Resolve display names for a bookable service_id from the catalog tree. */
+/** Resolve display names (and a representative photo) for a bookable
+ * service_id from the catalog tree. */
 export function lookupCatalogServiceById(
   tree: CatalogCategoriesTreeResponse,
   serviceId: number,
@@ -332,6 +338,7 @@ export function lookupCatalogServiceById(
           serviceLineName:
             stitching.service_line_name.trim() || line.name.trim() || stitching.name,
           stitchingTypeName: stitching.name.trim() || null,
+          imageUrl: stitching.image_url ?? line.image_url ?? null,
         };
       }
     }
@@ -342,6 +349,7 @@ export function lookupCatalogServiceById(
         serviceLineName:
           (direct.service_line_name ?? "").trim() || direct.name.trim() || "Service",
         stitchingTypeName: null,
+        imageUrl: direct.image_url ?? null,
       };
     }
   }

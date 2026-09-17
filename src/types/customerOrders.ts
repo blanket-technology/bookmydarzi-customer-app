@@ -255,6 +255,8 @@ export interface OrderDetailsLineItem {
   service_id: number | null;
   service_name: string | null;
   category_name: string | null;
+  /** Service/stitching-type photo for this line item's thumbnail. */
+  image_url?: string | null;
   quantity: number;
   unit_price: number | string | null;
   line_total: number | string | null;

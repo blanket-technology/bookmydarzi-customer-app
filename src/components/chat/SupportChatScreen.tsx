@@ -486,16 +486,22 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
       {/* Talk to agent bar - shown after AI has replied */}
       {showAgentBar && <TalkToAgentBar onPress={handleRequestAgent} />}
 
-      {/* Input */}
-      <MessageInput
-        onSend={handleSend}
-        onSendImage={handleSendImage}
-        onTypingStart={sendTypingStart}
-        onTypingStop={sendTypingStop}
-        sessionStatus={sessionStatus}
-        wsConnected={wsStatus === "connected"}
-        disabled={isClosed}
-      />
+      {/* Input - padded for the bottom safe area (home indicator on iOS,
+          on-screen nav bar on Android) so the composer never sits flush
+          against, or gets crowded by, the device's own navigation
+          controls. KeyboardAvoidingView already handles pushing this up
+          when the keyboard opens; this only matters when it's closed. */}
+      <View style={{ paddingBottom: insets.bottom }}>
+        <MessageInput
+          onSend={handleSend}
+          onSendImage={handleSendImage}
+          onTypingStart={sendTypingStart}
+          onTypingStop={sendTypingStop}
+          sessionStatus={sessionStatus}
+          wsConnected={wsStatus === "connected"}
+          disabled={isClosed}
+        />
+      </View>
 
       <CsatModal
         visible={csatPrompt}

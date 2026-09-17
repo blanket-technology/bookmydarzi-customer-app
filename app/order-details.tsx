@@ -80,6 +80,7 @@ import {
     PaymentCancelledError,
     openRazorpayCheckout,
 } from "../src/utils/razorpayCheckout";
+import { normalizeServiceImageUrl } from "../src/utils/serviceImage";
 import { useAuthStore } from "../store/useAuthStore";
 
 if (Platform.OS === "android") {
@@ -330,7 +331,7 @@ function DetailsStatusHero({
             </View>
           ) : null}
           <Text style={styles.metaLine}>
-            <Text style={styles.metaKey}>Order </Text>
+            <Text style={styles.metaKey}>Order ID: </Text>
             {orderCode}
           </Text>
         </View>
@@ -1109,14 +1110,31 @@ export default function OrderDetailsScreen() {
                   : "Service details"
               }
             >
-              <Text style={styles.serviceTitle}>
-                {detailsText(item.service_name)}
-              </Text>
-              {item.category_name ? (
-                <Text style={styles.serviceSubtitle}>
-                  {detailsText(item.category_name)}
-                </Text>
-              ) : null}
+              <View style={styles.serviceHeaderRow}>
+                {normalizeServiceImageUrl(item.image_url) ? (
+                  <Image
+                    source={{ uri: normalizeServiceImageUrl(item.image_url)! }}
+                    style={styles.serviceThumb}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    transition={150}
+                  />
+                ) : (
+                  <View style={styles.serviceThumbFallback}>
+                    <Ionicons name="cut-outline" size={20} color={COLORS.primaryDark} />
+                  </View>
+                )}
+                <View style={styles.serviceHeaderText}>
+                  <Text style={styles.serviceTitle}>
+                    {detailsText(item.service_name)}
+                  </Text>
+                  {item.category_name ? (
+                    <Text style={styles.serviceSubtitle}>
+                      {detailsText(item.category_name)}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
               {/* Only show "For" when it's a named family member, not the
                   default "Self"/"Me" (booking for yourself needs no label). */}
               {item.person_name &&
@@ -1726,6 +1744,29 @@ const styles = StyleSheet.create({
   },
   amountLabel: { fontSize: 13, color: "#6B7280" },
   amountValue: { fontSize: 15, fontWeight: "700", color: "#1F2937" },
+  serviceHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    marginBottom: 10,
+  },
+  serviceThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.md,
+    backgroundColor: "#F3F4F6",
+    flexShrink: 0,
+  },
+  serviceThumbFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  serviceHeaderText: { flex: 1 },
   serviceTitle: {
     fontSize: 15,
     fontWeight: "700",
@@ -1735,7 +1776,6 @@ const styles = StyleSheet.create({
   serviceSubtitle: {
     fontSize: 13,
     color: "#6B7280",
-    marginBottom: 10,
   },
   designBriefBadgeRow: {
     flexDirection: "row",
