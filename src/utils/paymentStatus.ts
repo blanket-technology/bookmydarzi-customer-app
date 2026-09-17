@@ -44,6 +44,21 @@ export function getPaymentStatusVisual(
   return { label, color: "#92400E", bg: "#FEF3C7" };
 }
 
+/** True when an order still needs an online payment action from the
+ * customer (advance/initiated/failed) - i.e. show a "Pay Now" CTA.
+ * Uses the same normalization as getPaymentStatusVisual() above so the
+ * two never drift (previously order-summary.tsx re-implemented this
+ * normalize-and-match logic inline). */
+export function needsPayment(status: string | null | undefined): boolean {
+  const norm = (status ?? "").toLowerCase().replace(/[^a-z]/g, "");
+  return (
+    norm === "advancepending" ||
+    norm === "initiated" ||
+    norm === "paymentfailed" ||
+    norm === "failed"
+  );
+}
+
 export type PaymentDisplayStatus = "paid" | "pending" | "failed" | "cod" | "processing";
 
 const SUCCESS_STATUSES = new Set(["paid", "completed", "success", "advance_paid", "fully_paid"]);

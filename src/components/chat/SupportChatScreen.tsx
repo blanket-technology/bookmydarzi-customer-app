@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
@@ -12,9 +12,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useChatWS } from "../../hooks/useChatWS";
+import { useNetworkStatus } from "../../hooks/useNetworkStatus";
 import { uploadChatAttachment } from "../../services/chatV2Service";
 import type { LocalChatMessage } from "../../store/useSupportChatStore";
 import { useSupportChatStore } from "../../store/useSupportChatStore";
+import { useToastStore } from "../../store/useToastStore";
 import { ChatSkeleton } from "./ChatSkeleton";
 import { CsatModal } from "./CsatModal";
 import { DateSeparator, formatDateSeparator } from "./DateSeparator";
@@ -71,6 +73,21 @@ interface Props {
    * over orderId when set. */
   sessionUuid?: string;
   onClose?: () => void;
+}
+
+// ── Offline banner - distinct from wsStatus, which only knows the socket is
+// down, not WHY. Device-level connectivity (airplane mode, no signal) is a
+// different, more informative signal to show than a permanently-spinning
+// send button with no explanation. ──────────────────────────────────────────
+function OfflineBanner() {
+  return (
+    <View style={[banner.root, { backgroundColor: "#fef2f2", borderColor: "#fecaca" }]}>
+      <Ionicons name="cloud-offline-outline" size={16} color="#b91c1c" style={{ marginRight: 6 }} />
+      <Text style={[banner.text, { color: "#991b1b" }]}>
+        You&apos;re offline - messages will send once you&apos;re back online.
+      </Text>
+    </View>
+  );
 }
 
 // ── Status banner at top of messages ────────────────────────────────────────
@@ -151,6 +168,8 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
     session,
     messages,
     loading,
+    loadingHistory,
+    hasMoreHistory,
     wsStatus,
     typingUsers,
     csatPrompt,
@@ -166,7 +185,18 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
     setCsatPrompt,
     submitCsat,
     requestHuman,
+    loadHistory,
   } = useSupportChatStore();
+  const { isConnected, isResolved } = useNetworkStatus();
+  const isOffline = isResolved && !isConnected;
+  // KeyboardAvoidingView's "padding" behavior on iOS only pads for the
+  // keyboard itself - it has no idea this screen renders its own in-screen
+  // header (no native nav header) above the KAV's content, so without an
+  // offset the keyboard could cover roughly the header's height worth of
+  // the input bar/last messages. Measure the header's actual rendered
+  // height instead of guessing a fixed number, since it's content-driven
+  // (text/padding), not fixed-height.
+  const [headerHeight, setHeaderHeight] = useState(0);
 
   const listRef = useRef<FlatList<DisplayItem>>(null);
   const sessionUuid = session?.uuid ?? null;
@@ -184,12 +214,42 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
     }
   }, []);
 
-  // Auto-scroll on new messages
+  // Auto-scroll on new messages - but NOT when the length grew because
+  // loadHistory() just prepended older messages (handleLoadMore sets this
+  // ref first), since that should keep the user's current scroll position,
+  // not yank them back down to the newest message they were scrolling away
+  // from to go find.
+  const skipNextAutoScrollRef = useRef(false);
+  const pendingAutoScrollRef = useRef(false);
   useEffect(() => {
+    if (skipNextAutoScrollRef.current) {
+      skipNextAutoScrollRef.current = false;
+      return;
+    }
     if (messages.length > 0) {
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+      pendingAutoScrollRef.current = true;
     }
   }, [messages.length]);
+
+  // Fires once FlatList's own layout pass for the new content has actually
+  // settled - a fixed setTimeout delay was racing against layout on slower
+  // devices or messages with an image (AttachmentPreview loads async), so
+  // scrollToEnd could fire before the new content's height was accounted
+  // for and land short of the true bottom.
+  const handleContentSizeChange = useCallback(() => {
+    if (pendingAutoScrollRef.current) {
+      pendingAutoScrollRef.current = false;
+      listRef.current?.scrollToEnd({ animated: true });
+    }
+  }, []);
+
+  const handleLoadMore = useCallback(() => {
+    if (!hasMoreHistory || loadingHistory || messages.length === 0) return;
+    const oldestSeq = messages[0]?.seq;
+    if (!oldestSeq || oldestSeq <= 0) return;
+    skipNextAutoScrollRef.current = true;
+    loadHistory(oldestSeq);
+  }, [hasMoreHistory, loadingHistory, messages, loadHistory]);
 
   // Mark read up to the latest non-own message whenever the visible list
   // grows - lets the admin thread show "customer has read this".
@@ -239,7 +299,22 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
   const handleSendImage = useCallback(
     async (uri: string) => {
       if (!sessionUuid) return;
-      const uploaded = await uploadChatAttachment(uri);
+      // Previously un-caught: a failed upload (network blip, file too
+      // large, backend rejecting the attachment) threw here with no
+      // optimistic bubble ever appended and no feedback at all - the
+      // customer's tap on the image just did nothing, unlike a failed text
+      // send, which shows a retryable bubble. Show the same toast pattern
+      // used elsewhere in this app for a failed action.
+      let uploaded: { url: string };
+      try {
+        uploaded = await uploadChatAttachment(uri);
+      } catch (err) {
+        useToastStore.getState().show(
+          err instanceof Error ? err.message : "Couldn't send image. Please try again.",
+          "error",
+        );
+        return;
+      }
       const clientId = genId();
       const optimistic: LocalChatMessage = {
         id: -Date.now(),
@@ -262,6 +337,17 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
 
   const handleRequestAgent = useCallback(async () => {
     await requestHuman();
+    // requestHuman() already catches its own failure and sets the store's
+    // `error` field (useSupportChatStore.ts) - but the screen only ever
+    // rendered that field on the initial "no session yet" error screen, so
+    // a failure here (network blip asking for a human agent) previously
+    // failed completely silently once a session already existed. Surface
+    // it the same way handleSendImage's failure now does.
+    const latestError = useSupportChatStore.getState().error;
+    if (latestError) {
+      useToastStore.getState().show(latestError, "error");
+      useSupportChatStore.getState().clearError();
+    }
   }, [requestHuman]);
 
   const sessionStatus = session?.status ?? "ai_handling";
@@ -301,10 +387,10 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + headerHeight : 0}
     >
       {/* Header */}
-      <View style={styles.header}>
+      <View style={styles.header} onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
         {onClose && (
           <TouchableOpacity onPress={onClose} style={styles.backBtn} hitSlop={12}>
             <Ionicons name="arrow-back" size={22} color="#1a1a1a" />
@@ -347,7 +433,7 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
       )}
 
       {/* Session status banner */}
-      <StatusBanner status={sessionStatus} agentName={agentName} />
+      {isOffline ? <OfflineBanner /> : <StatusBanner status={sessionStatus} agentName={agentName} />}
 
       {/* Message list */}
       <FlatList
@@ -364,11 +450,22 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
               showSenderMeta={item.showSenderMeta}
               isRead={item.message.sender_type === "customer" && item.message.seq <= peerReadUpToSeq}
               onRetry={item.message.deliveryStatus === "failed" ? () => handleRetry(item.message) : undefined}
+              agentName={agentName}
             />
           )
         }
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        onStartReached={handleLoadMore}
+        onContentSizeChange={handleContentSizeChange}
+        onStartReachedThreshold={0.3}
+        ListHeaderComponent={
+          loadingHistory ? (
+            <View style={styles.historyLoadingWrap}>
+              <ActivityIndicator size="small" color="#0a8c8c" />
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <Ionicons name="chatbubbles-outline" size={40} color="#d1d5db" />
@@ -438,6 +535,7 @@ const styles = StyleSheet.create({
   headerSub: { fontSize: 11, fontWeight: "600", marginTop: 1 },
 
   listContent: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4, flexGrow: 1 },
+  historyLoadingWrap: { paddingVertical: 12, alignItems: "center" },
 
   emptyWrap: { alignItems: "center", paddingTop: 60, paddingHorizontal: 32, gap: 8 },
   emptyTitle: { fontSize: 18, fontWeight: "800", color: "#1a1a1a", marginTop: 8 },

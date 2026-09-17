@@ -26,7 +26,7 @@ export const API_V1_PREFIX = API_V1_PATH;
 /** Resolved API origin used for all requests (no trailing slash). */
 export const API_HOST = resolveApiOrigin();
 
-console.log("API resolved origin:", API_HOST);
+if (__DEV__) console.log("API resolved origin:", API_HOST);
 
 /** Request timeout in milliseconds */
 const TIMEOUT_MS = 40_000;
@@ -74,6 +74,7 @@ export function getApiConnectivityConfig() {
 let _apiConfigLogged = false;
 
 function logApiConfigOnce(): void {
+  if (!__DEV__) return;
   if (_apiConfigLogged) return;
   _apiConfigLogged = true;
   const cfg = getApiConnectivityConfig();
@@ -349,14 +350,16 @@ async function doRefresh(): Promise<string> {
   const refreshToken = await getRefreshToken();
   const accessToken = await getAccessToken();
 
-  console.log(
-    `[API:refresh:start]\n` +
-      `  apiHost: ${API_HOST}\n` +
-      `  url: ${refreshUrl}\n` +
-      `  accessToken: ${maskToken(accessToken)}\n` +
-      `  refreshToken: ${maskToken(refreshToken)}\n` +
-      `  refreshTokenPresent: ${Boolean(refreshToken)}`,
-  );
+  if (__DEV__) {
+    console.log(
+      `[API:refresh:start]\n` +
+        `  apiHost: ${API_HOST}\n` +
+        `  url: ${refreshUrl}\n` +
+        `  accessToken: ${maskToken(accessToken)}\n` +
+        `  refreshToken: ${maskToken(refreshToken)}\n` +
+        `  refreshTokenPresent: ${Boolean(refreshToken)}`,
+    );
+  }
 
   if (!refreshToken) {
     console.warn("[API:refresh:error] no refresh token in SecureStore");
@@ -389,10 +392,21 @@ async function doRefresh(): Promise<string> {
   const data = await response.json().catch(() => ({}));
   const elapsedMs = Date.now() - startedAt;
 
-  console.log(
-    `[API:refresh:response] status=${response.status} in ${elapsedMs}ms\n` +
-      `  body: ${truncateForLog(data)}`,
-  );
+  // Mask before logging - a successful refresh's response body IS the new
+  // unmasked access/refresh token pair, so logging it raw defeated the
+  // masking this same file uses everywhere else for tokens (saveTokens,
+  // refresh:success below).
+  if (__DEV__) {
+    const maskedForLog = {
+      ...(data as Record<string, unknown>),
+      ...((data as any)?.access_token ? { access_token: maskToken((data as any).access_token) } : {}),
+      ...((data as any)?.refresh_token ? { refresh_token: maskToken((data as any).refresh_token) } : {}),
+    };
+    console.log(
+      `[API:refresh:response] status=${response.status} in ${elapsedMs}ms\n` +
+        `  body: ${truncateForLog(maskedForLog)}`,
+    );
+  }
 
   if (response.status === 404) {
     console.error("[API:refresh:error] POST /auth/refresh not found (404)");
@@ -453,9 +467,11 @@ async function doRefresh(): Promise<string> {
   }
 
   await saveTokens(newAccessToken, newRefreshToken);
-  console.log(
-    `[API:refresh:success] access=${maskToken(newAccessToken)} refresh=${maskToken(newRefreshToken)}`,
-  );
+  if (__DEV__) {
+    console.log(
+      `[API:refresh:success] access=${maskToken(newAccessToken)} refresh=${maskToken(newRefreshToken)}`,
+    );
+  }
   return newAccessToken;
 }
 
@@ -560,12 +576,19 @@ async function _fetch<T = unknown>(
     headers["Idempotency-Key"] = idempotencyKey;
   }
 
-  console.log(
-    `[API:req:start] ${method} ${apiPath}\n` +
-      `  url: ${url}\n` +
-      `  headers: ${JSON.stringify(headersForLog(headers))}\n` +
-      `  body: ${isFormData ? "(multipart FormData)" : body ? truncateForLog(body, 300) : "(none)"}`,
-  );
+  // __DEV__-gated: this previously logged every request body unconditionally
+  // in every build including production - passwords, OTPs, addresses,
+  // payment fields all sent to the backend passed through here in plaintext
+  // into the device's system log (readable via `adb logcat` on Android with
+  // no root, or Console.app on iOS with a connected device).
+  if (__DEV__) {
+    console.log(
+      `[API:req:start] ${method} ${apiPath}\n` +
+        `  url: ${url}\n` +
+        `  headers: ${JSON.stringify(headersForLog(headers))}\n` +
+        `  body: ${isFormData ? "(multipart FormData)" : body ? truncateForLog(body, 300) : "(none)"}`,
+    );
+  }
 
   // ── Fire the request ───────────────────────────────────────────────────
   let response: Response;
@@ -627,10 +650,12 @@ async function _fetch<T = unknown>(
   }
 
   const elapsedMs = Date.now() - startedAt;
-  console.log(
-    `[API:req:response] ${response.status} ${method} ${apiPath} in ${elapsedMs}ms\n` +
-      `  url: ${url}`,
-  );
+  if (__DEV__) {
+    console.log(
+      `[API:req:response] ${response.status} ${method} ${apiPath} in ${elapsedMs}ms\n` +
+        `  url: ${url}`,
+    );
+  }
 
   // ── 401 - attempt silent token refresh ────────────────────────────────
   if (response.status === 401 && !_retry && !skipAuth && !_isLoggingOut) {
@@ -682,10 +707,12 @@ async function _fetch<T = unknown>(
 
   // ── Parse response body ────────────────────────────────────────────────
   const data = await response.json().catch(() => ({}));
-  console.log(
-    `[API:req:body] ${method} ${apiPath} ${response.status}\n` +
-      `  ${truncateForLog(data)}`,
-  );
+  if (__DEV__) {
+    console.log(
+      `[API:req:body] ${method} ${apiPath} ${response.status}\n` +
+        `  ${truncateForLog(data)}`,
+    );
+  }
 
   // ── Non-2xx error handling ─────────────────────────────────────────────
   if (!response.ok) {

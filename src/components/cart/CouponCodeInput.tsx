@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View 
 import { COLORS, RADIUS, SPACING } from "../../../constants/theme";
 import { validateCouponCode } from "../../services/offerService";
 import type { ApiSpecialOffer } from "../../types/homeApi";
+import { formatCurrency } from "../../utils/formatters";
 import type { AppliedOffer } from "./CouponSection";
 
 function offerToApplied(offer: ApiSpecialOffer): AppliedOffer {
@@ -12,6 +13,8 @@ function offerToApplied(offer: ApiSpecialOffer): AppliedOffer {
     title: offer.Title,
     discountType: offer.DiscountType === "flat" ? "flat" : "percentage",
     discountValue: offer.DiscountType === "flat" ? offer.DiscountAmount ?? 0 : offer.DiscountPercent,
+    maxDiscountAmount: offer.MaxDiscountAmount ?? null,
+    minOrderValue: offer.MinOrderValue ?? 0,
   };
 }
 
@@ -21,7 +24,17 @@ function offerToApplied(offer: ApiSpecialOffer): AppliedOffer {
  * wired to useCartStore, and composed inside CouponSection for Book Now,
  * which has neither). Calls the same GET /offers/validate the website uses.
  */
-export function CouponCodeInput({ onApply }: { onApply: (offer: AppliedOffer) => void }) {
+export function CouponCodeInput({
+  orderTotal,
+  onApply,
+}: {
+  /** Current cart/order total - a code below its own MinOrderValue is
+   * rejected here with a clear message instead of being "Applied" and then
+   * silently ignored by checkout (checkout_service.py/
+   * direct_order_service.py's own min_order_ok check). */
+  orderTotal: number;
+  onApply: (offer: AppliedOffer) => void;
+}) {
   const [code, setCode] = useState("");
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
@@ -33,6 +46,11 @@ export function CouponCodeInput({ onApply }: { onApply: (offer: AppliedOffer) =>
     setError("");
     try {
       const offer = await validateCouponCode(trimmed);
+      const minOrderValue = offer.MinOrderValue ?? 0;
+      if (orderTotal < minOrderValue) {
+        setError(`This coupon needs a minimum order of ${formatCurrency(minOrderValue)}.`);
+        return;
+      }
       onApply(offerToApplied(offer));
       setCode("");
     } catch (err) {

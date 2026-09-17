@@ -36,7 +36,7 @@ import {
   summaryMoney,
   summaryText,
 } from "../src/utils/orderSummaryDisplay";
-import { getPaymentStatusVisual } from "../src/utils/paymentStatus";
+import { getPaymentStatusVisual, needsPayment } from "../src/utils/paymentStatus";
 import { COD_STATUS_LABELS, PAYMENT_ACTION_LABELS, PAYMENT_METHOD_META } from "../src/types/payment";
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
@@ -176,7 +176,7 @@ function SummaryStatusHero({ payload }: { payload: CustomerOrderSummaryPayload }
       {/* How much is it */}
       <View style={styles.priceBlock}>
         <View style={styles.priceRow}>
-          <Text style={styles.priceLabel}>Order Amount</Text>
+          <Text style={styles.priceLabel}>Total</Text>
           <Text style={styles.priceValue}>{orderAmount}</Text>
         </View>
         {paymentSummaryLines.map((line) => (
@@ -261,11 +261,7 @@ export default function OrderSummaryScreen() {
   const paymentStatusKey = (payload?.payment.payment_status ?? "")
     .toLowerCase()
     .replace(/[^a-z]/g, "");
-  const needsPayment =
-    paymentStatusKey === "advancepending" ||
-    paymentStatusKey === "initiated" ||
-    paymentStatusKey === "paymentfailed" ||
-    paymentStatusKey === "failed";
+  const needsPaymentAction = needsPayment(payload?.payment.payment_status);
 
   const navigatingToPayment = useRef(false);
 
@@ -378,7 +374,7 @@ export default function OrderSummaryScreen() {
             ) : null}
             <View style={styles.billDividerBold} />
             <BillRow
-              label="Total amount"
+              label="Total"
               value={summaryMoney(payload.billing.total_amount)}
               bold
               highlight
@@ -425,7 +421,7 @@ export default function OrderSummaryScreen() {
           </OrderScreenSection>
 
           {/* CTAs */}
-          {needsPayment ? (
+          {needsPaymentAction ? (
             <Pressable
               style={({ pressed }) => [styles.payNowCta, pressed && { opacity: 0.88 }]}
               onPress={handlePayNow}

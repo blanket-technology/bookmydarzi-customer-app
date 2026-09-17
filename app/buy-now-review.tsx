@@ -47,6 +47,7 @@ import { useOrderStore } from "../src/store/useOrderStore";
 import type { ApiAddress } from "../src/types/api";
 import { PAYMENT_ACTION_LABELS, type PaymentMethodOption } from "../src/types/payment";
 import { buildPickupTimeSlots } from "../src/utils/pickupTimeSlots";
+import { estimateCouponDiscount } from "../src/utils/couponDiscount";
 import { normalizeProfileImageUrl } from "../src/utils/profileImage";
 import { safeRouterPush, safeRouterReplace } from "../src/utils/safeNavigation";
 import { getUserMobile } from "../src/utils/userPhone";
@@ -183,7 +184,11 @@ export default function BuyNowReviewScreen() {
   }, [addresses, selectedAddressId, addressId]);
 
   useEffect(() => {
-    if (!pendingService?.bookableServiceId) return;
+    if (!pendingService?.bookableServiceId) {
+      setBillingLoading(false);
+      setBillingError("No service selected. Please go back and pick a service.");
+      return;
+    }
     setBillingLoading(true);
     setBillingError("");
     const addonIds = (pendingService.addons ?? []).map((a) => a.addonId);
@@ -221,16 +226,11 @@ export default function BuyNowReviewScreen() {
 
   // Client-side discount estimate for display only - create_direct_order
   // recomputes and validates the real discount server-side from offer_id
-  // (same "the backend is authoritative" contract as cart.tsx). Applied on
-  // the full bill (after GST + platform fee), capped at the bill total so a
-  // flat discount larger than the order can never show a negative "you pay"
-  // amount.
-  const estimatedDiscount =
-    appliedOffer && billing && appliedOffer.discountValue > 0
-      ? appliedOffer.discountType === "flat"
-        ? Math.min(Math.round(appliedOffer.discountValue), billing.total_amount)
-        : Math.round(billing.total_amount * (appliedOffer.discountValue / 100) * 100) / 100
-      : 0;
+  // (same "the backend is authoritative" contract as cart.tsx). Shared with
+  // cart.tsx via estimateCouponDiscount() so the two screens can't drift.
+  const estimatedDiscount = billing
+    ? estimateCouponDiscount(appliedOffer, billing.total_amount)
+    : 0;
   const displayTotal = billing ? Math.max(billing.total_amount - estimatedDiscount, 1) : 0;
   const displayTotalText = `₹${Math.round(displayTotal).toLocaleString("en-IN")}`;
 
@@ -515,7 +515,12 @@ export default function BuyNowReviewScreen() {
 
         {/* ── Available offers + coupon code (matches cart, previously
               missing entirely from Book Now) ───────────────────────── */}
-        <CouponSection offers={specialOffers} appliedOffer={appliedOffer} onChange={setAppliedOffer} />
+        <CouponSection
+          offers={specialOffers}
+          orderTotal={billing?.total_amount ?? 0}
+          appliedOffer={appliedOffer}
+          onChange={setAppliedOffer}
+        />
 
         {/* ── Pickup type ───────────────────────────────────── */}
         <View style={s.card}>
@@ -627,7 +632,7 @@ export default function BuyNowReviewScreen() {
       {/* ── Footer CTA - slide to confirm, same pattern as cart ─────────── */}
       <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, SPACING.sm) }]}>
         <View style={s.footerInfo}>
-          <Text style={s.footerLabel}>{paymentMethod === "cod" ? "Amount due" : "Pay now"}</Text>
+          <Text style={s.footerLabel}>Total</Text>
           <Text style={s.footerAmt}>
             {billing ? (estimatedDiscount > 0 ? displayTotalText : billing.total_amount_display) : "-"}
           </Text>

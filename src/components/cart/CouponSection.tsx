@@ -12,6 +12,15 @@ export interface AppliedOffer {
   title: string;
   discountType: "flat" | "percentage";
   discountValue: number;
+  // Mirrors the backend's own clamp (checkout_service.py/
+  // direct_order_service.py) so the client's displayed discount estimate
+  // never promises more than checkout will actually grant - without this,
+  // a percentage coupon shown as e.g. "50% off" on a big order displayed a
+  // bigger discount than the backend's MaxDiscountAmount cap allowed, and a
+  // flat/percentage coupon below MinOrderValue could be "Applied" in the UI
+  // even though checkout silently ignores it and charges the full amount.
+  maxDiscountAmount: number | null;
+  minOrderValue: number;
 }
 
 function offerToApplied(offer: ApiSpecialOffer): AppliedOffer {
@@ -20,33 +29,41 @@ function offerToApplied(offer: ApiSpecialOffer): AppliedOffer {
     title: offer.Title,
     discountType: offer.DiscountType === "flat" ? "flat" : "percentage",
     discountValue: offer.DiscountType === "flat" ? offer.DiscountAmount ?? 0 : offer.DiscountPercent,
+    maxDiscountAmount: offer.MaxDiscountAmount ?? null,
+    minOrderValue: offer.MinOrderValue ?? 0,
   };
 }
 
 function OfferRow({
   offer,
   applied,
+  eligible,
   onApply,
   onRemove,
 }: {
   offer: ApiSpecialOffer;
   applied: boolean;
+  eligible: boolean;
   onApply: () => void;
   onRemove: () => void;
 }) {
   return (
     <View style={s.row}>
       <View style={s.left}>
-        <View style={s.badge}>
+        <View style={[s.badge, !eligible && s.badgeDisabled]}>
           <Text style={s.badgeText}>
             {offer.DiscountType === "flat" ? formatCurrency(offer.DiscountAmount) : `${offer.DiscountPercent}%`}
           </Text>
         </View>
         <View style={s.textWrap}>
-          <Text style={s.title} numberOfLines={1}>
+          <Text style={[s.title, !eligible && s.titleDisabled]} numberOfLines={1}>
             {offer.Title}
           </Text>
-          {offer.Description ? (
+          {!eligible ? (
+            <Text style={s.desc} numberOfLines={1}>
+              Min. order {formatCurrency(offer.MinOrderValue)}
+            </Text>
+          ) : offer.Description ? (
             <Text style={s.desc} numberOfLines={1}>
               {offer.Description}
             </Text>
@@ -54,10 +71,11 @@ function OfferRow({
         </View>
       </View>
       <TouchableOpacity
-        style={[s.applyBtn, applied && s.applyBtnActive]}
+        style={[s.applyBtn, applied && s.applyBtnActive, !eligible && s.applyBtnDisabled]}
         onPress={applied ? onRemove : onApply}
         activeOpacity={0.8}
         hitSlop={8}
+        disabled={!eligible && !applied}
       >
         {applied ? <Ionicons name="checkmark" size={14} color={s.applyTextActive.color} style={{ marginRight: 3 }} /> : null}
         <Text style={[s.applyText, applied && s.applyTextActive]}>{applied ? "Applied" : "Apply"}</Text>
@@ -85,10 +103,17 @@ function OfferRow({
  */
 export function CouponSection({
   offers,
+  orderTotal,
   appliedOffer,
   onChange,
 }: {
   offers: ApiSpecialOffer[];
+  /** Current cart/order total, used only to gray out and block "Apply" on
+   * offers below their own MinOrderValue - mirrors the backend's own
+   * `min_order_ok` check (checkout_service.py/direct_order_service.py) so
+   * the UI never lets a customer "Apply" a coupon checkout will silently
+   * ignore. */
+  orderTotal: number;
   appliedOffer: AppliedOffer | null;
   onChange: (offer: AppliedOffer | null) => void;
 }) {
@@ -122,6 +147,7 @@ export function CouponSection({
               key={offer.Id}
               offer={offer}
               applied={appliedOffer?.offerId === offer.Id}
+              eligible={orderTotal >= (offer.MinOrderValue ?? 0)}
               onApply={() => onChange(offerToApplied(offer))}
               onRemove={() => onChange(null)}
             />
@@ -140,7 +166,7 @@ export function CouponSection({
         </>
       )}
 
-      <CouponCodeInput onApply={onChange} />
+      <CouponCodeInput orderTotal={orderTotal} onApply={onChange} />
     </View>
   );
 }
@@ -204,8 +230,10 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   badgeText: { fontSize: 11, fontWeight: "800", color: COLORS.white },
+  badgeDisabled: { backgroundColor: COLORS.grayBorder },
   textWrap: { flex: 1 },
   title: { fontSize: 12.5, fontWeight: "700", color: COLORS.black },
+  titleDisabled: { color: COLORS.gray },
   desc: { fontSize: 10.5, color: COLORS.gray, marginTop: 1 },
   applyBtn: {
     flexDirection: "row",
@@ -218,6 +246,7 @@ const s = StyleSheet.create({
     backgroundColor: "transparent",
   },
   applyBtnActive: { backgroundColor: COLORS.primaryDark },
+  applyBtnDisabled: { borderColor: COLORS.grayBorder, opacity: 0.5 },
   applyText: { fontSize: 11, fontWeight: "700", color: COLORS.primaryDark },
   applyTextActive: { color: COLORS.white },
 });

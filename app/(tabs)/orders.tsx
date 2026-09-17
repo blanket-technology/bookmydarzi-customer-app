@@ -133,13 +133,13 @@ export default function OrdersScreen() {
   // Details and back).
   useFocusEffect(
     useCallback(() => {
-      loadTab(tab);
+      loadTab(tab).catch(() => {});
     }, [tab, loadTab]),
   );
 
   const handleRefresh = () => {
     setRefreshing(true);
-    loadTab(tab, true);
+    loadTab(tab, true).catch(() => {});
   };
 
   const handleSummaryPress = useCallback(
@@ -249,7 +249,7 @@ export default function OrdersScreen() {
           <Ionicons name="alert-circle-outline" size={44} color={COLORS.error} />
           <Text style={styles.stateTitle}>{t("common.somethingWrong")}</Text>
           <Text style={styles.stateSub}>{error}</Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => loadTab(tab)}>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => loadTab(tab).catch(() => {})}>
             <Text style={styles.primaryBtnText}>{t("common.retry")}</Text>
           </TouchableOpacity>
         </View>

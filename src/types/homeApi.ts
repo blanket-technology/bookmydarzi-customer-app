@@ -43,6 +43,14 @@ export interface ApiSpecialOffer {
   DiscountType?: "percentage" | "flat";
   DiscountPercent: number;
   DiscountAmount?: number | null;
+  // Backend enforces both at checkout (checkout_service.py/
+  // direct_order_service.py) regardless of what the client does with them -
+  // but the client must mirror the same checks/cap for its own displayed
+  // discount estimate, or it shows the customer a number checkout will not
+  // actually honor (e.g. "Applied" on an order below MinOrderValue, which
+  // checkout silently ignores and charges the full amount instead).
+  MinOrderValue?: number;
+  MaxDiscountAmount?: number | null;
   ImageUrl: string | null;
   ValidFrom?: string | null;
   ValidUntil: string;

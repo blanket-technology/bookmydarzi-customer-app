@@ -91,11 +91,19 @@ interface CartState {
   appliedOfferDiscountType: "percentage" | "flat";
   appliedOfferDiscountValue: number;
   appliedOfferTitle: string;
+  /** Mirrors the backend's own clamp/cap (checkout_service.py) so the
+   * cart screen's discount estimate never promises more than checkout will
+   * actually grant - see CouponSection.tsx's AppliedOffer for the same
+   * fields on the Book Now path. */
+  appliedOfferMaxDiscountAmount: number | null;
+  appliedOfferMinOrderValue: number;
   setAppliedOffer: (
     id: number,
     discountType: "percentage" | "flat",
     discountValue: number,
     title: string,
+    maxDiscountAmount?: number | null,
+    minOrderValue?: number,
   ) => void;
   clearAppliedOffer: () => void;
 
@@ -164,13 +172,17 @@ export const useCartStore = create<CartState>()(
       appliedOfferDiscountType: "percentage",
       appliedOfferDiscountValue: 0,
       appliedOfferTitle: "",
+      appliedOfferMaxDiscountAmount: null,
+      appliedOfferMinOrderValue: 0,
 
-      setAppliedOffer: (id, discountType, discountValue, title) =>
+      setAppliedOffer: (id, discountType, discountValue, title, maxDiscountAmount = null, minOrderValue = 0) =>
         set({
           appliedOfferId: id,
           appliedOfferDiscountType: discountType,
           appliedOfferDiscountValue: discountValue,
           appliedOfferTitle: title,
+          appliedOfferMaxDiscountAmount: maxDiscountAmount,
+          appliedOfferMinOrderValue: minOrderValue,
         }),
       clearAppliedOffer: () =>
         set({
@@ -178,6 +190,8 @@ export const useCartStore = create<CartState>()(
           appliedOfferDiscountType: "percentage",
           appliedOfferDiscountValue: 0,
           appliedOfferTitle: "",
+          appliedOfferMaxDiscountAmount: null,
+          appliedOfferMinOrderValue: 0,
         }),
 
       applyCart: (cart) => set(applyCartToState(cart)),
@@ -196,6 +210,8 @@ export const useCartStore = create<CartState>()(
           appliedOfferDiscountType: "percentage",
           appliedOfferDiscountValue: 0,
           appliedOfferTitle: "",
+          appliedOfferMaxDiscountAmount: null,
+          appliedOfferMinOrderValue: 0,
         }),
 
       ensureCart: async () => {
@@ -378,6 +394,8 @@ export const useCartStore = create<CartState>()(
             appliedOfferDiscountType: "percentage",
             appliedOfferDiscountValue: 0,
             appliedOfferTitle: "",
+            appliedOfferMaxDiscountAmount: null,
+            appliedOfferMinOrderValue: 0,
           });
           void get()
             .refreshCart({ silent: true, allowCreate: true })

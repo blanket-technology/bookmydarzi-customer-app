@@ -2,6 +2,17 @@
  * Single source of truth for Expo configuration (SDK 54).
  * Replaces app.json - do not add a static app.json alongside this file.
  */
+// Only the local-dev-client build profiles ("development"/"development-railway"
+// in eas.json) connect over a raw http:// URL (Metro, or a bare LAN IP like
+// 192.168.x.x) - preview/staging/production all use HTTPS (Railway/ngrok).
+// withCleartextTraffic.js was previously applied unconditionally, so every
+// build including the production AAB submitted to Play shipped with
+// android:usesCleartextTraffic="true" and a network-security-config trusting
+// plain HTTP app-wide - an unjustified capability Play Store review flags,
+// and a real (if narrow) weakening of the shipped app's network security for
+// no reason, since production never actually uses cleartext HTTP.
+const isLocalDevBuild = process.env.APP_VARIANT === "development";
+
 /** @type {import("expo/config").ExpoConfig} */
 module.exports = {
   name: "DarziApp",
@@ -21,7 +32,16 @@ module.exports = {
         "Allow BookMyDarzi to access your photos to update your profile picture.",
       NSCameraUsageDescription:
         "Allow BookMyDarzi to use your camera to capture order progress photos.",
+      NSLocationWhenInUseUsageDescription:
+        "BookMyDarzi uses your location to find your address for pickup and delivery, and to show nearby service availability.",
     },
+    // Lets Razorpay/UPI apps (GPay, PhonePe, Paytm) return to this app via a
+    // verified https link instead of only the bare darziapp:// custom scheme,
+    // which some UPI apps fail to redirect back through reliably. Requires
+    // hosting /.well-known/apple-app-site-association on this domain (see
+    // public/.well-known/apple-app-site-association in the web repo) with
+    // the real Apple Team ID filled in - see that file's TODO.
+    associatedDomains: ["applinks:bookmydarzi.com"],
   },
   android: {
     package: "com.darziapp.mobile",
@@ -50,6 +70,26 @@ module.exports = {
       "android.permission.ACCESS_COARSE_LOCATION",
       "android.permission.CAMERA",
     ],
+    // Verified App Links so payment-redirect flows (Razorpay/UPI apps)
+    // return here via a real https link rather than only the bare
+    // darziapp:// custom scheme. Requires hosting
+    // /.well-known/assetlinks.json on this domain (see
+    // public/.well-known/assetlinks.json in the web repo) with the real
+    // release-keystore SHA-256 fingerprint filled in - see that file's TODO.
+    intentFilters: [
+      {
+        action: "VIEW",
+        autoVerify: true,
+        data: [
+          {
+            scheme: "https",
+            host: "bookmydarzi.com",
+            pathPrefix: "/app",
+          },
+        ],
+        category: ["BROWSABLE", "DEFAULT"],
+      },
+    ],
   },
   web: {
     output: "static",
@@ -67,8 +107,13 @@ module.exports = {
       {
         android: {
           minSdkVersion: 24,
-          compileSdkVersion: 35,
-          targetSdkVersion: 35,
+          // Matches Expo SDK 54's own default (36 = Android 16) - Google
+          // requires new app submissions to target API 36 starting
+          // 2026-08-31 (existing apps get until 2026-11-01 with an
+          // extension). This was previously pinned to 35, one version
+          // behind this SDK's actual baseline.
+          compileSdkVersion: 36,
+          targetSdkVersion: 36,
         },
         ios: {
           deploymentTarget: "15.1",
@@ -109,7 +154,7 @@ module.exports = {
         microphonePermission: false,
       },
     ],
-    "./plugins/withCleartextTraffic.js",
+    ...(isLocalDevBuild ? ["./plugins/withCleartextTraffic.js"] : []),
     "./plugins/withRazorpayGradle.js",
     "@sentry/react-native",
   ],

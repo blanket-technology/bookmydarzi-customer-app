@@ -377,6 +377,8 @@ export default function PaymentScreen() {
           style={styles.secondaryBtn}
           onPress={() => router.replace("/(tabs)/orders")}
           disabled={state === "paying" || state === "verifying"}
+          accessibilityRole="button"
+          accessibilityLabel="Go to My Orders"
         >
           <Text style={styles.secondaryBtnText}>Go to My Orders</Text>
         </TouchableOpacity>

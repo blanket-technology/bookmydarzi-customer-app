@@ -76,7 +76,7 @@ const FAQS: FaqItem[] = [
     category: "booking",
     question: "Can I cancel my booking?",
     answer:
-      "You can cancel an order before it is accepted by a tailor. Once a tailor is assigned, cancellations are subject to our cancellation policy. Raise a support ticket from the Help & Support section if you need assistance.",
+      "You can cancel an order before it is accepted by a tailor. Once a tailor is assigned, cancellations are subject to our cancellation policy. Chat with us from Help & Support if you need assistance.",
   },
   {
     id: 4,
@@ -90,7 +90,7 @@ const FAQS: FaqItem[] = [
     category: "booking",
     question: "What if I need to change my order details after booking?",
     answer:
-      "Minor changes may be possible before the tailor starts work. Please contact our support team as soon as possible by raising a ticket under Help & Support.",
+      "Minor changes may be possible before the tailor starts work. Please contact our support team as soon as possible by starting a chat under Help & Support.",
   },
 
   // ── Payments ──
@@ -157,7 +157,7 @@ const FAQS: FaqItem[] = [
     category: "services",
     question: "What if I am not satisfied with the finished garment?",
     answer:
-      "We offer free alterations for any stitching mistakes on our part. If the issue is unresolved, you can raise a support ticket or request a refund through the app.",
+      "We offer free alterations for any stitching mistakes on our part. If the issue is unresolved, you can chat with us under Help & Support or request a refund through the app.",
   },
   {
     id: 15,
@@ -224,7 +224,7 @@ const FAQS: FaqItem[] = [
     category: "account",
     question: "How do I delete my account?",
     answer:
-      "Please raise a support ticket under Help & Support with the subject 'Account Deletion Request'. Our team will process it within 7 business days.",
+      "Go to Profile → Delete My Account. This immediately deactivates your account. If you'd rather have our team do it for you, you can also chat with us under Help & Support.",
   },
   {
     id: 24,

@@ -28,4 +28,4 @@ export function buildApiV1Url(endpoint: string): string {
   return `${resolveApiOrigin()}${API_V1_PATH}${ep}`;
 }
 
-console.log("API_BASE_URL:", API_BASE_URL);
+if (__DEV__) console.log("API_BASE_URL:", API_BASE_URL);

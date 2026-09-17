@@ -36,6 +36,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import ScreenHeader from "../src/components/common/ScreenHeader";
+import ErrorState from "../src/components/common/ErrorState";
 import { useHardwareBackHandler } from "../src/hooks/useHardwareBackHandler";
 import type { ApiMeasurement, MeasurementGender } from "../src/services/measurementService";
 import { useMeasurementStore } from "../src/store/useMeasurementStore";
@@ -425,6 +426,8 @@ export default function MeasurementsScreen() {
                 <ActivityIndicator color={COLORS.primary} />
                 <Text style={styles.loadingText}>Loading measurements...</Text>
               </View>
+            ) : error && measurements.length === 0 ? (
+              <ErrorState message={error} onRetry={() => fetchMeasurements()} />
             ) : measurements.length > 0 ? (
               <Animated.View entering={FadeInDown.delay(80).duration(400)} style={styles.card}>
                 <Text style={styles.cardTitle}>Saved Measurements</Text>

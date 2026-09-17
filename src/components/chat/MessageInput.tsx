@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import React, { useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { AttachmentPreview, type AttachmentUploadStatus } from "./AttachmentPreview";
 
 const MAX_LENGTH = 1000;
@@ -72,8 +72,7 @@ export function MessageInput({
     }
   };
 
-  const handlePickImage = async () => {
-    if (!onSendImage || disabled || !wsConnected) return;
+  const pickFromLibrary = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -83,6 +82,32 @@ export function MessageInput({
     });
     if (result.canceled || !result.assets?.[0]) return;
     void uploadImage(result.assets[0].uri);
+  };
+
+  const takePhoto = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission needed", "Allow BookMyDarzi to use your camera to take a photo.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false });
+    if (result.canceled || !result.assets?.[0]) return;
+    void uploadImage(result.assets[0].uri);
+  };
+
+  // Previously only the photo library was reachable here - a customer
+  // wanting to show a live problem (e.g. a stitching defect, a wrong item)
+  // had no way to capture a fresh photo on the spot, only pick an existing
+  // one. A simple choice sheet on the one attach button, matching how the
+  // rest of the app already offers both (see order-detail.tsx's pickPhoto/
+  // takePhoto), rather than adding a second toolbar icon to this compact bar.
+  const handlePickImage = () => {
+    if (!onSendImage || disabled || !wsConnected) return;
+    Alert.alert("Add a photo", undefined, [
+      { text: "Take Photo", onPress: () => void takePhoto() },
+      { text: "Choose from Library", onPress: () => void pickFromLibrary() },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const isResolved = sessionStatus === "resolved" || sessionStatus === "closed";
