@@ -212,8 +212,16 @@ function TypeCard({ group, onPress }: { group: StitchGroup; onPress: () => void 
           />
         </View>
       )}
-      <Text style={tc.name} numberOfLines={2}>{baseName}</Text>
-      {desc ? <Text style={tc.desc} numberOfLines={2}>{desc}</Text> : null}
+      {/* Name/description block reserves the same vertical space on every
+          card (name always allots 2 lines, description slot always
+          renders even when empty) - previously an empty desc collapsed
+          to zero height while a sibling card's 2-line desc pushed its
+          footer down further, so the price/"Book" row landed at a
+          different height per card in the same grid row. */}
+      <View style={tc.textBlock}>
+        <Text style={tc.name} numberOfLines={2}>{baseName}</Text>
+        <Text style={tc.desc} numberOfLines={2}>{desc || " "}</Text>
+      </View>
       <View style={tc.footer}>
         <Text style={[tc.price, { color: accentColor }]}>
           from ₹{minPrice.toLocaleString("en-IN")}
@@ -768,9 +776,17 @@ const sb = StyleSheet.create({
 const tc = StyleSheet.create({
   card: {
     flex: 1,
+    // Every card in a grid row now has the same minimum height regardless
+    // of how much name/description text it has, so the footer (price +
+    // "Book"/"N opts" pill) lands at the same vertical position across a
+    // row instead of floating wherever that card's own content happened
+    // to end - see the textBlock reserved-height fix below for the other
+    // half of this.
+    minHeight: 190,
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg, padding: 14,
-    alignItems: "flex-start", gap: 6,
+    alignItems: "flex-start",
+    justifyContent: "space-between",
     ...Platform.select({
       ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8 },
       android: { elevation: 3 },
@@ -778,9 +794,13 @@ const tc = StyleSheet.create({
   },
   iconBox: { width: 48, height: 48, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center", marginBottom: 2 },
   image: { width: "100%", height: 90, borderRadius: RADIUS.md, marginBottom: 2 },
+  // Fixed height = 2 lines of name (18 * 2) + 2 lines of desc (15 * 2) + a
+  // small gap, so this block is always the same height whether or not this
+  // particular card actually has a description or a 2-line name.
+  textBlock: { height: 18 * 2 + 15 * 2 + 4, gap: 4, width: "100%" },
   name: { fontSize: 13, fontWeight: "700", color: COLORS.black, lineHeight: 18 },
   desc: { fontSize: 11, color: COLORS.gray, lineHeight: 15 },
-  footer: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, marginTop: 4 },
+  footer: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, width: "100%" },
   price: { fontSize: 12, fontWeight: "800" },
   pill: { paddingHorizontal: 5, paddingVertical: 2, borderRadius: RADIUS.full, backgroundColor: COLORS.grayLight },
   pillText: { fontSize: 10, fontWeight: "600", color: COLORS.gray },
