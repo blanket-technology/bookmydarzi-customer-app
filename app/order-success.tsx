@@ -11,7 +11,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import React, { useEffect } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   Easing,
@@ -145,19 +145,24 @@ export default function OrderSuccessScreen() {
       colors={["#0c6c75", "#1aa3b0", "#2dd4bf"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
-      style={[
-        styles.root,
-        { paddingTop: insets.top, paddingBottom: insets.bottom + SPACING.lg },
-      ]}
+      style={[styles.root, { paddingTop: insets.top }]}
     >
       <View style={styles.circle1} />
       <View style={styles.circle2} />
 
-      <View style={styles.content}>
+      {/* Scrollable so a taller info card (e.g. a wide Order ID, or a
+          balance-at-delivery row) or a smaller/older phone screen never
+          clips content off-screen - previously this was a fixed,
+          non-scrolling View, so anything that didn't fit simply vanished
+          past the screen edge instead of being reachable. */}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.iconStack}>
           <Animated.View style={[styles.ring, ringStyle]} />
           <Animated.View style={[styles.iconWrap, checkStyle]}>
-            <Ionicons name="checkmark-circle" size={88} color={COLORS.white} />
+            <Ionicons name="checkmark-circle" size={72} color={COLORS.white} />
           </Animated.View>
         </View>
 
@@ -170,14 +175,22 @@ export default function OrderSuccessScreen() {
 
         {orderId ? (
           <Animated.View style={[styles.infoCard, cardStyle]}>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Order Number</Text>
-              <Text style={styles.infoValue}>{orderNumberDisplay}</Text>
+            {/* Order ID gets its own stacked row (label above value, full
+                width) instead of sharing a horizontal row with the label -
+                a long code like "ORD-20260918-MWY88G" has nowhere to wrap
+                to in a space-between row and was overflowing the screen
+                edge. Every other row here is short enough to stay
+                side-by-side. */}
+            <View style={styles.infoRowStacked}>
+              <Text style={styles.infoLabel}>Order ID</Text>
+              <Text style={styles.infoValueMono} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {orderNumberDisplay}
+              </Text>
             </View>
             <View style={styles.infoDivider} />
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Payment Method</Text>
-              <Text style={styles.infoValue}>
+              <Text style={styles.infoValue} numberOfLines={1}>
                 {isCod ? PAYMENT_METHOD_META.cod.displayLabel : PAYMENT_METHOD_META.online.displayLabel}
               </Text>
             </View>
@@ -186,14 +199,14 @@ export default function OrderSuccessScreen() {
               <Text style={styles.infoLabel}>
                 {isCod ? "Amount Due" : "Total"}
               </Text>
-              <Text style={styles.infoValue}>{orderAmountDisplay}</Text>
+              <Text style={styles.infoValue} numberOfLines={1}>{orderAmountDisplay}</Text>
             </View>
             {!isCod && remainingDisplay ? (
               <>
                 <View style={styles.infoDivider} />
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Balance at Delivery</Text>
-                  <Text style={styles.infoValue}>{remainingDisplay}</Text>
+                  <Text style={styles.infoValue} numberOfLines={1}>{remainingDisplay}</Text>
                 </View>
               </>
             ) : null}
@@ -205,9 +218,15 @@ export default function OrderSuccessScreen() {
             ? "Our team will arrange cloth pickup shortly. Please keep the cash ready at delivery. You'll receive a notification with updates."
             : "Our team will arrange cloth pickup shortly. You will receive a notification with updates."}
         </Animated.Text>
-      </View>
+      </ScrollView>
 
-      <Animated.View style={[styles.btns, btnsStyle]}>
+      <Animated.View
+        style={[
+          styles.btns,
+          btnsStyle,
+          { paddingBottom: insets.bottom + SPACING.md },
+        ]}
+      >
         <TouchableOpacity
           style={styles.primaryBtn}
           onPress={() => {
@@ -241,10 +260,14 @@ export default function OrderSuccessScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    overflow: "hidden",
+  },
+  scrollContent: {
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: SPACING.xl,
-    overflow: "hidden",
+    paddingVertical: SPACING.xl,
   },
   circle1: {
     position: "absolute",
@@ -264,31 +287,25 @@ const styles = StyleSheet.create({
     bottom: -60,
     left: -60,
   },
-  content: {
-    alignItems: "center",
-    width: "100%",
-    flex: 1,
-    justifyContent: "center",
-  },
   iconStack: {
-    width: 140,
-    height: 140,
+    width: 112,
+    height: 112,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 28,
+    marginBottom: 24,
   },
   ring: {
     position: "absolute",
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 112,
+    height: 112,
+    borderRadius: 56,
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.6)",
   },
   iconWrap: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 112,
+    height: 112,
+    borderRadius: 56,
     backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
@@ -328,6 +345,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: SPACING.sm,
+  },
+  infoRowStacked: {
+    gap: 4,
   },
   infoDivider: {
     height: 1,
@@ -335,7 +356,17 @@ const styles = StyleSheet.create({
     marginVertical: SPACING.md,
   },
   infoLabel: { fontSize: 13, color: "rgba(255,255,255,0.75)" },
-  infoValue: { fontSize: 16, fontWeight: "800", color: COLORS.white },
+  infoValue: { fontSize: 16, fontWeight: "800", color: COLORS.white, flexShrink: 1, textAlign: "right" },
+  // Slightly smaller + letter-spaced for an order code (ORD-20260918-MWY88G)
+  // - reads more like a scannable reference number this way, and the
+  // numberOfLines={1} + adjustsFontSizeToFit on the Text itself (see JSX)
+  // guarantees it never overflows the card regardless of code length.
+  infoValueMono: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: COLORS.white,
+    letterSpacing: 0.3,
+  },
   note: {
     fontSize: 13,
     color: "rgba(255,255,255,0.7)",
