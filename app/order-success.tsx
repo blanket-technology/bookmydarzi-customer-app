@@ -374,9 +374,18 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     maxWidth: 300,
   },
+  // This View sits outside the ScrollView (so the buttons stay pinned
+  // while everything above scrolls), so it needs its own copy of the same
+  // horizontal inset scrollContent applies to the info card/text above it
+  // - paddingHorizontal: SPACING.xl matches that, and the same maxWidth:
+  // 320 cap as infoCard/note keeps the buttons from stretching absurdly
+  // wide on a tablet, while width: "100%" + alignSelf: "center" lets them
+  // shrink to fit narrow phones and stay centered on every screen size.
   btns: {
     width: "100%",
     maxWidth: 320,
+    alignSelf: "center",
+    paddingHorizontal: SPACING.xl,
     gap: SPACING.md,
   },
   primaryBtn: {
