@@ -58,7 +58,13 @@ module.exports = {
       },
     },
     adaptiveIcon: {
-      backgroundColor: "#E6F4FE",
+      // Matches the custom splash screen's own backgroundColor (below) so
+      // the native Android splash and the app's JS-driven splash hand off
+      // without a visible color flash between them - previously this was
+      // a leftover light-blue (#E6F4FE) from before the app icon assets
+      // were replaced with real branding, which no longer matches the
+      // background image/splash and read as two disconnected screens.
+      backgroundColor: "#ffffff",
       foregroundImage: "./assets/images/android-icon-foreground.png",
       backgroundImage: "./assets/images/android-icon-background.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
