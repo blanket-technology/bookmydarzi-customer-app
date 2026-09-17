@@ -18,10 +18,6 @@ import { ONBOARDING_VERSION, useOnboardingStore } from "../src/store/useOnboardi
  */
 export default function Index() {
   const hydrated            = useAuthStore((s: AuthState) => s._hasHydrated);
-  // Reactive selector - re-renders when role changes (e.g. after profile fetch completes).
-  // Previously used getState() inside the if-block which captured a one-shot snapshot
-  // and missed profile-fetch updates that arrived after the 500ms hydration timeout.
-  const role                = useAuthStore((s: AuthState) => s.user?.role);
   const rootNavigationState = useRootNavigationState();
   const isNavigationReady   = rootNavigationState?.key != null;
   const onboardingHydrated  = useOnboardingStore((s) => s._hasHydrated);
@@ -39,16 +35,9 @@ export default function Index() {
   }, [fadeAnim]);
 
   if (hydrated && isNavigationReady) {
-    if (role === "admin" || role === "superadmin") {
-      return <Redirect href="/(admin)" />;
-    }
-    if (role === "employee") {
-      return <Redirect href="/(employee)" />;
-    }
-    if (role === "tailor") {
-      return <Redirect href="/(tailor)" />;
-    }
-    // Customer path only (staff roles above skip onboarding entirely).
+    // Customer-only app - staff roles (admin/superadmin/employee/tailor)
+    // are rejected at login (see authCartRedirect.ts), so `role` here is
+    // always "user" for anyone who reaches this point authenticated.
     // Falls through to the splash UI below until onboarding's own
     // AsyncStorage rehydration resolves, so a fresh install can't flash
     // past onboarding before storage finishes loading.

@@ -58,7 +58,7 @@ const TABS_CONFIG = [
   { name: "profile", route: "/profile", labelKey: "tabs.profile", icon: "person", iconOutline: "person-outline" },
 ] as const;
 
-const HIDE_ON_SEGMENTS = new Set(["(auth)", "(admin)", "(employee)", "(tailor)"]);
+const HIDE_ON_SEGMENTS = new Set(["(auth)"]);
 const HIDE_ON_PATHS    = new Set(["/payment", "/order-success", "/chat", "/support-chat"]);
 
 // ─── Persistent footer tab bar ─────────────────────────────────────────────────
@@ -359,61 +359,12 @@ function WebSocketSetup() {
   return null;
 }
 
-// Maps each role to the route group it belongs in.
-const ROLE_HOME: Record<string, string> = {
-  admin:      "/(admin)",
-  superadmin: "/(admin)",
-  employee:   "/(employee)",
-  tailor:     "/(tailor)",
-  user:       "/(tabs)",
-};
-
-// Which roles are allowed inside each route group.
-const GROUP_ALLOWED_ROLES: Record<string, Set<string>> = {
-  "(admin)":    new Set(["admin", "superadmin"]),
-  "(employee)": new Set(["employee"]),
-  "(tailor)":   new Set(["tailor"]),
-  "(tabs)":     new Set(["user"]),
-};
-
+// Customer-only app now - the (admin)/(employee)/(tailor) route groups and
+// their role-gating were removed (staff have their own dedicated app,
+// bmdadmin). A staff account is rejected outright at login (see
+// authCartRedirect.ts's STAFF_ROLES check) before it ever reaches here, so
+// there's no other route group left to guard against wrong-role access.
 function AuthGuard() {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const role            = useAuthStore((s) => s.user?.role);
-  const hydrated        = useAuthStore((s) => s._hasHydrated);
-  const router          = useRouter();
-  const segments        = useSegments();
-
-  useEffect(() => {
-    if (!hydrated) return;
-
-    const seg0 = segments[0] as string | undefined;
-
-    // 1. Not authenticated inside a STAFF group → login. The customer (tabs)
-    //    group is intentionally NOT here: BookMyDarzi allows guest browsing of
-    //    the home/services tabs before login (Blinkit/Zepto-style), so guarding
-    //    (tabs) would bounce guests to login and break "back → home". Logout
-    //    from a customer tab is handled explicitly at the logout call site.
-    const isProtected =
-      seg0 === "(admin)" ||
-      seg0 === "(employee)" ||
-      seg0 === "(tailor)";
-    if (!isAuthenticated && isProtected) {
-      router.replace("/(auth)/login");
-      return;
-    }
-
-    // 2. Authenticated but wrong role for the current route group → correct home.
-    //    This is the defence-in-depth catch for the race condition where the initial
-    //    redirect in index.tsx ran before the profile fetch resolved the true role.
-    if (isAuthenticated && role && seg0 && GROUP_ALLOWED_ROLES[seg0]) {
-      const allowed = GROUP_ALLOWED_ROLES[seg0];
-      if (!allowed.has(role)) {
-        const home = ROLE_HOME[role] ?? "/(tabs)";
-        router.replace(home as never);
-      }
-    }
-  }, [isAuthenticated, role, hydrated, segments]);
-
   return null;
 }
 
@@ -436,9 +387,6 @@ export default function RootLayout() {
           <Stack.Screen name="index"         options={{ animation: "fade" }} />
           <Stack.Screen name="onboarding"    options={{ animation: "fade", gestureEnabled: false }} />
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="(admin)"       options={{ animation: "fade" }} />
-          <Stack.Screen name="(employee)"    options={{ animation: "fade" }} />
-          <Stack.Screen name="(tailor)"      options={{ animation: "fade" }} />
           <Stack.Screen name="(auth)"        options={{ animation: "slide_from_right" }} />
           <Stack.Screen name="sub-services"  options={{ headerShown: false, animation: "slide_from_right" }} />
           <Stack.Screen name="service-details" options={{ headerShown: false, animation: "slide_from_right" }} />

@@ -1,11 +1,33 @@
 import type { Router } from "expo-router";
 import { useCartStore } from "../store/useCartStore";
 import { useAuthStore } from "../../store/useAuthStore";
+import { useToastStore } from "../store/useToastStore";
 import { postPopularServiceToCart } from "./popularCartAdd";
 import { safeRouterReplace } from "./safeNavigation";
 
+// BookMyDarzi customer app is customer-only - tailor/employee/bridge/admin
+// accounts have their own dedicated staff app (bmdadmin) now. This app used
+// to bundle all four roles' screens in one binary; those route groups
+// ((admin)/(employee)/(tailor)) have been removed, so a staff account
+// logging in here has nowhere role-appropriate to land. Rather than drop
+// them into the customer (tabs) home (confusing - an admin seeing an empty
+// "browse services" screen looks broken, not intentional), reject the
+// login outright with a clear message and sign them back out.
+const STAFF_ROLES = new Set(["admin", "superadmin", "employee", "tailor"]);
+
 /** Post-login redirect - deferred until root layout is mounted. */
 export function navigateAfterAuthWithCart(router: Router): void {
+  const role = useAuthStore.getState().user?.role;
+  if (role && STAFF_ROLES.has(role)) {
+    useToastStore.getState().show(
+      "This account is for BookMyDarzi staff. Please use the BookMyDarzi Staff app instead.",
+      "error",
+    );
+    void useAuthStore.getState().logout();
+    safeRouterReplace(router, "/(auth)/login");
+    return;
+  }
+
   const {
     pendingRoute,
     pendingRouteParams,
@@ -15,19 +37,6 @@ export function navigateAfterAuthWithCart(router: Router): void {
   } = useCartStore.getState();
 
   if (!pendingRoute) {
-    const role = useAuthStore.getState().user?.role;
-    if (role === "admin" || role === "superadmin") {
-      safeRouterReplace(router, "/(admin)");
-      return;
-    }
-    if (role === "employee") {
-      safeRouterReplace(router, "/(employee)");
-      return;
-    }
-    if (role === "tailor") {
-      safeRouterReplace(router, "/(tailor)");
-      return;
-    }
     safeRouterReplace(router, "/(tabs)");
     return;
   }
