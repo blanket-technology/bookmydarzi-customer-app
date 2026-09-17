@@ -15,7 +15,13 @@ const isLocalDevBuild = process.env.APP_VARIANT === "development";
 
 /** @type {import("expo/config").ExpoConfig} */
 module.exports = {
-  name: "DarziApp",
+  // Display name shown as the app's title (home screen, Expo Go's list,
+  // OS app switcher) - kept separate from `slug` (the Expo/EAS project
+  // identifier) and `scheme` (the darziapp:// deep-link scheme used by
+  // Razorpay/UPI return flows and app links), neither of which should
+  // change without also updating the EAS project and every place that
+  // scheme is hardcoded.
+  name: "BookMyDarzi",
   slug: "DarziApp",
   version: "1.0.0",
   orientation: "portrait",
