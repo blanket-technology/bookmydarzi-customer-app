@@ -621,13 +621,7 @@ function ServicesCarousel({
         snapToInterval={stride}
         decelerationRate="fast"
         disableIntervalMomentum
-        contentContainerStyle={[
-          { gap: itemGap, paddingHorizontal: 2 },
-          // When the whole set fits on screen (few categories), center the row
-          // so the cards sit as an evenly-spaced cluster in the middle instead
-          // of stretching edge-to-edge or clumping at the left.
-          categories.length <= 4 && carouselStyles.contentCentered,
-        ]}
+        contentContainerStyle={{ gap: itemGap, paddingHorizontal: 2 }}
         keyExtractor={(cat, i) => `carousel-${cat.Id ?? cat.Name}-${i}`}
         renderItem={renderItem}
         onScroll={onScroll}
@@ -726,13 +720,6 @@ const CarouselCategoryItem = React.memo(function CarouselCategoryItem({
 const carouselStyles = StyleSheet.create({
   wrap: {
     position: "relative",
-  },
-  // Center the cards when the whole set fits on screen (<=4). flexGrow makes
-  // the content container fill the FlatList width so justifyContent can center
-  // the (narrower) row of cards within it.
-  contentCentered: {
-    flexGrow: 1,
-    justifyContent: "center",
   },
   edgeFade: {
     position: "absolute",
