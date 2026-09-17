@@ -352,7 +352,6 @@ export default function SubServicesScreen() {
   const {
     setPendingService,
     setPendingRoute,
-    setBookingFlowActive,
     setBuyNowMode,
   } = useCartStore();
 
@@ -491,25 +490,29 @@ export default function SubServicesScreen() {
     } as never);
   }, [selectedEntry, resolvedCategoryId, categoryName, router]);
 
+  // Add to Cart never needs an address - nothing ships yet, the item just
+  // joins the cart (address is only resolved once at actual checkout, see
+  // app/(tabs)/cart.tsx's resolveCheckoutAddressId). Previously this routed
+  // through the same /address screen "Book Now" uses, interrupting
+  // browsing on every single add - stays on this screen instead.
   const proceedDirect = useCallback(
-    () => {
+    async () => {
       const direct = selectedEntry?.direct;
       if (!direct) return;
 
-      const existing = useCartStore.getState().pendingService;
-      setPendingService({
-        bookableServiceId: direct.service_id,
-        categoryId: resolvedCategoryId,
-        categoryName,
-        serviceLineName: direct.name,
-        basePrice: direct.base_price,
-        displayName: direct.name,
-        imageUrl: direct.image_url,
-        tailorId: paramTailorId ?? existing?.tailorId,
-        tailorName: paramTailorName ?? existing?.tailorName,
-      });
-
       if (!isAuthenticated) {
+        const existing = useCartStore.getState().pendingService;
+        setPendingService({
+          bookableServiceId: direct.service_id,
+          categoryId: resolvedCategoryId,
+          categoryName,
+          serviceLineName: direct.name,
+          basePrice: direct.base_price,
+          displayName: direct.name,
+          imageUrl: direct.image_url,
+          tailorId: paramTailorId ?? existing?.tailorId,
+          tailorName: paramTailorName ?? existing?.tailorName,
+        });
         setPendingRoute("/sub-services", {
           catalogCategoryId: String(resolvedCategoryId),
           categoryName,
@@ -518,14 +521,19 @@ export default function SubServicesScreen() {
         return;
       }
 
-      // Measurement is never collected from the customer - go straight to
-      // address selection.
-      setBookingFlowActive(true);
-      router.push("/address");
+      try {
+        await useCartStore.getState().addServiceEntry({
+          service_id: direct.service_id,
+          quantity: 1,
+          tailor_id: paramTailorId,
+        });
+      } catch {
+        // addServiceEntry already surfaces its own error via the store.
+      }
     },
     [
       selectedEntry, resolvedCategoryId, categoryName, paramTailorId, paramTailorName,
-      isAuthenticated, setPendingService, setBookingFlowActive, setPendingRoute, router,
+      isAuthenticated, setPendingService, setPendingRoute, router,
     ],
   );
 
