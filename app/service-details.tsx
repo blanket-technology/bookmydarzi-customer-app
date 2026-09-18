@@ -484,6 +484,13 @@ export default function ServiceDetailsScreen() {
     }
 
     const isPremiumSelected = selectedStitching.is_premium ?? false;
+    const extraTiers = allLineTiers.filter((t) => checkedTierIds.has(t.service_id));
+    // Suppress each call's own default "Added to Cart" toast whenever
+    // extras are involved, since a single combined summary toast fires
+    // once the whole batch finishes below - otherwise checking 2 extra
+    // tiers fires 3 separate "Added to Cart" toasts back-to-back before
+    // the real summary, a visible stacking/flicker bug.
+    const suppressPerCallToast = extraTiers.length > 0;
     setAddingToCart(true);
     try {
       await useCartStore.getState().addServiceEntry({
@@ -497,7 +504,7 @@ export default function ServiceDetailsScreen() {
             }
           : undefined,
         addons: selectedAddons.length > 0 ? selectedAddons : undefined,
-      });
+      }, suppressPerCallToast ? { toastMessage: null } : undefined);
 
       // "Add more work to this garment" - each ticked tier is a full,
       // independently priced/bookable service in its own right (not a
@@ -507,14 +514,13 @@ export default function ServiceDetailsScreen() {
       // fails partway through does not roll back the ones that already
       // succeeded - those are valid lines the customer would still want;
       // they're told exactly which one failed and can retry from cart.
-      const extraTiers = allLineTiers.filter((t) => checkedTierIds.has(t.service_id));
       const failedNames: string[] = [];
       for (const tier of extraTiers) {
         try {
           await useCartStore.getState().addServiceEntry({
             service_id: tier.service_id,
             quantity: 1,
-          });
+          }, { toastMessage: null });
         } catch {
           failedNames.push(stripQualityPrefix(tier.name));
         }
