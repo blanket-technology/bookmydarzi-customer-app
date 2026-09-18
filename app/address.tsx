@@ -892,7 +892,7 @@ export default function AddressScreen() {
                           : "close-circle-outline"
                       }
                       size={16}
-                      color={serviceability.serviceable ? "#059669" : "#dc2626"}
+                      color={serviceability.serviceable ? COLORS.success : COLORS.error}
                       style={{ marginTop: 1 }}
                     />
                     <Text
@@ -919,12 +919,12 @@ export default function AddressScreen() {
                         paddingVertical: 6,
                         borderRadius: 999,
                         borderWidth: 1,
-                        borderColor: "#dc2626",
+                        borderColor: COLORS.error,
                         opacity: interestState === "submitting" ? 0.6 : 1,
                       }}
                       activeOpacity={0.8}
                     >
-                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#dc2626" }}>
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: COLORS.error }}>
                         {interestState === "done"
                           ? "Thanks! We'll notify you 🎉"
                           : interestState === "submitting"
@@ -1123,7 +1123,7 @@ export default function AddressScreen() {
             <>
               {saveSuccess ? (
                 <View style={styles.saveSuccessBanner}>
-                  <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                  <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
                   <Text style={styles.saveSuccessText}>
                     Address Saved Successfully
                   </Text>
@@ -1350,7 +1350,7 @@ const styles = StyleSheet.create({
   saveSuccessText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#059669",
+    color: COLORS.success,
     flex: 1,
   },
 
@@ -1748,8 +1748,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 18,
   },
-  svcBadgeTextOk: { color: "#059669" },
-  svcBadgeTextFail: { color: "#dc2626" },
+  svcBadgeTextOk: { color: COLORS.success },
+  svcBadgeTextFail: { color: COLORS.error },
   coordsHint: {
     flexDirection: "row",
     alignItems: "center",

@@ -22,13 +22,16 @@ import Animated, {
     FadeInDown,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { RADIUS } from "../constants/theme";
+import { COLORS, RADIUS } from "../constants/theme";
 import { useHomeStore } from "../src/store/useHomeStore";
 import type { ApiServiceCategory } from "../src/types/homeApi";
 import { resolveCatalogCategoryId } from "../src/utils/catalogCategoryMap";
 import { normalizeProfileImageUrl } from "../src/utils/profileImage";
 
-const TEAL = "#0F766E";
+// Aligned to the app's real brand teal (constants/theme.ts COLORS), same fix
+// as browse.tsx - this screen previously defined its own slightly different
+// teal (#0F766E vs COLORS.primaryDark's #0c6c75).
+const TEAL = COLORS.primaryDark;
 const TEAL_DARK = "#0a3d3d";
 const COPPER = "#B87333";
 const FOREST = "#0D1410";
@@ -429,7 +432,7 @@ const s = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 9,
-    backgroundColor: "#E6F7F7",
+    backgroundColor: COLORS.primaryLight,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
