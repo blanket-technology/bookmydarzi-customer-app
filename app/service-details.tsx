@@ -546,7 +546,9 @@ export default function ServiceDetailsScreen() {
     setPendingService, setBuyNowMode, setPendingRoute, buildReturnParams, router,
   ]);
 
-  const handleBookNow = useCallback(() => {
+  const [bookingWithExtras, setBookingWithExtras] = useState(false);
+
+  const handleBookNow = useCallback(async () => {
     if (!selectedStitching) {
       Alert.alert("Select stitching type", "Please choose a stitching type to continue.");
       return;
@@ -580,6 +582,57 @@ export default function ServiceDetailsScreen() {
       safeRouterPush(router, "/(auth)/login");
       return;
     }
+
+    const extraTiers = allLineTiers.filter((t) => checkedTierIds.has(t.service_id));
+    if (extraTiers.length > 0) {
+      // "Add more work to this garment" applies here too - the direct-order
+      // ("Book Now") backend endpoint only ever takes one service_id, so
+      // rather than build a second multi-item order path, this reuses the
+      // cart (already proven correct for multi-item billing) as the
+      // mechanism: add the primary tier + every checked extra, then land
+      // straight on the cart tab to finish checkout - skipping the single-
+      // item direct-order flow entirely once more than one tier is involved.
+      setBookingWithExtras(true);
+      try {
+        await useCartStore.getState().addServiceEntry({
+          service_id: selectedStitching.service_id,
+          quantity: qty,
+          stitching_preferences: isPremiumSelected
+            ? {
+                design_style: designStyle,
+                embellishment_level: embellishmentLevel,
+                design_notes: designNotes.trim() || undefined,
+              }
+            : undefined,
+          addons: selectedAddons.length > 0 ? selectedAddons : undefined,
+        }, { toastMessage: null });
+        const failedNames: string[] = [];
+        for (const tier of extraTiers) {
+          try {
+            await useCartStore.getState().addServiceEntry(
+              { service_id: tier.service_id, quantity: 1 },
+              { toastMessage: null },
+            );
+          } catch {
+            failedNames.push(stripQualityPrefix(tier.name));
+          }
+        }
+        setCheckedTierIds(new Set());
+        if (failedNames.length > 0) {
+          useToastStore.getState().show(
+            `Added to cart, but couldn't add: ${failedNames.join(", ")}. Review your cart to finish booking.`,
+            "error",
+          );
+        }
+        safeRouterPush(router, "/(tabs)/cart" as never);
+      } catch {
+        Alert.alert("Couldn't start booking", "Please try again.");
+      } finally {
+        setBookingWithExtras(false);
+      }
+      return;
+    }
+
     setPendingService(pendingItem);
     setBuyNowMode(true);
     // Book Now skips the cart entirely, so (unlike Add to Cart) it does
@@ -592,7 +645,7 @@ export default function ServiceDetailsScreen() {
     selectedStitching, getQuantityForStitching, serviceLine, directService?.name, serviceName,
     catalogCategoryId, categoryName, displayImage, designStyle, embellishmentLevel, designNotes,
     selectedAddons, isAuthenticated, setPendingService, setBuyNowMode, setPendingRoute,
-    buildReturnParams, router, setBookingFlowActive,
+    buildReturnParams, router, setBookingFlowActive, allLineTiers, checkedTierIds,
   ]);
 
   // Every other bookable tier on this same line, any group (e.g. "Button
@@ -1118,19 +1171,28 @@ export default function ServiceDetailsScreen() {
                 )}
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.bookNowBtn, !canContinue && styles.continueBtnDisabled]}
+                style={[styles.bookNowBtn, (!canContinue || bookingWithExtras) && styles.continueBtnDisabled]}
                 onPress={handleBookNow}
-                disabled={!canContinue}
+                disabled={!canContinue || bookingWithExtras}
                 activeOpacity={0.9}
               >
-                <Ionicons name="flash-outline" size={18} color={COLORS.white} />
-                <Text style={styles.bookNowBtnText}>{t("service.bookNow")}</Text>
+                {bookingWithExtras ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <>
+                    <Ionicons name="flash-outline" size={18} color={COLORS.white} />
+                    <Text style={styles.bookNowBtnText}>
+                      {checkedTierIds.size > 0
+                        ? `${t("service.bookNow")} (${checkedTierIds.size + 1})`
+                        : t("service.bookNow")}
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
             {checkedTierIds.size > 0 ? (
               <Text style={styles.multiAddHint}>
-                Book Now only books "{selectedStitching ? stripQualityPrefix(selectedStitching.name) : ""}" -
-                use Add to Cart to include the extra items you selected above.
+                Booking {checkedTierIds.size + 1} items together will take you to your cart to finish checkout.
               </Text>
             ) : null}
 
