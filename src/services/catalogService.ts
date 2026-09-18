@@ -365,6 +365,7 @@ export interface ServiceNavParams {
   serviceName: string;
   serviceLineId: string;
   bookableServiceId: string;
+  selectedStitchingId: string;
   basePrice: string;
   imageUrl: string;
   description: string;
@@ -396,6 +397,7 @@ export function resolveServiceNavParams(
           serviceName: line.name,
           serviceLineId: String(line.id),
           bookableServiceId: String(stitching.service_id),
+          selectedStitchingId: String(stitching.service_id),
           basePrice: String(stitching.base_price),
           imageUrl: stitching.image_url ?? line.image_url ?? "",
           description: stitching.description ?? line.description ?? "",
@@ -411,6 +413,7 @@ export function resolveServiceNavParams(
         serviceName: direct.name,
         serviceLineId: String(direct.service_line_id ?? 0),
         bookableServiceId: String(direct.service_id),
+        selectedStitchingId: String(direct.service_id),
         basePrice: String(direct.base_price),
         imageUrl: direct.image_url ?? "",
         description: direct.description ?? "",
