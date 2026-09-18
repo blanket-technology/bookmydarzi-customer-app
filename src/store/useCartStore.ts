@@ -53,6 +53,12 @@ export interface PendingCartItem {
   /** Extras selected on the service detail screen (e.g. Button Replacement)
    * before add-to-cart/book-now - see AddonPicker. */
   addons?: SelectedAddon[];
+  /** Other tiers checked under "Add more work to this garment" before Book
+   * Now - each becomes its own line on the same direct order as
+   * bookableServiceId, via POST /orders/direct's multi-item `items`. Name/
+   * price are carried here purely for display on the order summary screen
+   * (the actual charge is always recomputed server-side from service_id). */
+  extraItems?: { serviceId: number; name: string; basePrice: number }[];
 }
 
 interface CartState {

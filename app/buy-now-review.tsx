@@ -192,7 +192,14 @@ export default function BuyNowReviewScreen() {
     setBillingLoading(true);
     setBillingError("");
     const addonIds = (pendingService.addons ?? []).map((a) => a.addonId);
-    getBillingEstimate(pendingService.bookableServiceId, 1, addonIds)
+    const extraItems = pendingService.extraItems ?? [];
+    const items = extraItems.length > 0
+      ? [
+          { service_id: pendingService.bookableServiceId, quantity: pendingService.quantity ?? 1 },
+          ...extraItems.map((e) => ({ service_id: e.serviceId, quantity: 1 })),
+        ]
+      : undefined;
+    getBillingEstimate(pendingService.bookableServiceId, 1, addonIds, items)
       .then(setBilling)
       .catch((err) => {
         setBillingError(
@@ -202,9 +209,14 @@ export default function BuyNowReviewScreen() {
       .finally(() => setBillingLoading(false));
     // Same reasoning as service-details.tsx's addon fetch effect - depend on
     // the ids themselves (joined), not the array reference, since
-    // pendingService.addons is a new array identity on every render.
+    // pendingService.addons/extraItems are new array identities on every
+    // render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingService?.bookableServiceId, (pendingService?.addons ?? []).map((a) => a.addonId).join(",")]);
+  }, [
+    pendingService?.bookableServiceId,
+    (pendingService?.addons ?? []).map((a) => a.addonId).join(","),
+    (pendingService?.extraItems ?? []).map((e) => e.serviceId).join(","),
+  ]);
 
   const selectedAddress = addresses.find((a) => a.id === selectedAddressId);
 
@@ -253,6 +265,7 @@ export default function BuyNowReviewScreen() {
         scheduledPickupAt = dt.toISOString();
       }
 
+      const extraItems = pendingService.extraItems ?? [];
       const result = await createDirectOrder({
         service_id: pendingService.bookableServiceId,
         quantity: pendingService.quantity ?? 1,
@@ -268,6 +281,14 @@ export default function BuyNowReviewScreen() {
         ...(orderNotes.trim() ? { customization_notes: orderNotes.trim() } : {}),
         ...(styleReferenceUri && /^https?:\/\//.test(styleReferenceUri)
           ? { image_references: [styleReferenceUri] }
+          : {}),
+        ...(extraItems.length > 0
+          ? {
+              items: [
+                { service_id: pendingService.bookableServiceId, quantity: pendingService.quantity ?? 1 },
+                ...extraItems.map((e) => ({ service_id: e.serviceId, quantity: 1 })),
+              ],
+            }
           : {}),
       });
 
@@ -449,6 +470,18 @@ export default function BuyNowReviewScreen() {
                   <Text style={s.addonSummaryName}>+ {a.name}</Text>
                   <Text style={s.addonSummaryPrice}>
                     ₹{a.price.toLocaleString("en-IN")}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {pendingService.extraItems && pendingService.extraItems.length > 0 ? (
+            <View style={s.addonsSummary}>
+              {pendingService.extraItems.map((e) => (
+                <View key={e.serviceId} style={s.addonSummaryRow}>
+                  <Text style={s.addonSummaryName}>+ {e.name}</Text>
+                  <Text style={s.addonSummaryPrice}>
+                    ₹{e.basePrice.toLocaleString("en-IN")}
                   </Text>
                 </View>
               ))}
