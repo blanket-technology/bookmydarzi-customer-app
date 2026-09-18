@@ -25,10 +25,13 @@ import { fetchCatalogTree, resolveCatalogCategory } from "../src/services/catalo
 import {
   GROUP_DESCRIPTIONS,
   groupAlterationTiers,
+  stripQualityPrefix,
   type AlterationGroupKey,
 } from "../src/services/alterationGroups";
 import type { CatalogStitchingType } from "../src/types/catalogApi";
 import { safeRouterPush } from "../src/utils/safeNavigation";
+import { normalizeServiceImageUrl } from "../src/utils/serviceImage";
+import { fallbackTierDescription } from "../src/services/fallbackDescription";
 
 const GROUP_ICONS: Record<AlterationGroupKey, keyof typeof Ionicons.glyphMap> = {
   repair: "hammer-outline",
@@ -82,7 +85,7 @@ export default function AlterationGroupScreen() {
           setLoadError(true);
           return;
         }
-        setLineImageUrl(line.image_url ?? null);
+        setLineImageUrl(normalizeServiceImageUrl(line.image_url));
         const groups = groupAlterationTiers(line.stitching_types ?? []);
         const group = groups.find((g) => g.key === groupKey);
         setTiers(group?.tiers ?? []);
@@ -99,11 +102,19 @@ export default function AlterationGroupScreen() {
 
   const groupLabel = useMemo(() => GROUP_LABELS[groupKey] ?? "Options", [groupKey]);
   const heroImage = useMemo(
-    () => tiers.find((t) => t.image_url)?.image_url ?? lineImageUrl,
+    () => normalizeServiceImageUrl(tiers.find((t) => t.image_url)?.image_url) ?? lineImageUrl,
     [tiers, lineImageUrl],
   );
 
   const navigateToDetail = (tier: CatalogStitchingType) => {
+    const resolvedImage = normalizeServiceImageUrl(tier.image_url) ?? lineImageUrl ?? "";
+    const description =
+      tier.description?.trim() ||
+      fallbackTierDescription({
+        name: tier.name,
+        basePrice: tier.base_price,
+        estimatedDeliveryDays: tier.estimated_delivery_days ?? 7,
+      });
     safeRouterPush(router, {
       pathname: "/service-details",
       params: {
@@ -121,8 +132,8 @@ export default function AlterationGroupScreen() {
         // say explicitly which tier was tapped.
         selectedStitchingId: String(tier.service_id),
         basePrice: String(tier.base_price),
-        imageUrl: tier.image_url ?? lineImageUrl ?? "",
-        description: tier.description ?? "",
+        imageUrl: resolvedImage,
+        description,
       },
     } as never);
   };
@@ -201,16 +212,18 @@ export default function AlterationGroupScreen() {
                 </View>
               ) : (
                 <View style={styles.list}>
-                  {tiers.map((tier, idx) => (
+                  {tiers.map((tier, idx) => {
+                    const tierImage = normalizeServiceImageUrl(tier.image_url) ?? heroImage;
+                    return (
                     <Animated.View key={tier.service_id} entering={FadeInDown.delay(idx * 40).duration(220)}>
                       <TouchableOpacity
                         style={styles.tierCard}
                         onPress={() => navigateToDetail(tier)}
                         activeOpacity={0.85}
                       >
-                        {tier.image_url ? (
+                        {tierImage ? (
                           <Image
-                            source={{ uri: tier.image_url }}
+                            source={{ uri: tierImage }}
                             style={styles.tierImage}
                             contentFit="cover"
                             cachePolicy="memory-disk"
@@ -222,7 +235,7 @@ export default function AlterationGroupScreen() {
                           </View>
                         )}
                         <View style={styles.tierText}>
-                          <Text style={styles.tierName} numberOfLines={2}>{tier.name}</Text>
+                          <Text style={styles.tierName} numberOfLines={2}>{stripQualityPrefix(tier.name)}</Text>
                           <View style={styles.tierMetaRow}>
                             <Ionicons name="time-outline" size={12} color={COLORS.gray} />
                             <Text style={styles.tierMeta}>
@@ -239,7 +252,7 @@ export default function AlterationGroupScreen() {
                         </View>
                       </TouchableOpacity>
                     </Animated.View>
-                  ))}
+                  );})}
                 </View>
               )}
             </>

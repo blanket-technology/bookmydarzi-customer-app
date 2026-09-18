@@ -47,6 +47,8 @@ import type {
 } from "../src/types/catalogApi";
 import { safeRouterPush } from "../src/utils/safeNavigation";
 import { normalizeServiceImageUrl } from "../src/utils/serviceImage";
+import { fallbackTierDescription } from "../src/services/fallbackDescription";
+import { stripQualityPrefix } from "../src/services/alterationGroups";
 import { useAuthStore } from "../store/useAuthStore";
 import type { SelectedAddon, StitchingPreferences } from "../src/types/cart";
 
@@ -386,13 +388,18 @@ export default function ServiceDetailsScreen() {
   // falls back to the static nav param / line / direct-service description
   // only when that specific variant has none of its own.
   const displayDescription = useMemo(() => {
-    return (
+    const real =
       (selectedStitching?.description ?? "").trim() ||
       paramDescription.trim() ||
       (serviceLine?.description ?? "").trim() ||
-      (directService?.description ?? "").trim() ||
-      ""
-    );
+      (directService?.description ?? "").trim();
+    if (real) return real;
+    if (!selectedStitching) return "";
+    return fallbackTierDescription({
+      name: selectedStitching.name,
+      basePrice: selectedStitching.base_price,
+      estimatedDeliveryDays: selectedStitching.estimated_delivery_days ?? 7,
+    });
   }, [selectedStitching, paramDescription, serviceLine, directService]);
 
   const lowestPrice = useMemo(
@@ -787,7 +794,9 @@ export default function ServiceDetailsScreen() {
                       </View>
                       <View style={styles.stitchBody}>
                         <View style={styles.stitchTitleRow}>
-                          <Text style={styles.stitchTitle}>{stitching.name}</Text>
+                          <Text style={styles.stitchTitle}>
+                            {isAlterationsCategory ? stripQualityPrefix(stitching.name) : stitching.name}
+                          </Text>
                           {isPremium ? (
                             <View style={styles.premiumBadge}>
                               <Ionicons name="diamond-outline" size={9} color="#C9A84C" />
