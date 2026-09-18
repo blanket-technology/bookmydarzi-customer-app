@@ -284,8 +284,18 @@ export default function BuyNowReviewScreen() {
           : {}),
         ...(extraItems.length > 0
           ? {
+              // Backend ignores the top-level service_id/stitching_preferences/
+              // addons above once items is set - the primary item's own
+              // design brief/addons must ride on items[0] instead, or a
+              // premium tier's brief (and any addons) silently gets
+              // dropped the moment an extra tier is checked.
               items: [
-                { service_id: pendingService.bookableServiceId, quantity: pendingService.quantity ?? 1 },
+                {
+                  service_id: pendingService.bookableServiceId,
+                  quantity: pendingService.quantity ?? 1,
+                  stitching_preferences: pendingService.stitchingPreferences,
+                  addons: pendingService.addons,
+                },
                 ...extraItems.map((e) => ({ service_id: e.serviceId, quantity: 1 })),
               ],
             }
