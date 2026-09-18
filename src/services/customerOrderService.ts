@@ -627,6 +627,7 @@ function mapDetailsLineItems(raw: Record<string, unknown>): OrderDetailsLineItem
       service_id: nullableNum(row.service_id ?? row.serviceId),
       service_name: nullableStr(row.service_name ?? row.serviceName),
       category_name: nullableStr(row.category_name ?? row.categoryName),
+      image_url: nullableStr(row.image_url ?? row.imageUrl ?? row.ImageUrl),
       quantity: nullableNum(row.quantity) ?? 1,
       unit_price: nullableMoney(row.unit_price ?? row.unitPrice),
       line_total: nullableMoney(row.line_total ?? row.lineTotal),
