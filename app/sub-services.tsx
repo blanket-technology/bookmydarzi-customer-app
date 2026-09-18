@@ -205,16 +205,34 @@ const GROUP_ICONS: Record<AlterationGroup["key"], keyof typeof Ionicons.glyphMap
   other: "cut-outline",
 };
 
-function GroupCard({ group, onPress }: { group: AlterationGroup; onPress: () => void }) {
+function GroupCard({
+  group,
+  lineImageUrl,
+  onPress,
+}: {
+  group: AlterationGroup;
+  lineImageUrl: string | null;
+  onPress: () => void;
+}) {
   const cheapest = group.tiers.reduce<number | null>(
     (min, t) => (min === null || t.base_price < min ? t.base_price : min),
     null,
   );
+  // A tier within this group's own photo wins over the shared line photo -
+  // same fallback order as TypeCard above - falling back to the line's
+  // photo only when none of this group's own tiers have one yet, so the
+  // Repair/Resize/Restyle cards show a real garment photo instead of a
+  // generic icon whenever any photo exists anywhere on this line.
+  const imageUrl = group.tiers.find((t) => t.image_url)?.image_url ?? lineImageUrl;
   return (
     <TouchableOpacity style={tc.card} onPress={onPress} activeOpacity={0.78}>
-      <View style={[tc.iconBox, { backgroundColor: COLORS.primaryLight }]}>
-        <Ionicons name={GROUP_ICONS[group.key]} size={26} color={COLORS.primaryDark} />
-      </View>
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={tc.image} contentFit="cover" cachePolicy="memory-disk" transition={150} />
+      ) : (
+        <View style={[tc.iconBox, { backgroundColor: COLORS.primaryLight }]}>
+          <Ionicons name={GROUP_ICONS[group.key]} size={26} color={COLORS.primaryDark} />
+        </View>
+      )}
       <View style={tc.textBlock}>
         <Text style={tc.name} numberOfLines={2}>{group.label}</Text>
         <Text style={tc.desc} numberOfLines={2}>{GROUP_DESCRIPTIONS[group.key]}</Text>
@@ -671,6 +689,20 @@ export default function SubServicesScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={rp.listContent}
           >
+            {/* Line's own hero photo above the Repair/Resize/Restyle group
+                cards - gives the group-selection step a real product photo
+                (the garment/line itself) before the customer picks a work
+                type, rather than jumping straight to icon-only group tiles. */}
+            {showAlterationGroups && selectedEntry.line?.image_url ? (
+              <Image
+                source={{ uri: selectedEntry.line.image_url }}
+                style={rp.heroImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={150}
+              />
+            ) : null}
+
             <View style={rp.panelHead}>
               <Text style={rp.panelTitle}>{selectedEntry.name}</Text>
               <Text style={rp.panelSub}>
@@ -688,7 +720,11 @@ export default function SubServicesScreen() {
                     style={rp.gridItem}
                     entering={FadeInRight.delay(idx * 50).duration(180)}
                   >
-                    <GroupCard group={group} onPress={() => navigateToGroup(group.key)} />
+                    <GroupCard
+                      group={group}
+                      lineImageUrl={selectedEntry.line?.image_url ?? null}
+                      onPress={() => navigateToGroup(group.key)}
+                    />
                   </Animated.View>
                 ))}
               </View>
@@ -954,6 +990,13 @@ const dp = StyleSheet.create({
 
 const rp = StyleSheet.create({
   listContent: { padding: SPACING.md, paddingBottom: 48, gap: 10 },
+  heroImage: {
+    width: "100%",
+    height: 160,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.grayLight,
+    marginBottom: 4,
+  },
   panelHead: { marginBottom: 4 },
   panelTitle: { fontSize: 16, fontWeight: "800", color: COLORS.black, letterSpacing: -0.2 },
   panelSub: { fontSize: 11, color: COLORS.gray, marginTop: 2 },
