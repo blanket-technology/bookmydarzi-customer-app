@@ -48,7 +48,7 @@ import type {
 import { safeRouterPush } from "../src/utils/safeNavigation";
 import { normalizeServiceImageUrl } from "../src/utils/serviceImage";
 import { fallbackTierDescription } from "../src/services/fallbackDescription";
-import { stripQualityPrefix } from "../src/services/alterationGroups";
+import { groupAlterationTiers, stripQualityPrefix } from "../src/services/alterationGroups";
 import { useAuthStore } from "../store/useAuthStore";
 import type { SelectedAddon, StitchingPreferences } from "../src/types/cart";
 
@@ -247,9 +247,24 @@ export default function ServiceDetailsScreen() {
           const allTypes = [...(line.stitching_types ?? [])].sort(
             (a, b) => a.display_order - b.display_order,
           );
-          const types = filterBaseName
-            ? allTypes.filter((t) => getServiceBaseName(t.name) === filterBaseName)
-            : allTypes;
+          // Custom Alterations arrives here two ways: sub-services.tsx's
+          // own flow always narrows by exact quality name (filterBaseName,
+          // e.g. "Sleeve Repair"); the newer alteration-group.tsx screen
+          // instead passes the tapped tier's id with no filterBaseName, so
+          // this must narrow to that tier's own Repair/Resize/Restyle group
+          // itself - otherwise every tier on the whole line (spanning all
+          // three groups) shows in one flat list, which is exactly what the
+          // dedicated group screen exists to avoid.
+          let types = allTypes;
+          if (filterBaseName) {
+            types = allTypes.filter((t) => getServiceBaseName(t.name) === filterBaseName);
+          } else if (isAlterationsCategory && paramSelectedStitchingId > 0) {
+            const groups = groupAlterationTiers(allTypes);
+            const ownGroup = groups.find((g) =>
+              g.tiers.some((t) => t.service_id === paramSelectedStitchingId),
+            );
+            if (ownGroup) types = ownGroup.tiers;
+          }
           setStitchingTypes(types);
           const preferredId =
             paramSelectedStitchingId > 0 &&
