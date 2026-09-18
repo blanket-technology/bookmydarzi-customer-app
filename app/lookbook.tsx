@@ -4,7 +4,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Dimensions,
   FlatList,
   Modal,
   Platform,
@@ -13,6 +12,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
   type ListRenderItemInfo,
   type NativeSyntheticEvent,
@@ -33,11 +33,9 @@ import {
 } from "../src/services/lookbookService";
 import { safeRouterPush } from "../src/utils/safeNavigation";
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 const COLS = 2;
 const GRID_PAD = 12;
 const ITEM_GAP = 8;
-const ITEM_W = (SCREEN_W - GRID_PAD * 2 - ITEM_GAP) / COLS;
 
 const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   all: "sparkles-outline",
@@ -50,25 +48,25 @@ const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
 
 // ─── Skeleton grid shown while a category's photos are loading ─────────────
 
-function SkeletonTile({ index }: { index: number }) {
+function SkeletonTile({ index, itemWidth }: { index: number; itemWidth: number }) {
   const isOdd = index % 2 !== 0;
-  const height = isOdd ? ITEM_W * 1.35 : ITEM_W * 1.1;
+  const height = isOdd ? itemWidth * 1.35 : itemWidth * 1.1;
   return (
     <Animated.View
       entering={FadeIn.delay(index * 30).duration(300)}
-      style={[galleryStyles.item, galleryStyles.skeleton, { width: ITEM_W, height }]}
+      style={[galleryStyles.item, galleryStyles.skeleton, { width: itemWidth, height }]}
     />
   );
 }
 
-function SkeletonGrid() {
+function SkeletonGrid({ itemWidth }: { itemWidth: number }) {
   const rows = Array.from({ length: 6 });
   return (
     <View style={styles.grid}>
       {rows.map((_, rowIdx) => (
         <View key={rowIdx} style={styles.gridRow}>
-          <SkeletonTile index={rowIdx * 2} />
-          <SkeletonTile index={rowIdx * 2 + 1} />
+          <SkeletonTile index={rowIdx * 2} itemWidth={itemWidth} />
+          <SkeletonTile index={rowIdx * 2 + 1} itemWidth={itemWidth} />
         </View>
       ))}
     </View>
@@ -81,19 +79,21 @@ function GalleryItem({
   item,
   onTap,
   index,
+  itemWidth,
 }: {
   item: LookbookItem;
   onTap: (item: LookbookItem) => void;
   index: number;
+  itemWidth: number;
 }) {
   const [imgError, setImgError] = useState(false);
   const isOdd = index % 2 !== 0;
-  const height = isOdd ? ITEM_W * 1.35 : ITEM_W * 1.1;
+  const height = isOdd ? itemWidth * 1.35 : itemWidth * 1.1;
 
   return (
     <Animated.View
       entering={FadeInDown.delay(Math.min(index, 10) * 40).duration(350)}
-      style={[galleryStyles.item, { width: ITEM_W, height }]}
+      style={[galleryStyles.item, { width: itemWidth, height }]}
     >
       <Pressable
         style={StyleSheet.absoluteFill}
@@ -166,26 +166,30 @@ function Lightbox({
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [booking, setBooking] = useState(false);
   const router = useRouter();
+  // Reactive, unlike the removed module-level Dimensions.get("window")
+  // snapshot - this updates on rotation/foldable-fold instead of paging
+  // math and page/image sizing silently going stale after the first read.
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const activeItem = items[activeIndex];
 
   const handleMomentumEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+    const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
     setActiveIndex(idx);
-  }, []);
+  }, [screenWidth]);
 
   const renderPage = useCallback(
     ({ item }: ListRenderItemInfo<LookbookItem>) => (
-      <View style={lightboxStyles.page}>
+      <View style={[lightboxStyles.page, { width: screenWidth, height: screenHeight }]}>
         <Image
           source={{ uri: item.image_url }}
-          style={lightboxStyles.img}
+          style={[lightboxStyles.img, { width: screenWidth, height: screenHeight * 0.72 }]}
           contentFit="contain"
           transition={150}
         />
       </View>
     ),
-    [],
+    [screenWidth, screenHeight],
   );
 
   const handleBookThisLook = useCallback(async () => {
@@ -217,7 +221,7 @@ function Lightbox({
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           initialScrollIndex={initialIndex}
-          getItemLayout={(_, i) => ({ length: SCREEN_W, offset: SCREEN_W * i, index: i })}
+          getItemLayout={(_, i) => ({ length: screenWidth, offset: screenWidth * i, index: i })}
           onMomentumScrollEnd={handleMomentumEnd}
         />
 
@@ -269,6 +273,8 @@ function Lightbox({
 export default function LookbookScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const itemWidth = (screenWidth - GRID_PAD * 2 - ITEM_GAP) / COLS;
   const [activeCategory, setActiveCategory] = useState("all");
   const [items, setItems] = useState<LookbookItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -315,9 +321,9 @@ export default function LookbookScreen() {
 
   const renderItem = useCallback(
     ({ item, index }: { item: LookbookItem; index: number }) => (
-      <GalleryItem item={item} onTap={() => setLightboxIndex(index)} index={index} />
+      <GalleryItem item={item} onTap={() => setLightboxIndex(index)} index={index} itemWidth={itemWidth} />
     ),
-    [],
+    [itemWidth],
   );
 
   const bookableCount = useMemo(() => items.filter((i) => i.service_id).length, [items]);
@@ -372,7 +378,7 @@ export default function LookbookScreen() {
       </ScrollView>
 
       {loading ? (
-        <SkeletonGrid />
+        <SkeletonGrid itemWidth={itemWidth} />
       ) : error ? (
         <View style={styles.center}>
           <Ionicons name="image-outline" size={44} color={COLORS.grayBorder} />
@@ -540,15 +546,10 @@ const lightboxStyles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.94)",
   },
   page: {
-    width: SCREEN_W,
-    height: SCREEN_H,
     alignItems: "center",
     justifyContent: "center",
   },
-  img: {
-    width: SCREEN_W,
-    height: SCREEN_H * 0.72,
-  },
+  img: {},
   topBar: {
     position: "absolute",
     top: 0,
