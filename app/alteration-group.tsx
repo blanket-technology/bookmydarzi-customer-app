@@ -17,8 +17,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { COLORS, RADIUS, SPACING } from "../constants/theme";
+import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import ErrorState from "../src/components/common/ErrorState";
 import { fetchCatalogTree, resolveCatalogCategory } from "../src/services/catalogService";
 import {
@@ -34,6 +35,13 @@ const GROUP_ICONS: Record<AlterationGroupKey, keyof typeof Ionicons.glyphMap> = 
   resize: "resize-outline",
   restyle: "sparkles-outline",
   other: "cut-outline",
+};
+
+const GROUP_LABELS: Record<AlterationGroupKey, string> = {
+  repair: "Repair",
+  resize: "Resize",
+  restyle: "Restyle",
+  other: "Other",
 };
 
 export default function AlterationGroupScreen() {
@@ -55,6 +63,7 @@ export default function AlterationGroupScreen() {
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
   const [tiers, setTiers] = useState<CatalogStitchingType[]>([]);
   const [lineImageUrl, setLineImageUrl] = useState<string | null>(null);
 
@@ -86,17 +95,13 @@ export default function AlterationGroupScreen() {
     return () => {
       cancelled = true;
     };
-  }, [catalogCategoryId, categoryName, serviceLineId, groupKey]);
+  }, [catalogCategoryId, categoryName, serviceLineId, groupKey, retryTick]);
 
-  const groupLabel = useMemo(() => {
-    const labels: Record<AlterationGroupKey, string> = {
-      repair: "Repair",
-      resize: "Resize",
-      restyle: "Restyle",
-      other: "Other",
-    };
-    return labels[groupKey] ?? "Options";
-  }, [groupKey]);
+  const groupLabel = useMemo(() => GROUP_LABELS[groupKey] ?? "Options", [groupKey]);
+  const heroImage = useMemo(
+    () => tiers.find((t) => t.image_url)?.image_url ?? lineImageUrl,
+    [tiers, lineImageUrl],
+  );
 
   const navigateToDetail = (tier: CatalogStitchingType) => {
     safeRouterPush(router, {
@@ -107,6 +112,14 @@ export default function AlterationGroupScreen() {
         serviceName: tier.name,
         serviceLineId: String(serviceLineId),
         bookableServiceId: String(tier.service_id),
+        // Without this, service-details.tsx's tier-resolution effect falls
+        // back to the FIRST tier on the whole line (types[0]) whenever no
+        // filterBaseName is supplied - it was never wrong for sub-
+        // services.tsx's own navigateToDetail() because that always passes
+        // filterBaseName, narrowing the list down to (usually) just the one
+        // tapped item first. This screen has no such narrowing, so it must
+        // say explicitly which tier was tapped.
+        selectedStitchingId: String(tier.service_id),
         basePrice: String(tier.base_price),
         imageUrl: tier.image_url ?? lineImageUrl ?? "",
         description: tier.description ?? "",
@@ -128,66 +141,108 @@ export default function AlterationGroupScreen() {
           <View style={styles.headerIcon}>
             <Ionicons name={GROUP_ICONS[groupKey]} size={18} color={COLORS.primaryDark} />
           </View>
-          <View>
-            <Text style={styles.headerTitle}>{groupLabel}</Text>
-            {serviceLineName ? <Text style={styles.headerSub}>{serviceLineName}</Text> : null}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle} numberOfLines={1}>{groupLabel}</Text>
+            {serviceLineName ? (
+              <Text style={styles.headerSub} numberOfLines={1}>{serviceLineName}</Text>
+            ) : null}
           </View>
         </View>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 36 }} />
       </View>
 
       {loadError ? (
-        <ErrorState message="Could not load options. Please check your connection and try again." />
+        <ErrorState
+          message="Could not load options. Please check your connection and try again."
+          onRetry={() => setRetryTick((t) => t + 1)}
+        />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          <Text style={styles.description}>{GROUP_DESCRIPTIONS[groupKey]}</Text>
-
           {loading ? (
-            <View style={styles.loadingWrap}>
-              {[0, 1, 2].map((i) => <View key={i} style={styles.skeleton} />)}
-            </View>
-          ) : tiers.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>No options available in this group yet.</Text>
-            </View>
+            <>
+              <View style={styles.heroSkeleton} />
+              <View style={styles.loadingWrap}>
+                {[0, 1, 2].map((i) => <View key={i} style={styles.skeleton} />)}
+              </View>
+            </>
           ) : (
-            <View style={styles.list}>
-              {tiers.map((tier) => (
-                <TouchableOpacity
-                  key={tier.service_id}
-                  style={styles.tierCard}
-                  onPress={() => navigateToDetail(tier)}
-                  activeOpacity={0.85}
-                >
-                  {tier.image_url ? (
-                    <Image
-                      source={{ uri: tier.image_url }}
-                      style={styles.tierImage}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                      transition={150}
-                    />
-                  ) : (
-                    <View style={styles.tierImageFallback}>
-                      <Ionicons name="cut-outline" size={22} color={COLORS.primaryDark} />
-                    </View>
-                  )}
-                  <View style={styles.tierText}>
-                    <Text style={styles.tierName} numberOfLines={2}>{tier.name}</Text>
-                    <Text style={styles.tierMeta}>
-                      Delivered in {tier.estimated_delivery_days} day{tier.estimated_delivery_days === 1 ? "" : "s"}
-                    </Text>
-                  </View>
-                  <View style={styles.tierPriceWrap}>
-                    <Text style={styles.tierPrice}>₹{tier.base_price.toLocaleString("en-IN")}</Text>
-                    <Ionicons name="chevron-forward" size={16} color={COLORS.gray} />
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <>
+              {heroImage ? (
+                <Animated.View entering={FadeIn.duration(220)}>
+                  <Image
+                    source={{ uri: heroImage }}
+                    style={styles.heroImage}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    transition={150}
+                  />
+                </Animated.View>
+              ) : null}
+
+              <View style={styles.introBlock}>
+                <View style={styles.groupBadge}>
+                  <Ionicons name={GROUP_ICONS[groupKey]} size={13} color={COLORS.primaryDark} />
+                  <Text style={styles.groupBadgeText}>{groupLabel.toUpperCase()}</Text>
+                </View>
+                <Text style={styles.description}>{GROUP_DESCRIPTIONS[groupKey]}</Text>
+              </View>
+
+              <Text style={styles.sectionLabel}>
+                {tiers.length} option{tiers.length === 1 ? "" : "s"} available
+              </Text>
+
+              {tiers.length === 0 ? (
+                <View style={styles.empty}>
+                  <Ionicons name="cut-outline" size={28} color={COLORS.grayBorder} />
+                  <Text style={styles.emptyText}>No options available in this group yet.</Text>
+                </View>
+              ) : (
+                <View style={styles.list}>
+                  {tiers.map((tier, idx) => (
+                    <Animated.View key={tier.service_id} entering={FadeInDown.delay(idx * 40).duration(220)}>
+                      <TouchableOpacity
+                        style={styles.tierCard}
+                        onPress={() => navigateToDetail(tier)}
+                        activeOpacity={0.85}
+                      >
+                        {tier.image_url ? (
+                          <Image
+                            source={{ uri: tier.image_url }}
+                            style={styles.tierImage}
+                            contentFit="cover"
+                            cachePolicy="memory-disk"
+                            transition={150}
+                          />
+                        ) : (
+                          <View style={styles.tierImageFallback}>
+                            <Ionicons name="cut-outline" size={24} color={COLORS.primaryDark} />
+                          </View>
+                        )}
+                        <View style={styles.tierText}>
+                          <Text style={styles.tierName} numberOfLines={2}>{tier.name}</Text>
+                          <View style={styles.tierMetaRow}>
+                            <Ionicons name="time-outline" size={12} color={COLORS.gray} />
+                            <Text style={styles.tierMeta}>
+                              {tier.estimated_delivery_days} day{tier.estimated_delivery_days === 1 ? "" : "s"}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.tierPriceWrap}>
+                          <Text style={styles.tierPrice}>₹{tier.base_price.toLocaleString("en-IN")}</Text>
+                          <View style={styles.tierCta}>
+                            <Text style={styles.tierCtaText}>Book</Text>
+                            <Ionicons name="chevron-forward" size={13} color={COLORS.primaryDark} />
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  ))}
+                </View>
+              )}
+            </>
           )}
         </ScrollView>
       )}
@@ -196,13 +251,14 @@ export default function AlterationGroupScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.white },
+  root: { flex: 1, backgroundColor: COLORS.offWhite },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.white,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.grayBorder,
     ...Platform.select({
@@ -215,7 +271,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.grayLight,
     alignItems: "center", justifyContent: "center",
   },
-  headerMid: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, flex: 1, marginLeft: SPACING.sm },
+  headerMid: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, flex: 1, marginLeft: SPACING.sm, minWidth: 0 },
   headerIcon: {
     width: 32, height: 32, borderRadius: RADIUS.md,
     backgroundColor: COLORS.primaryLight,
@@ -224,10 +280,44 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 16, fontWeight: "800", color: COLORS.black },
   headerSub: { fontSize: 11, color: COLORS.gray, marginTop: 1 },
   scrollContent: { padding: SPACING.md, paddingBottom: 48 },
-  description: { fontSize: 13, color: COLORS.gray, lineHeight: 19, marginBottom: SPACING.md },
+  heroImage: {
+    width: "100%",
+    height: 180,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.grayLight,
+    marginBottom: SPACING.md,
+  },
+  heroSkeleton: {
+    width: "100%",
+    height: 180,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.grayLight,
+    marginBottom: SPACING.md,
+  },
+  introBlock: { marginBottom: SPACING.lg, gap: 8 },
+  groupBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 5,
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  groupBadgeText: { fontSize: 10, fontWeight: "800", color: COLORS.primaryDark, letterSpacing: 0.4 },
+  description: { fontSize: 13.5, color: COLORS.gray, lineHeight: 20 },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.black,
+    marginBottom: SPACING.sm,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
   loadingWrap: { gap: 10 },
-  skeleton: { height: 76, borderRadius: RADIUS.lg, backgroundColor: COLORS.grayLight },
-  empty: { alignItems: "center", justifyContent: "center", paddingVertical: 48 },
+  skeleton: { height: 84, borderRadius: RADIUS.lg, backgroundColor: COLORS.grayLight },
+  empty: { alignItems: "center", justifyContent: "center", paddingVertical: 48, gap: 10 },
   emptyText: { fontSize: 13, color: COLORS.gray, textAlign: "center" },
   list: { gap: 10 },
   tierCard: {
@@ -236,19 +326,29 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.grayBorder,
-    padding: SPACING.sm + 2,
+    padding: SPACING.sm + 4,
+    ...SHADOW.card,
   },
-  tierImage: { width: 56, height: 56, borderRadius: RADIUS.md, backgroundColor: COLORS.grayLight },
+  tierImage: { width: 64, height: 64, borderRadius: RADIUS.md, backgroundColor: COLORS.grayLight },
   tierImageFallback: {
-    width: 56, height: 56, borderRadius: RADIUS.md,
+    width: 64, height: 64, borderRadius: RADIUS.md,
     backgroundColor: COLORS.primaryLight,
     alignItems: "center", justifyContent: "center",
   },
-  tierText: { flex: 1 },
-  tierName: { fontSize: 14, fontWeight: "700", color: COLORS.black, lineHeight: 18 },
-  tierMeta: { fontSize: 11, color: COLORS.gray, marginTop: 3 },
-  tierPriceWrap: { flexDirection: "row", alignItems: "center", gap: 4 },
-  tierPrice: { fontSize: 15, fontWeight: "800", color: COLORS.primaryDark },
+  tierText: { flex: 1, gap: 4 },
+  tierName: { fontSize: 14.5, fontWeight: "700", color: COLORS.black, lineHeight: 19 },
+  tierMetaRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  tierMeta: { fontSize: 11.5, color: COLORS.gray },
+  tierPriceWrap: { alignItems: "flex-end", gap: 6 },
+  tierPrice: { fontSize: 16, fontWeight: "800", color: COLORS.black },
+  tierCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  tierCtaText: { fontSize: 11, fontWeight: "700", color: COLORS.primaryDark },
 });
