@@ -21,11 +21,15 @@ import Animated, {
     useSharedValue,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { RADIUS } from "../constants/theme";
+import { COLORS, RADIUS } from "../constants/theme";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const TEAL = "#0F766E";
+// Aligned to the app's real brand teal (constants/theme.ts COLORS) - this
+// screen previously defined its own slightly different teal (#0F766E vs
+// COLORS.primaryDark's #0c6c75), which made it look like a different app
+// right after the home screen.
+const TEAL = COLORS.primaryDark;
 const COPPER = "#B87333";
 const FOREST = "#0D1410";
 const LINEN = "#F7F3EE";
@@ -41,7 +45,7 @@ const STEPS = [
     title: "Book Online",
     desc: "Pick your service and share your address. Choose a pickup time - morning, evening, or weekend. Done in under 2 minutes.",
     accent: TEAL,
-    bg: "#E6F7F7",
+    bg: COLORS.primaryLight,
     dir: "left" as const,
   },
   {
@@ -81,7 +85,7 @@ const OFFERINGS = [
     title: "Custom Stitching",
     desc: "Any garment, made to your exact measurements.",
     accent: TEAL,
-    bg: "#E6F7F7",
+    bg: COLORS.primaryLight,
   },
   {
     icon: "construct-outline" as const,
