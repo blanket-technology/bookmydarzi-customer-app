@@ -26,6 +26,11 @@ import {
     fetchCatalogTree,
     resolveCatalogCategory,
 } from "../src/services/catalogService";
+import {
+    GROUP_DESCRIPTIONS,
+    groupAlterationTiers,
+    type AlterationGroup,
+} from "../src/services/alterationGroups";
 import { useCartStore } from "../src/store/useCartStore";
 import type {
     CatalogDirectService,
@@ -187,6 +192,43 @@ function SidebarItem({
       >
         {entry.name}
       </Text>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Alteration group card (Repair/Resize/Restyle) ────────────────────────────
+
+const GROUP_ICONS: Record<AlterationGroup["key"], keyof typeof Ionicons.glyphMap> = {
+  repair: "hammer-outline",
+  resize: "resize-outline",
+  restyle: "sparkles-outline",
+  other: "cut-outline",
+};
+
+function GroupCard({ group, onPress }: { group: AlterationGroup; onPress: () => void }) {
+  const cheapest = group.tiers.reduce<number | null>(
+    (min, t) => (min === null || t.base_price < min ? t.base_price : min),
+    null,
+  );
+  return (
+    <TouchableOpacity style={tc.card} onPress={onPress} activeOpacity={0.78}>
+      <View style={[tc.iconBox, { backgroundColor: COLORS.primaryLight }]}>
+        <Ionicons name={GROUP_ICONS[group.key]} size={26} color={COLORS.primaryDark} />
+      </View>
+      <View style={tc.textBlock}>
+        <Text style={tc.name} numberOfLines={2}>{group.label}</Text>
+        <Text style={tc.desc} numberOfLines={2}>{GROUP_DESCRIPTIONS[group.key]}</Text>
+      </View>
+      <View style={tc.footer}>
+        {cheapest != null && (
+          <Text style={[tc.price, { color: COLORS.primaryDark }]}>
+            from ₹{cheapest.toLocaleString("en-IN")}
+          </Text>
+        )}
+        <View style={tc.pill}>
+          <Text style={tc.pillText}>{group.tiers.length} opts</Text>
+        </View>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -397,6 +439,20 @@ export default function SubServicesScreen() {
     }));
   }, [selectedEntry]);
 
+  // On a Custom Alterations line with more than one group, show
+  // Repair/Resize/Restyle group cards instead of tier cards directly - a
+  // real extra tap (line -> group screen -> tier), matching the website's
+  // dedicated group pages, per explicit direction to keep both platforms
+  // consistent. Falls back to the plain stitchGroups grid for every other
+  // line (e.g. Men/Women/Kids Clothing's Normal/Designer stitching, which
+  // isn't repair/resize work).
+  const alterationGroups = useMemo(() => {
+    if (selectedEntry?.kind !== "line" || !selectedEntry.line) return [];
+    if (categoryName.toLowerCase() !== "custom alterations") return [];
+    return groupAlterationTiers(selectedEntry.line.stitching_types ?? []);
+  }, [selectedEntry, categoryName]);
+  const showAlterationGroups = alterationGroups.length > 1;
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -486,6 +542,22 @@ export default function SubServicesScreen() {
         imageUrl: line.image_url ?? "",
         description: line.description ?? "",
         filterBaseName: group.baseName,
+      },
+    } as never);
+  }, [selectedEntry, resolvedCategoryId, categoryName, router]);
+
+  const navigateToGroup = useCallback((groupKey: string) => {
+    if (!selectedEntry || selectedEntry.kind !== "line") return;
+    const line = selectedEntry.line;
+    if (!line) return;
+    safeRouterPush(router, {
+      pathname: "/alteration-group",
+      params: {
+        catalogCategoryId: String(resolvedCategoryId),
+        categoryName,
+        serviceLineId: String(line.id),
+        serviceLineName: line.name,
+        groupKey,
       },
     } as never);
   }, [selectedEntry, resolvedCategoryId, categoryName, router]);
@@ -602,11 +674,25 @@ export default function SubServicesScreen() {
             <View style={rp.panelHead}>
               <Text style={rp.panelTitle}>{selectedEntry.name}</Text>
               <Text style={rp.panelSub}>
-                {stitchGroups.length === 1 ? "Select a style to book" : `${stitchGroups.length} styles available`}
+                {showAlterationGroups
+                  ? "Pick the kind of work you need"
+                  : stitchGroups.length === 1 ? "Select a style to book" : `${stitchGroups.length} styles available`}
               </Text>
             </View>
 
-            {stitchGroups.length === 0 ? (
+            {showAlterationGroups ? (
+              <View style={rp.grid}>
+                {alterationGroups.map((group, idx) => (
+                  <Animated.View
+                    key={group.key}
+                    style={rp.gridItem}
+                    entering={FadeInRight.delay(idx * 50).duration(180)}
+                  >
+                    <GroupCard group={group} onPress={() => navigateToGroup(group.key)} />
+                  </Animated.View>
+                ))}
+              </View>
+            ) : stitchGroups.length === 0 ? (
               <View style={rp.empty}>
                 <Text style={rp.emptyText}>No variants available</Text>
               </View>
