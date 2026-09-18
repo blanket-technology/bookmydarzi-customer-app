@@ -39,6 +39,7 @@ import {
     type ServiceRatings,
 } from "../src/services/catalogService";
 import { useCartStore } from "../src/store/useCartStore";
+import { useToastStore } from "../src/store/useToastStore";
 import type {
     CatalogDirectService,
     CatalogServiceLine,
@@ -48,7 +49,7 @@ import type {
 import { safeRouterPush } from "../src/utils/safeNavigation";
 import { normalizeServiceImageUrl } from "../src/utils/serviceImage";
 import { fallbackTierDescription } from "../src/services/fallbackDescription";
-import { groupAlterationTiers, stripQualityPrefix } from "../src/services/alterationGroups";
+import { stripQualityPrefix } from "../src/services/alterationGroups";
 import { useAuthStore } from "../store/useAuthStore";
 import type { SelectedAddon, StitchingPreferences } from "../src/types/cart";
 
@@ -140,6 +141,12 @@ export default function ServiceDetailsScreen() {
   const [directService, setDirectService] = useState<CatalogDirectService | null>(null);
   const [relatedLines, setRelatedLines] = useState<CatalogServiceLine[]>([]);
   const [stitchingTypes, setStitchingTypes] = useState<CatalogStitchingType[]>([]);
+  // Every tier on the line, unfiltered by group - stitchingTypes above is
+  // narrowed to just the tapped tier for display; this stays the full set
+  // so the "Add more work to this garment" checkbox list below can offer
+  // tiers from any group (repair/resize/restyle), not just siblings.
+  const [allLineTiers, setAllLineTiers] = useState<CatalogStitchingType[]>([]);
+  const [checkedTierIds, setCheckedTierIds] = useState<Set<number>>(new Set());
   const [selectedStitchingId, setSelectedStitchingId] = useState<number | null>(null);
   const [designStyle, setDesignStyle] = useState<StitchingPreferences["design_style"] | undefined>(undefined);
   const [embellishmentLevel, setEmbellishmentLevel] = useState<StitchingPreferences["embellishment_level"] | undefined>(undefined);
@@ -223,6 +230,7 @@ export default function ServiceDetailsScreen() {
           setServiceLine(null);
           setDirectService(null);
           setStitchingTypes([]);
+          setAllLineTiers([]);
           setRelatedLines([]);
           return;
         }
@@ -247,25 +255,26 @@ export default function ServiceDetailsScreen() {
           const allTypes = [...(line.stitching_types ?? [])].sort(
             (a, b) => a.display_order - b.display_order,
           );
-          // Custom Alterations arrives here two ways: sub-services.tsx's
-          // own flow always narrows by exact quality name (filterBaseName,
-          // e.g. "Sleeve Repair"); the newer alteration-group.tsx screen
-          // instead passes the tapped tier's id with no filterBaseName, so
-          // this must narrow to that tier's own Repair/Resize/Restyle group
-          // itself - otherwise every tier on the whole line (spanning all
-          // three groups) shows in one flat list, which is exactly what the
-          // dedicated group screen exists to avoid.
+          // Custom Alterations tiers are booked one at a time - this screen
+          // shows exactly the tapped tier's own info, never a picker to
+          // switch between siblings (matches the website's tier detail
+          // page). sub-services.tsx's older flow narrows by exact quality
+          // name (filterBaseName, e.g. "Sleeve Repair" out of Normal/
+          // Designer); alteration-group.tsx and any other alteration entry
+          // narrow to just the one tapped tier by id. Wanting to add
+          // several alteration tiers to one order is handled separately by
+          // the "Add more work to this garment" checkbox list below, which
+          // reads from allLineTiers (the full, unfiltered line) rather than
+          // this narrowed list.
           let types = allTypes;
           if (filterBaseName) {
             types = allTypes.filter((t) => getServiceBaseName(t.name) === filterBaseName);
           } else if (isAlterationsCategory && paramSelectedStitchingId > 0) {
-            const groups = groupAlterationTiers(allTypes);
-            const ownGroup = groups.find((g) =>
-              g.tiers.some((t) => t.service_id === paramSelectedStitchingId),
-            );
-            if (ownGroup) types = ownGroup.tiers;
+            const tapped = allTypes.find((t) => t.service_id === paramSelectedStitchingId);
+            if (tapped) types = [tapped];
           }
           setStitchingTypes(types);
+          setAllLineTiers(allTypes);
           const preferredId =
             paramSelectedStitchingId > 0 &&
             types.some((t) => t.service_id === paramSelectedStitchingId)
@@ -299,6 +308,7 @@ export default function ServiceDetailsScreen() {
             },
           ]);
           setSelectedStitchingId(direct.service_id);
+          setAllLineTiers([]);
           setRelatedLines(
             [...category.service_lines].sort(
               (a, b) => a.display_order - b.display_order,
@@ -308,12 +318,14 @@ export default function ServiceDetailsScreen() {
           setServiceLine(null);
           setDirectService(null);
           setStitchingTypes([]);
+          setAllLineTiers([]);
           setRelatedLines([]);
         }
       } catch {
         setServiceLine(null);
         setDirectService(null);
         setStitchingTypes([]);
+        setAllLineTiers([]);
         setRelatedLines([]);
         setLoadError(true);
       } finally {
@@ -363,6 +375,7 @@ export default function ServiceDetailsScreen() {
   // (Normal/Designer), since one variant's extras don't apply to another.
   useEffect(() => {
     setSelectedAddons([]);
+    setCheckedTierIds(new Set());
     if (!selectedStitching || selectedStitching.service_id <= 0) {
       setAddons([]);
       return;
@@ -485,6 +498,39 @@ export default function ServiceDetailsScreen() {
           : undefined,
         addons: selectedAddons.length > 0 ? selectedAddons : undefined,
       });
+
+      // "Add more work to this garment" - each ticked tier is a full,
+      // independently priced/bookable service in its own right (not a
+      // ServiceAddon extra), so each becomes its own cart line via the
+      // same single-item add call, fired sequentially rather than in
+      // parallel so cart state stays consistent call-by-call. A tier that
+      // fails partway through does not roll back the ones that already
+      // succeeded - those are valid lines the customer would still want;
+      // they're told exactly which one failed and can retry from cart.
+      const extraTiers = allLineTiers.filter((t) => checkedTierIds.has(t.service_id));
+      const failedNames: string[] = [];
+      for (const tier of extraTiers) {
+        try {
+          await useCartStore.getState().addServiceEntry({
+            service_id: tier.service_id,
+            quantity: 1,
+          });
+        } catch {
+          failedNames.push(stripQualityPrefix(tier.name));
+        }
+      }
+      setCheckedTierIds(new Set());
+      if (failedNames.length > 0) {
+        useToastStore.getState().show(
+          `Added to cart, but couldn't add: ${failedNames.join(", ")}. Try again from the cart.`,
+          "error",
+        );
+      } else if (extraTiers.length > 0) {
+        useToastStore.getState().show(
+          `Added ${extraTiers.length + 1} items to cart.`,
+          "success",
+        );
+      }
     } catch {
       // addServiceEntry already surfaces its own error via useCartStore's
       // error state / a caller-visible throw - nothing further to do here
@@ -496,6 +542,7 @@ export default function ServiceDetailsScreen() {
     selectedStitching, isAuthenticated, getQuantityForStitching,
     serviceLine, directService?.name, serviceName, catalogCategoryId, categoryName,
     displayImage, designStyle, embellishmentLevel, designNotes, selectedAddons,
+    allLineTiers, checkedTierIds,
     setPendingService, setBuyNowMode, setPendingRoute, buildReturnParams, router,
   ]);
 
@@ -548,15 +595,24 @@ export default function ServiceDetailsScreen() {
     buildReturnParams, router, setBookingFlowActive,
   ]);
 
-  // Every other bookable tier on this same line (e.g. "Button Replacement",
-  // "Shoulder Adjustment" while "Sleeve Repair" is selected) - matches the
-  // website's "Other options in {line.name}" section on its tier detail
-  // page, since the customer already scrolled past the selected tier's own
-  // card and shouldn't have to hunt through the full list above to switch.
+  // Every other bookable tier on this same line, any group (e.g. "Button
+  // Replacement" or "Waist Adjustment" while "Sleeve Repair" is the primary
+  // tier) - offered as opt-in checkboxes so a customer fixing one garment
+  // can add several tiers of work to it in one Add to Cart tap, instead of
+  // navigating back and adding each one separately.
   const otherTiers = useMemo(
-    () => stitchingTypes.filter((s) => s.service_id !== selectedStitchingId),
-    [stitchingTypes, selectedStitchingId],
+    () => allLineTiers.filter((s) => s.service_id !== selectedStitchingId),
+    [allLineTiers, selectedStitchingId],
   );
+
+  const toggleTierChecked = useCallback((serviceId: number) => {
+    setCheckedTierIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(serviceId)) next.delete(serviceId);
+      else next.add(serviceId);
+      return next;
+    });
+  }, []);
 
   const navigateToRelatedLine = useCallback(
     (relatedLine: CatalogServiceLine) => {
@@ -780,12 +836,16 @@ export default function ServiceDetailsScreen() {
               entering={FadeInDown.delay(100).duration(400)}
               style={styles.stitchingSection}
             >
-              <Text style={styles.sectionTitle}>
-                {isAlterationsCategory ? "Alteration type" : t("service.stitchingType")}
-              </Text>
-              <Text style={styles.sectionSub}>
-                {isAlterationsCategory ? "Select the work you need" : t("service.selectFinish")}
-              </Text>
+              {isAlterationsCategory && stitchingTypes.length <= 1 ? null : (
+                <>
+                  <Text style={styles.sectionTitle}>
+                    {isAlterationsCategory ? "Alteration type" : t("service.stitchingType")}
+                  </Text>
+                  <Text style={styles.sectionSub}>
+                    {isAlterationsCategory ? "Select the work you need" : t("service.selectFinish")}
+                  </Text>
+                </>
+              )}
               {stitchingTypes.map((stitching) => {
                 const selected = stitching.service_id === selectedStitchingId;
                 const isPremium = stitching.is_premium ?? false;
@@ -984,6 +1044,59 @@ export default function ServiceDetailsScreen() {
               })}
             </Animated.View>
 
+            {otherTiers.length > 0 ? (
+              <View style={styles.otherTiersSection}>
+                <Text style={styles.sectionTitle}>Add more work to this garment</Text>
+                <Text style={styles.sectionSub}>
+                  Fixing more than one thing? Add it now in the same order.
+                </Text>
+                <View style={styles.otherTiersList}>
+                  {otherTiers.map((tier) => {
+                    const checked = checkedTierIds.has(tier.service_id);
+                    return (
+                      <TouchableOpacity
+                        key={tier.service_id}
+                        style={[styles.otherTierCard, checked && styles.otherTierCardChecked]}
+                        activeOpacity={0.85}
+                        onPress={() => toggleTierChecked(tier.service_id)}
+                      >
+                        {normalizeServiceImageUrl(tier.image_url) ? (
+                          <Image
+                            source={{ uri: normalizeServiceImageUrl(tier.image_url)! }}
+                            style={styles.otherTierImage}
+                            contentFit="cover"
+                            cachePolicy="memory-disk"
+                            transition={150}
+                          />
+                        ) : (
+                          <View style={styles.otherTierImageFallback}>
+                            <Ionicons name="cut-outline" size={20} color={COLORS.primaryDark} />
+                          </View>
+                        )}
+                        <View style={styles.otherTierBody}>
+                          <Text style={styles.otherTierName} numberOfLines={1}>
+                            {isAlterationsCategory ? stripQualityPrefix(tier.name) : tier.name}
+                          </Text>
+                          <View style={styles.otherTierMetaRow}>
+                            <Text style={styles.otherTierPrice}>{formatMoney(tier.base_price)}</Text>
+                            <Ionicons name="time-outline" size={11} color={COLORS.gray} />
+                            <Text style={styles.otherTierDays}>
+                              {tier.estimated_delivery_days ?? 7}d
+                            </Text>
+                          </View>
+                        </View>
+                        <Ionicons
+                          name={checked ? "checkmark-circle" : "ellipse-outline"}
+                          size={22}
+                          color={checked ? COLORS.primaryDark : COLORS.grayBorder}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
             <View style={styles.ctaRow}>
               <TouchableOpacity
                 style={[styles.addToCartBtn, (!canContinue || addingToCart) && styles.continueBtnDisabled]}
@@ -996,7 +1109,11 @@ export default function ServiceDetailsScreen() {
                 ) : (
                   <>
                     <Ionicons name="cart-outline" size={18} color={COLORS.primaryDark} />
-                    <Text style={styles.addToCartBtnText}>{t("service.addToCart")}</Text>
+                    <Text style={styles.addToCartBtnText}>
+                      {checkedTierIds.size > 0
+                        ? `${t("service.addToCart")} (${checkedTierIds.size + 1})`
+                        : t("service.addToCart")}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -1010,44 +1127,11 @@ export default function ServiceDetailsScreen() {
                 <Text style={styles.bookNowBtnText}>{t("service.bookNow")}</Text>
               </TouchableOpacity>
             </View>
-
-            {otherTiers.length > 0 ? (
-              <View style={styles.otherTiersSection}>
-                <Text style={styles.sectionTitle}>
-                  Other options in {serviceLine?.name ?? serviceName}
-                </Text>
-                <View style={styles.otherTiersList}>
-                  {otherTiers.map((tier) => (
-                    <TouchableOpacity
-                      key={tier.service_id}
-                      style={styles.otherTierCard}
-                      activeOpacity={0.85}
-                      onPress={() => setSelectedStitchingId(tier.service_id)}
-                    >
-                      {normalizeServiceImageUrl(tier.image_url) ? (
-                        <Image
-                          source={{ uri: normalizeServiceImageUrl(tier.image_url)! }}
-                          style={styles.otherTierImage}
-                          contentFit="cover"
-                          cachePolicy="memory-disk"
-                          transition={150}
-                        />
-                      ) : (
-                        <View style={styles.otherTierImageFallback}>
-                          <Ionicons name="cut-outline" size={20} color={COLORS.primaryDark} />
-                        </View>
-                      )}
-                      <View style={styles.otherTierBody}>
-                        <Text style={styles.otherTierName} numberOfLines={1}>
-                          {isAlterationsCategory ? stripQualityPrefix(tier.name) : tier.name}
-                        </Text>
-                        <Text style={styles.otherTierPrice}>{formatMoney(tier.base_price)}</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={16} color={COLORS.gray} />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
+            {checkedTierIds.size > 0 ? (
+              <Text style={styles.multiAddHint}>
+                Book Now only books "{selectedStitching ? stripQualityPrefix(selectedStitching.name) : ""}" -
+                use Add to Cart to include the extra items you selected above.
+              </Text>
             ) : null}
 
             {relatedLines.length > 0 ? (
@@ -1184,6 +1268,10 @@ const styles = StyleSheet.create({
     borderColor: COLORS.grayBorder,
     padding: SPACING.sm,
   },
+  otherTierCardChecked: {
+    borderColor: COLORS.primaryDark,
+    backgroundColor: COLORS.primaryLight,
+  },
   otherTierImage: {
     width: 48,
     height: 48,
@@ -1207,11 +1295,27 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.black,
   },
+  otherTierMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
   otherTierPrice: {
     fontSize: 12.5,
     fontWeight: "700",
     color: COLORS.primaryDark,
-    marginTop: 2,
+    marginRight: 4,
+  },
+  otherTierDays: {
+    fontSize: 11,
+    color: COLORS.gray,
+  },
+  multiAddHint: {
+    fontSize: 11.5,
+    color: COLORS.gray,
+    marginTop: SPACING.xs,
+    lineHeight: 16,
   },
   relatedSection: {
     marginTop: SPACING.lg,
