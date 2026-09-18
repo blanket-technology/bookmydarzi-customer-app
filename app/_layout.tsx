@@ -389,6 +389,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="(auth)"        options={{ animation: "slide_from_right" }} />
           <Stack.Screen name="sub-services"  options={{ headerShown: false, animation: "slide_from_right" }} />
+          <Stack.Screen name="alteration-group" options={{ headerShown: false, animation: "slide_from_right" }} />
           <Stack.Screen name="service-details" options={{ headerShown: false, animation: "slide_from_right" }} />
           <Stack.Screen name="stitching-type"  options={{ headerShown: false, animation: "slide_from_right" }} />
           <Stack.Screen name="address"       options={{ headerShown: false, animation: "slide_from_bottom" }} />
