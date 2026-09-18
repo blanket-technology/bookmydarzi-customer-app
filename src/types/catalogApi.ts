@@ -17,6 +17,11 @@ export interface CatalogStitchingType {
   service_line_name: string;
   category_id: number;
   category_name: string;
+  /** Admin-set Repair/Resize/Restyle grouping, only meaningful for a
+   * Custom Alterations tier. Null if not yet explicitly assigned - callers
+   * fall back to keyword classification on the tier name in that case
+   * (see services/alterationGroups.ts's classifyByKeyword()). */
+  alteration_group?: "repair" | "resize" | "restyle" | null;
 }
 
 export interface CatalogServiceLine {

@@ -1,13 +1,13 @@
 import type { CatalogStitchingType } from "../types/catalogApi";
 
-// Classifies a Custom Alterations line's tiers into Repair/Resize/Restyle -
-// no backend/catalog change, the catalog has no explicit "type" field for a
-// tier, so this reads keywords already present in every real tier name
-// today (see the live catalog: "Sleeve Repair", "Button Replacement",
-// "Waist Adjustment", "Length Shortening", ...). Mirrors the website's
-// lib/services/alterationGroups.ts exactly - same classification, same
-// real-extra-click design (line -> group screen -> tier), per explicit
-// direction to keep both platforms consistent.
+// Classifies a Custom Alterations line's tiers into Repair/Resize/Restyle.
+// The catalog now has a real, admin-set field for this
+// (CatalogStitchingType.alteration_group) - a tier's own explicit
+// assignment always wins. Keyword classification on the tier name is only
+// a fallback for a tier that hasn't been assigned one yet. Mirrors the
+// website's lib/services/alterationGroups.ts exactly - same resolution
+// order, same real-extra-tap design (line -> group screen -> tier), per
+// explicit direction to keep both platforms consistent.
 export type AlterationGroupKey = "repair" | "resize" | "restyle" | "other";
 
 const GROUP_LABELS: Record<AlterationGroupKey, string> = {
@@ -26,7 +26,19 @@ export const GROUP_DESCRIPTIONS: Record<AlterationGroupKey, string> = {
 
 const GROUP_ORDER: AlterationGroupKey[] = ["repair", "resize", "restyle", "other"];
 
-function classify(name: string): AlterationGroupKey {
+/** Strips a leading "Normal "/"Designer " quality prefix for display - the
+ * distinction still matters for booking (they're separate priced tiers) but
+ * reads as noise in a list that's already scoped to one alteration group,
+ * e.g. "Normal Sleeve Repair" -> "Sleeve Repair". */
+export function stripQualityPrefix(name: string): string {
+  const t = name.trim();
+  const l = t.toLowerCase();
+  if (l.startsWith("normal ")) return t.slice("normal ".length).trim();
+  if (l.startsWith("designer ")) return t.slice("designer ".length).trim();
+  return t;
+}
+
+function classifyByKeyword(name: string): AlterationGroupKey {
   const n = name.toLowerCase();
   if (n.includes("repair") || n.includes("replacement")) return "repair";
   if (n.includes("length") || n.includes("waist") || n.includes("shoulder") || n.includes("adjustment")) {
@@ -36,6 +48,13 @@ function classify(name: string): AlterationGroupKey {
   return "other";
 }
 
+function resolveGroup(tier: CatalogStitchingType): AlterationGroupKey {
+  if (tier.alteration_group === "repair" || tier.alteration_group === "resize" || tier.alteration_group === "restyle") {
+    return tier.alteration_group;
+  }
+  return classifyByKeyword(tier.name);
+}
+
 export interface AlterationGroup {
   key: AlterationGroupKey;
   label: string;
@@ -43,12 +62,12 @@ export interface AlterationGroup {
 }
 
 /** Groups tiers by type, dropping any empty group - an "Other" bucket only
- * ever appears if a tier's name genuinely doesn't match a known keyword, so
- * nothing is hidden, just organized. */
+ * ever appears if a tier has neither an explicit alteration_group nor a
+ * name matching a known keyword, so nothing is hidden, just organized. */
 export function groupAlterationTiers(tiers: CatalogStitchingType[]): AlterationGroup[] {
   const byKey = new Map<AlterationGroupKey, CatalogStitchingType[]>();
   for (const tier of tiers) {
-    const key = classify(tier.name);
+    const key = resolveGroup(tier);
     const list = byKey.get(key) ?? [];
     list.push(tier);
     byKey.set(key, list);

@@ -25,6 +25,8 @@ function mapStitchingType(raw: Record<string, unknown>): CatalogStitchingType {
     service_line_name: String(raw.service_line_name ?? raw.ServiceLineName ?? ""),
     category_id: Number(raw.category_id ?? raw.CategoryId ?? 0),
     category_name: String(raw.category_name ?? raw.CategoryName ?? ""),
+    alteration_group: (raw.alteration_group ?? raw.AlterationGroup ?? null) as
+      | "repair" | "resize" | "restyle" | null,
   };
 }
 
