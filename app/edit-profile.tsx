@@ -150,11 +150,19 @@ export default function EditProfileScreen() {
           {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
 
           <Text style={styles.fieldLabel}>Phone Number</Text>
-          <View style={styles.readonlyField}>
+          <TouchableOpacity
+            style={styles.readonlyField}
+            onPress={() => router.push("/change-mobile" as never)}
+            accessibilityRole="button"
+            accessibilityLabel="Change mobile number"
+          >
             <Ionicons name="call-outline" size={15} color={COLORS.gray} />
             <Text style={styles.readonlyFieldText}>{displayPhone || "Not set"}</Text>
-          </View>
-          <Text style={styles.fieldHint}>Phone changes require verification via OTP</Text>
+            <View style={{ flex: 1 }} />
+            <Text style={styles.changeLink}>Change</Text>
+            <Ionicons name="chevron-forward" size={14} color={COLORS.primaryDark} />
+          </TouchableOpacity>
+          <Text style={styles.fieldHint}>Changing your number requires OTP verification on both numbers</Text>
 
           <Text style={styles.fieldLabel}>Gender</Text>
           <View style={styles.genderRow}>
@@ -224,6 +232,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   readonlyFieldText: { fontSize: 14, color: COLORS.gray, fontWeight: "600" },
+  changeLink: { fontSize: 13, fontWeight: "700", color: COLORS.primaryDark, marginRight: 2 },
   fieldHint: { fontSize: 11, color: COLORS.gray, marginTop: 5 },
   genderRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   genderChip: {
