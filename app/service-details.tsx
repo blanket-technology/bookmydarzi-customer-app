@@ -552,15 +552,14 @@ export default function ServiceDetailsScreen() {
     setPendingService, setBuyNowMode, setPendingRoute, buildReturnParams, router,
   ]);
 
-  const [bookingWithExtras, setBookingWithExtras] = useState(false);
-
-  const handleBookNow = useCallback(async () => {
+  const handleBookNow = useCallback(() => {
     if (!selectedStitching) {
       Alert.alert("Select stitching type", "Please choose a stitching type to continue.");
       return;
     }
     const qty = getQuantityForStitching(selectedStitching.service_id);
     const isPremiumSelected = selectedStitching.is_premium ?? false;
+    const extraTiers = allLineTiers.filter((t) => checkedTierIds.has(t.service_id));
     const pendingItem = {
       bookableServiceId: selectedStitching.service_id,
       serviceLineId: serviceLine?.id,
@@ -580,6 +579,17 @@ export default function ServiceDetailsScreen() {
           }
         : undefined,
       addons: selectedAddons.length > 0 ? selectedAddons : undefined,
+      // "Add more work to this garment" - each checked tier becomes its
+      // own real order line via POST /orders/direct's multi-item `items`,
+      // a genuine multi-item Book Now (no cart involved at all), not the
+      // primary tier's own addons.
+      extraItems: extraTiers.length > 0
+        ? extraTiers.map((t) => ({
+            serviceId: t.service_id,
+            name: stripQualityPrefix(t.name),
+            basePrice: t.base_price,
+          }))
+        : undefined,
     };
     if (!isAuthenticated) {
       setPendingService(pendingItem);
@@ -588,59 +598,9 @@ export default function ServiceDetailsScreen() {
       safeRouterPush(router, "/(auth)/login");
       return;
     }
-
-    const extraTiers = allLineTiers.filter((t) => checkedTierIds.has(t.service_id));
-    if (extraTiers.length > 0) {
-      // "Add more work to this garment" applies here too - the direct-order
-      // ("Book Now") backend endpoint only ever takes one service_id, so
-      // rather than build a second multi-item order path, this reuses the
-      // cart (already proven correct for multi-item billing) as the
-      // mechanism: add the primary tier + every checked extra, then land
-      // straight on the cart tab to finish checkout - skipping the single-
-      // item direct-order flow entirely once more than one tier is involved.
-      setBookingWithExtras(true);
-      try {
-        await useCartStore.getState().addServiceEntry({
-          service_id: selectedStitching.service_id,
-          quantity: qty,
-          stitching_preferences: isPremiumSelected
-            ? {
-                design_style: designStyle,
-                embellishment_level: embellishmentLevel,
-                design_notes: designNotes.trim() || undefined,
-              }
-            : undefined,
-          addons: selectedAddons.length > 0 ? selectedAddons : undefined,
-        }, { toastMessage: null });
-        const failedNames: string[] = [];
-        for (const tier of extraTiers) {
-          try {
-            await useCartStore.getState().addServiceEntry(
-              { service_id: tier.service_id, quantity: 1 },
-              { toastMessage: null },
-            );
-          } catch {
-            failedNames.push(stripQualityPrefix(tier.name));
-          }
-        }
-        setCheckedTierIds(new Set());
-        if (failedNames.length > 0) {
-          useToastStore.getState().show(
-            `Added to cart, but couldn't add: ${failedNames.join(", ")}. Review your cart to finish booking.`,
-            "error",
-          );
-        }
-        safeRouterPush(router, "/(tabs)/cart" as never);
-      } catch {
-        Alert.alert("Couldn't start booking", "Please try again.");
-      } finally {
-        setBookingWithExtras(false);
-      }
-      return;
-    }
-
     setPendingService(pendingItem);
     setBuyNowMode(true);
+    setCheckedTierIds(new Set());
     // Book Now skips the cart entirely, so (unlike Add to Cart) it does
     // need an address right away - measurement is still never collected
     // from the customer here; that's filled later by Bridge/employee at
@@ -1177,28 +1137,22 @@ export default function ServiceDetailsScreen() {
                 )}
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.bookNowBtn, (!canContinue || bookingWithExtras) && styles.continueBtnDisabled]}
+                style={[styles.bookNowBtn, !canContinue && styles.continueBtnDisabled]}
                 onPress={handleBookNow}
-                disabled={!canContinue || bookingWithExtras}
+                disabled={!canContinue}
                 activeOpacity={0.9}
               >
-                {bookingWithExtras ? (
-                  <ActivityIndicator size="small" color={COLORS.white} />
-                ) : (
-                  <>
-                    <Ionicons name="flash-outline" size={18} color={COLORS.white} />
-                    <Text style={styles.bookNowBtnText}>
-                      {checkedTierIds.size > 0
-                        ? `${t("service.bookNow")} (${checkedTierIds.size + 1})`
-                        : t("service.bookNow")}
-                    </Text>
-                  </>
-                )}
+                <Ionicons name="flash-outline" size={18} color={COLORS.white} />
+                <Text style={styles.bookNowBtnText}>
+                  {checkedTierIds.size > 0
+                    ? `${t("service.bookNow")} (${checkedTierIds.size + 1})`
+                    : t("service.bookNow")}
+                </Text>
               </TouchableOpacity>
             </View>
             {checkedTierIds.size > 0 ? (
               <Text style={styles.multiAddHint}>
-                Booking {checkedTierIds.size + 1} items together will take you to your cart to finish checkout.
+                All {checkedTierIds.size + 1} items will be booked together in one order.
               </Text>
             ) : null}
 

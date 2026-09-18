@@ -23,7 +23,13 @@ export interface BillingEstimate {
   remaining_amount_display: string;
 }
 
+export interface DirectOrderItem {
+  service_id: number;
+  quantity?: number;
+}
+
 export interface DirectOrderPayload {
+  /** Ignored when `items` is set - see DirectOrderItem. */
   service_id: number;
   quantity?: number;
   address_id: number;
@@ -39,6 +45,12 @@ export interface DirectOrderPayload {
   image_references?: string[];
   /** Extras selected on the service detail screen - see AddonPicker. */
   addons?: SelectedAddon[];
+  /** Multi-item Book Now (e.g. a primary alteration tier plus other tiers
+   * checked under "Add more work to this garment") - one real order with
+   * several service lines, created directly without touching the cart.
+   * When set, service_id/quantity/stitching_preferences/addons above are
+   * ignored - see POST /orders/direct's `items` field on the backend. */
+  items?: DirectOrderItem[];
 }
 
 function asRecord(raw: unknown): Record<string, unknown> {
@@ -58,9 +70,13 @@ export async function getBillingEstimate(
   serviceId: number,
   quantity = 1,
   addonIds: number[] = [],
+  items?: DirectOrderItem[],
 ): Promise<BillingEstimate> {
   const qs = new URLSearchParams({ service_id: String(serviceId), quantity: String(quantity) });
   if (addonIds.length > 0) qs.set("addon_ids", addonIds.join(","));
+  if (items?.length) {
+    qs.set("items", JSON.stringify(items.map((i) => ({ service_id: i.service_id, quantity: i.quantity ?? 1 }))));
+  }
   const raw = await request<unknown>(`/orders/billing-estimate?${qs.toString()}`);
   const r = asRecord(raw);
   return {
@@ -116,18 +132,22 @@ export async function createDirectOrder(
   const raw = await request<unknown>("/orders/direct", {
     method: "POST",
     body: {
-      service_id: payload.service_id,
-      quantity: payload.quantity ?? 1,
       address_id: payload.address_id,
       pickup_type: payload.pickup_type ?? "instant",
       payment_method: payload.payment_method ?? "online",
       offer_id: payload.offer_id,
       scheduled_pickup_at: payload.scheduled_pickup_at,
       pickup_time_slot: payload.pickup_time_slot,
-      stitching_preferences: payload.stitching_preferences,
-      ...(payload.addons?.length
-        ? { addons: payload.addons.map((a) => ({ addon_id: a.addonId, ...(a.note?.trim() ? { note: a.note.trim() } : {}) })) }
-        : {}),
+      ...(payload.items?.length
+        ? { items: payload.items.map((i) => ({ service_id: i.service_id, quantity: i.quantity ?? 1 })) }
+        : {
+            service_id: payload.service_id,
+            quantity: payload.quantity ?? 1,
+            stitching_preferences: payload.stitching_preferences,
+            ...(payload.addons?.length
+              ? { addons: payload.addons.map((a) => ({ addon_id: a.addonId, ...(a.note?.trim() ? { note: a.note.trim() } : {}) })) }
+              : {}),
+          }),
     },
     // Same reasoning as cart checkout - makes the request wrapper's built-in
     // network-failure retry (and an accidental double-tap) safe.
