@@ -26,6 +26,11 @@ export interface BillingEstimate {
 export interface DirectOrderItem {
   service_id: number;
   quantity?: number;
+  /** Only meaningful on the primary (first) item - a "checked extra" tier
+   * never carries its own addons/design brief, matching Add to Cart's
+   * same convention. */
+  stitching_preferences?: StitchingPreferences;
+  addons?: SelectedAddon[];
 }
 
 export interface DirectOrderPayload {
@@ -48,8 +53,11 @@ export interface DirectOrderPayload {
   /** Multi-item Book Now (e.g. a primary alteration tier plus other tiers
    * checked under "Add more work to this garment") - one real order with
    * several service lines, created directly without touching the cart.
-   * When set, service_id/quantity/stitching_preferences/addons above are
-   * ignored - see POST /orders/direct's `items` field on the backend. */
+   * When set, the top-level service_id/quantity above are ignored - the
+   * primary item's own stitching_preferences/addons (set on THIS item, at
+   * items[0]) still apply; the top-level stitching_preferences/addons
+   * fields are ignored too once items is set, so callers must put them on
+   * items[0] instead. See POST /orders/direct's `items` field on the backend. */
   items?: DirectOrderItem[];
 }
 
@@ -139,7 +147,16 @@ export async function createDirectOrder(
       scheduled_pickup_at: payload.scheduled_pickup_at,
       pickup_time_slot: payload.pickup_time_slot,
       ...(payload.items?.length
-        ? { items: payload.items.map((i) => ({ service_id: i.service_id, quantity: i.quantity ?? 1 })) }
+        ? {
+            items: payload.items.map((i) => ({
+              service_id: i.service_id,
+              quantity: i.quantity ?? 1,
+              ...(i.stitching_preferences ? { stitching_preferences: i.stitching_preferences } : {}),
+              ...(i.addons?.length
+                ? { addons: i.addons.map((a) => ({ addon_id: a.addonId, ...(a.note?.trim() ? { note: a.note.trim() } : {}) })) }
+                : {}),
+            })),
+          }
         : {
             service_id: payload.service_id,
             quantity: payload.quantity ?? 1,
