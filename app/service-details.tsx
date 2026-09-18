@@ -533,6 +533,16 @@ export default function ServiceDetailsScreen() {
     buildReturnParams, router, setBookingFlowActive,
   ]);
 
+  // Every other bookable tier on this same line (e.g. "Button Replacement",
+  // "Shoulder Adjustment" while "Sleeve Repair" is selected) - matches the
+  // website's "Other options in {line.name}" section on its tier detail
+  // page, since the customer already scrolled past the selected tier's own
+  // card and shouldn't have to hunt through the full list above to switch.
+  const otherTiers = useMemo(
+    () => stitchingTypes.filter((s) => s.service_id !== selectedStitchingId),
+    [stitchingTypes, selectedStitchingId],
+  );
+
   const navigateToRelatedLine = useCallback(
     (relatedLine: CatalogServiceLine) => {
       const firstStitch = relatedLine.stitching_types[0];
@@ -986,6 +996,45 @@ export default function ServiceDetailsScreen() {
               </TouchableOpacity>
             </View>
 
+            {otherTiers.length > 0 ? (
+              <View style={styles.otherTiersSection}>
+                <Text style={styles.sectionTitle}>
+                  Other options in {serviceLine?.name ?? serviceName}
+                </Text>
+                <View style={styles.otherTiersList}>
+                  {otherTiers.map((tier) => (
+                    <TouchableOpacity
+                      key={tier.service_id}
+                      style={styles.otherTierCard}
+                      activeOpacity={0.85}
+                      onPress={() => setSelectedStitchingId(tier.service_id)}
+                    >
+                      {normalizeServiceImageUrl(tier.image_url) ? (
+                        <Image
+                          source={{ uri: normalizeServiceImageUrl(tier.image_url)! }}
+                          style={styles.otherTierImage}
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
+                          transition={150}
+                        />
+                      ) : (
+                        <View style={styles.otherTierImageFallback}>
+                          <Ionicons name="cut-outline" size={20} color={COLORS.primaryDark} />
+                        </View>
+                      )}
+                      <View style={styles.otherTierBody}>
+                        <Text style={styles.otherTierName} numberOfLines={1}>
+                          {isAlterationsCategory ? stripQualityPrefix(tier.name) : tier.name}
+                        </Text>
+                        <Text style={styles.otherTierPrice}>{formatMoney(tier.base_price)}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={COLORS.gray} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
             {relatedLines.length > 0 ? (
               <View style={styles.relatedSection}>
                 <Text style={styles.sectionTitle}>You might also like</Text>
@@ -1102,6 +1151,52 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     marginBottom: SPACING.md,
     lineHeight: 18,
+  },
+  otherTiersSection: {
+    marginTop: SPACING.lg,
+  },
+  otherTiersList: {
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  otherTierCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    padding: SPACING.sm,
+  },
+  otherTierImage: {
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.grayLight,
+  },
+  otherTierImageFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  otherTierBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  otherTierName: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: COLORS.black,
+  },
+  otherTierPrice: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+    marginTop: 2,
   },
   relatedSection: {
     marginTop: SPACING.lg,
