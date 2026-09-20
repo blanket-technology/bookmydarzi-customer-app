@@ -1192,7 +1192,17 @@ export default function OrderDetailsScreen() {
               ) : null}
               <InfoRow
                 label="Base price"
-                value={detailsMoney(item.unit_price)}
+                // item.unit_price is base + this item's own addons combined
+                // (backend: unit_price = base + selected addons) - showing
+                // it raw here read as "Base price ₹228" with the addon rows
+                // below implying they were additional, when they were
+                // already folded in. Subtract this item's own addon total so
+                // "Base price" here actually means base-only, consistent
+                // with the "Service subtotal" row in the breakdown below.
+                value={detailsMoney(
+                  (Number(item.unit_price) || 0) -
+                    (item.addons ?? []).reduce((s, a) => s + a.price, 0),
+                )}
               />
               {item.addons.map((addon, ai) => (
                 <React.Fragment key={addon.addon_id ?? ai}>
