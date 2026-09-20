@@ -15,8 +15,18 @@ export function formatCurrency(amount: number | string | null | undefined): stri
   return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
-export function formatRelativeTime(isoTimestamp: string): string {
-  const diffMs = Date.now() - new Date(isoTimestamp).getTime();
+/** "Just now" / "5m ago" / "3h ago" / "2d ago" / "12 Jan" (7+ days). The
+ * single source for this pattern - previously reimplemented in
+ * notifications.tsx with a silent drift (a stray `year: "numeric"` on the
+ * 7+ day fallback, so the exact same week-old timestamp showed a year on
+ * that one screen and nowhere else that used this same "relative time"
+ * concept). Guards against an empty/invalid ISO string the same way that
+ * duplicate did, folded back in here rather than lost in the consolidation. */
+export function formatRelativeTime(isoTimestamp: string | null | undefined): string {
+  if (!isoTimestamp) return "";
+  const d = new Date(isoTimestamp);
+  if (Number.isNaN(d.getTime())) return "";
+  const diffMs = Date.now() - d.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMins / 60);
   const diffDays = Math.floor(diffHours / 24);
@@ -25,10 +35,52 @@ export function formatRelativeTime(isoTimestamp: string): string {
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays < 7) return `${diffDays}d ago`;
-  return new Date(isoTimestamp).toLocaleDateString("en-IN", {
+  return d.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
   });
+}
+
+/** "12 Jan" - short absolute date, no year/weekday. Use for a compact date
+ * reference (a chat date separator, a pinned-order card) where "how long
+ * ago" isn't the point, just "which date". */
+export function formatShortDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+/** "Mon, 12 Jan" - short absolute date with weekday. Use where knowing the
+ * day-of-week matters (e.g. a scheduled pickup date). */
+export function formatShortDateWithWeekday(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+}
+
+/** "3:42 PM" - 12-hour clock time, no date. */
+export function formatShortTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
+}
+
+/** "Today" / "Yesterday" / "12 Jan" - a chat-style date separator label.
+ * Matches the (employee)/order-chat.tsx format so date-separator copy is
+ * consistent across both chat surfaces. */
+export function formatDateSeparatorLabel(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const today = new Date();
+  if (d.toDateString() === today.toDateString()) return "Today";
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return formatShortDate(iso);
 }
 
 export function formatOrderStatus(status: Order["status"]): string {

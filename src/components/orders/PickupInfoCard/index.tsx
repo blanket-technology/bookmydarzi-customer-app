@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from "../../../../constants/theme";
 import { getOrderStatusMeta } from "../../../constants/orderStatus";
 import { orderDisplayValue } from "../../../types/api";
+import { formatShortDateWithWeekday, formatShortTime } from "../../../utils/formatters";
 
 export interface PickupInfoCardProps {
   pickupType: string | null | undefined;
@@ -11,18 +12,6 @@ export interface PickupInfoCardProps {
   scheduledPickupAt: string | null | undefined;
   /** Current order status - determines which pickup state to show. */
   status: string | null | undefined;
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
 function useCountdown(targetIso: string | null | undefined) {
@@ -93,7 +82,7 @@ const PickupInfoCard = memo(
         {isScheduled && scheduledPickupAt ? (
           <View style={styles.row}>
             <Text style={styles.label}>Date</Text>
-            <Text style={styles.value}>{formatDate(scheduledPickupAt)}</Text>
+            <Text style={styles.value}>{formatShortDateWithWeekday(scheduledPickupAt)}</Text>
           </View>
         ) : null}
 
@@ -103,7 +92,7 @@ const PickupInfoCard = memo(
             <Text style={styles.value}>
               {orderDisplayValue(pickupTimeSlot) !== "-"
                 ? orderDisplayValue(pickupTimeSlot)
-                : formatTime(scheduledPickupAt)}
+                : formatShortTime(scheduledPickupAt)}
             </Text>
           </View>
         ) : null}

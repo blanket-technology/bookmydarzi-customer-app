@@ -1,5 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { formatDateSeparatorLabel } from "../../utils/formatters";
 
 export function DateSeparator({ label }: { label: string }) {
   return (
@@ -12,18 +13,11 @@ export function DateSeparator({ label }: { label: string }) {
 }
 
 /** Today / Yesterday / "12 Jan" - matches (employee)/order-chat.tsx's format
- * so date-separator copy is consistent across both chat surfaces. */
-export function formatDateSeparator(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const today = new Date();
-  if (d.toDateString() === today.toDateString()) return "Today";
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-}
+ * so date-separator copy is consistent across both chat surfaces.
+ * Re-exported from the shared formatters.ts implementation - kept as its
+ * own named export here so SupportChatScreen.tsx's existing import site
+ * doesn't need to change. */
+export const formatDateSeparator = formatDateSeparatorLabel;
 
 const styles = StyleSheet.create({
   wrap: { flexDirection: "row", alignItems: "center", marginVertical: 12, paddingHorizontal: 12, gap: 10 },

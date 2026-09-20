@@ -20,6 +20,7 @@ import ErrorState from "../src/components/common/ErrorState";
 import ScreenHeader from "../src/components/common/ScreenHeader";
 import EmptyState from "../src/components/common/EmptyState";
 import NotificationSkeleton from "../src/components/skeletons/NotificationSkeleton";
+import { formatRelativeTime } from "../src/utils/formatters";
 import { useNotificationStore } from "../src/store/useNotificationStore";
 import { useAuthStore } from "../store/useAuthStore";
 import type { AppNotification } from "../src/types/engagement";
@@ -40,21 +41,6 @@ function iconForType(type: string): keyof typeof Ionicons.glyphMap {
     default:
       return "notifications-outline";
   }
-}
-
-function formatTime(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const diffMs = Date.now() - d.getTime();
-  const mins = Math.round(diffMs / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.round(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
 export default function NotificationsScreen() {
@@ -122,7 +108,7 @@ export default function NotificationsScreen() {
         <Text style={styles.itemBody} numberOfLines={2}>
           {item.body}
         </Text>
-        <Text style={styles.itemTime}>{formatTime(item.created_at)}</Text>
+        <Text style={styles.itemTime}>{formatRelativeTime(item.created_at)}</Text>
       </View>
       {!item.is_read ? <View style={styles.dot} /> : null}
     </TouchableOpacity>
