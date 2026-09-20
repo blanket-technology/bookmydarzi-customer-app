@@ -30,16 +30,25 @@ export function formatCustomerOrderStatusLabel(
     .join(" ");
 }
 
+/**
+ * The headline is now always `getOrderStatusMeta(status).title` - the same
+ * curated copy the description/nextStep lines below it already come from
+ * (see getOrderStatusNarrative). Previously this preferred a separately-
+ * maintained label (the backend's own Order.CustomerStatus string, or a
+ * bare Title-Cased status slug depending on the caller) over this file's
+ * own title - two independently-edited copies of the same idea drifting
+ * apart in wording ("Pickup Completed" vs "Fabric collected", "Booking
+ * completed" vs "Order completed", etc), which is exactly the kind of
+ * seam that reads as unpolished even though neither string was wrong on
+ * its own. `status` alone is now enough; the second parameter is no
+ * longer needed since this file's own ORDER_STATUS_META is the single
+ * source for both lines of text on every one of these cards.
+ */
 export function getBookingHeadline(
   status: string | null | undefined,
-  statusLabel: string | null | undefined,
+  _statusLabel?: string | null,
 ): string {
-  if (isCompletedCustomerOrderStatus(status)) {
-    return "Booking completed";
-  }
-  const formatted = formatCustomerOrderStatusLabel(statusLabel);
-  if (formatted && formatted !== "-") return formatted;
-  return "Booking active";
+  return getOrderStatusMeta(status).title;
 }
 
 export type { StatusVisualTone };
