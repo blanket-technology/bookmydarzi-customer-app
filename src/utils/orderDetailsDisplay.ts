@@ -1,7 +1,4 @@
-import {
-  formatCustomerOrderStatusLabel,
-  getBookingHeadline,
-} from "./customerOrderStatus";
+import { getBookingHeadline } from "./customerOrderStatus";
 import type { CustomerOrderDetailsPayload } from "../types/customerOrders";
 import { SUMMARY_NA, summaryDateTime, summaryMoney, summaryText } from "./orderSummaryDisplay";
 
@@ -23,9 +20,7 @@ export function detailsMeasurement(
 }
 
 export function getDetailsStatusHeadline(payload: CustomerOrderDetailsPayload): string {
-  const status = payload.order.status ?? "";
-  const label = payload.order.customer_status ?? formatCustomerOrderStatusLabel(status);
-  return getBookingHeadline(status, label);
+  return getBookingHeadline(payload.order.status ?? "");
 }
 
 export function getDetailsPaidAmount(payload: CustomerOrderDetailsPayload): string {

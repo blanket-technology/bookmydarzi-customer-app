@@ -1,5 +1,4 @@
 import {
-  formatCustomerOrderStatusLabel,
   getBookingHeadline,
   isCompletedCustomerOrderStatus,
 } from "./customerOrderStatus";
@@ -79,9 +78,7 @@ export function ordinalDateOnly(value: string | null | undefined): string {
 }
 
 export function getSummaryStatusHeadline(payload: CustomerOrderSummaryPayload): string {
-  const status = payload.order.status ?? "";
-  const label = formatCustomerOrderStatusLabel(status);
-  return getBookingHeadline(status, label);
+  return getBookingHeadline(payload.order.status ?? "");
 }
 
 export function getSummaryScheduledLabel(payload: CustomerOrderSummaryPayload): string {
