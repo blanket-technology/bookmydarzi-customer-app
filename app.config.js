@@ -143,6 +143,24 @@ module.exports = {
         dark: {
           backgroundColor: "#000000",
         },
+        // Android 12+ (API 31+) forces its OWN native splash on cold start,
+        // shown before any JS loads - and without this block it falls back
+        // to the app's raw adaptiveIcon (the full round mascot artwork)
+        // blown up on a plain background, completely unstyled and jarring
+        // against the branded splash that follows a beat later. Explicitly
+        // pointing Android at the same splash-icon.png/colors as above
+        // makes that forced native frame match the branded splash exactly,
+        // so the two blend into what reads as one continuous splash
+        // instead of two visibly different screens flashing in sequence.
+        android: {
+          image: "./assets/images/splash-icon.png",
+          imageWidth: 200,
+          resizeMode: "contain",
+          backgroundColor: "#ffffff",
+          dark: {
+            backgroundColor: "#000000",
+          },
+        },
       },
     ],
     "expo-secure-store",
