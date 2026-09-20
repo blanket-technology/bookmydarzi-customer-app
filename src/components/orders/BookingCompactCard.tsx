@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { COLORS, RADIUS, SHADOW } from "../../../constants/theme";
 import { ORDER_DISPLAY_FALLBACK } from "../../types/api";
 import { getOrderStatusMeta, normalizeOrderStatus } from "../../constants/orderStatus";
+import StatusBadge from "./StatusBadge";
 import { ordinalDateOnly } from "../../utils/orderSummaryDisplay";
 import { PAYMENT_ACTION_LABELS } from "../../types/payment";
 import {
@@ -217,6 +218,12 @@ function BookingCompactCard({
                 </>
               ) : null}
             </View>
+            {/* The "Active" tab merges every in-progress state (order
+                placed, tailor assigned, stitching, out for delivery, etc)
+                into one list - without a status badge here, a customer
+                can't tell two of their own orders apart at a glance without
+                tapping into each one. */}
+            <StatusBadge status={status} size="sm" style={styles.statusBadgeMargin} />
           </View>
 
           {showRatingPlaceholder && !onPayNow && rating != null && rating > 0 ? (
@@ -337,6 +344,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     marginTop: 1,
+  },
+  statusBadgeMargin: {
+    marginTop: 6,
   },
   metaRow: {
     flexDirection: "row",
