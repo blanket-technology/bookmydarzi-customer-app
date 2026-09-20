@@ -23,6 +23,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS } from "../constants/theme";
+import ErrorState from "../src/components/common/ErrorState";
+import EmptyState from "../src/components/common/EmptyState";
 import { useHomeStore } from "../src/store/useHomeStore";
 import type { ApiServiceCategory } from "../src/types/homeApi";
 import { resolveCatalogCategoryId } from "../src/utils/catalogCategoryMap";
@@ -92,7 +94,7 @@ export default function AllServicesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: W } = useWindowDimensions();
-  const { serviceCategories } = useHomeStore();
+  const { serviceCategories, loading, error, loadHomeData } = useHomeStore();
 
   const gridGap = 12;
   const catCardW = (W - H_PAD * 2 - gridGap * 2) / 3;
@@ -141,6 +143,26 @@ export default function AllServicesScreen() {
         contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 40 }]}
       >
         {/* ════════════════════════ SERVICES ════════════════════════════════ */}
+        {/* This screen never fetches its own data - it reads whatever the
+            home store already has (normally already populated by the home
+            tab). If that fetch failed or hasn't happened yet before the
+            user reached this screen directly (e.g. a deep link), the grid
+            below silently rendered nothing at all - the "What's Included"/
+            CTA sections still rendered around a blank hole with zero
+            explanation. Give the user something to act on instead. */}
+        {sortedCats.length === 0 && error ? (
+          <View style={s.section}>
+            <ErrorState message={error} onRetry={() => loadHomeData(true)} />
+          </View>
+        ) : sortedCats.length === 0 && !loading ? (
+          <View style={s.section}>
+            <EmptyState
+              icon="grid-outline"
+              title="No services yet"
+              subtitle="Check back soon - new services are being added."
+            />
+          </View>
+        ) : null}
         {sortedCats.length > 0 && (
           <View style={s.section}>
             <Animated.View
