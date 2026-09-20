@@ -3,9 +3,8 @@
  * Binds to: order, service, pricing, payment, delivery_address, measurement, tracking_timeline
  */
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
 import { Image } from "expo-image";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
     ActivityIndicator,
@@ -1081,6 +1080,17 @@ export default function OrderDetailsScreen() {
               title="Your delivery partner"
               subtitle="Bringing your order to your doorstep"
               partner={payload.order.delivery_partner}
+            />
+          ) : null}
+
+          {/* Return-leg equivalent - who's bringing the garment back after
+              a cancellation past custody. Same doorstep trust/safety
+              reasoning as pickup/delivery. */}
+          {payload.order.return_partner ? (
+            <BridgePartnerCard
+              title="Your return partner"
+              subtitle="Bringing your garment back to your doorstep"
+              partner={payload.order.return_partner}
             />
           ) : null}
 

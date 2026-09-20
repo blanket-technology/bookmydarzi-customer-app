@@ -3,8 +3,7 @@
  * Lists the signed-in user's in-app notifications with read/mark-all-read.
  */
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import React, { useCallback } from "react";
 import {
   FlatList,

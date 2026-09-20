@@ -1,4 +1,4 @@
-import type { Router } from "expo-router";
+import type { ImperativeRouter } from "expo-router";
 import { useCartStore } from "../store/useCartStore";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useToastStore } from "../store/useToastStore";
@@ -16,7 +16,7 @@ import { safeRouterReplace } from "./safeNavigation";
 const STAFF_ROLES = new Set(["admin", "superadmin", "employee", "tailor"]);
 
 /** Post-login redirect - deferred until root layout is mounted. */
-export function navigateAfterAuthWithCart(router: Router): void {
+export function navigateAfterAuthWithCart(router: ImperativeRouter): void {
   const role = useAuthStore.getState().user?.role;
   if (role && STAFF_ROLES.has(role)) {
     useToastStore.getState().show(

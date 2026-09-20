@@ -1,3 +1,7 @@
+/* eslint-disable react-hooks/refs -- classic RN Animated.Value ref
+ * (fadeAnim), read in JSX to drive the splash fade. See the identical
+ * disable comment in app/(auth)/otp-verify-success.tsx for why this is
+ * the standard, safe RN Animated pattern rather than a bug. */
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, useRootNavigationState } from "expo-router";

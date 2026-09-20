@@ -57,8 +57,12 @@ export interface PendingCartItem {
    * Now - each becomes its own line on the same direct order as
    * bookableServiceId, via POST /orders/direct's multi-item `items`. Name/
    * price are carried here purely for display on the order summary screen
-   * (the actual charge is always recomputed server-side from service_id). */
-  extraItems?: { serviceId: number; name: string; basePrice: number }[];
+   * (the actual charge is always recomputed server-side from service_id).
+   * addons is that extra tier's OWN selected add-ons (e.g. checking Sleeve
+   * Repair as extra work and also picking its Button Replacement add-on) -
+   * previously never carried at all, so an extra tier's add-ons were
+   * silently dropped even when the customer had picked them. */
+  extraItems?: { serviceId: number; name: string; basePrice: number; addons?: SelectedAddon[] }[];
 }
 
 interface CartState {

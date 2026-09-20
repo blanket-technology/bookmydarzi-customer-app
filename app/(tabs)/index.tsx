@@ -1,8 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect, useNavigation } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
@@ -183,18 +182,20 @@ function BannerCarousel({
     return () => clearInterval(timer);
   }, [banners.length]);
 
-  const onViewableItemsChanged = useRef(
+  const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
       const index = viewableItems[0]?.index;
       if (index != null) {
         setActiveIndex(index);
       }
     },
-  ).current;
+    [],
+  );
 
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50,
-  }).current;
+  const viewabilityConfig = useMemo(
+    () => ({ itemVisiblePercentThreshold: 50 }),
+    [],
+  );
 
   const getItemLayout = useCallback(
     (_: unknown, index: number) => ({
@@ -339,7 +340,7 @@ const carousel = StyleSheet.create({
   imageBg: { minHeight: 128, justifyContent: "flex-end" },
   imageRadius: { borderRadius: BANNER_RADIUS },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(8, 50, 55, 0.55)",
     borderRadius: BANNER_RADIUS,
   },
@@ -1012,14 +1013,6 @@ export default function HomeScreen() {
 
   useHomeExitBackHandler();
 
-  useEffect(() => {
-    const unsub = navigation.addListener("tabPress" as any, () => {
-      setSearchQuery("");
-      setSearchExpanded(false);
-    });
-    return unsub;
-  }, [navigation]);
-
   const cartItemCount = useCartStore((s) => s.itemCount);
   const { unreadCount: notifUnreadCount, fetchUnreadCount } = useNotificationStore();
 
@@ -1040,6 +1033,19 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchExpanded, setSearchExpanded] = useState(false);
   const searchInputRef = useRef<TextInput>(null);
+
+  // Moved below the searchQuery/searchExpanded declarations - previously
+  // declared above them, which worked fine at runtime (the listener only
+  // fires on an actual tab press, well after every const in this render
+  // pass is bound) but tripped react-hooks/immutability's static ordering
+  // check.
+  useEffect(() => {
+    const unsub = navigation.addListener("tabPress" as any, () => {
+      setSearchQuery("");
+      setSearchExpanded(false);
+    });
+    return unsub;
+  }, [navigation]);
   // Catalog tree resolves the real bookableServiceId for a searched
   // subcategory (home API subcategories carry ServiceLine.Id, not the
   // bookable ServiceSubCategory.Id - see enrichPopularServices.ts). Fetched

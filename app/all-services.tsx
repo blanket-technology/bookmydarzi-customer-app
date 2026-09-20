@@ -393,10 +393,10 @@ const s = StyleSheet.create({
     }),
   },
   catImg: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   catOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   catArrow: {
     position: "absolute",

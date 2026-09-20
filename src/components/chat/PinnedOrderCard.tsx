@@ -26,8 +26,10 @@ export function PinnedOrderCard({ orderId, issueCategory, onChangeOrder }: Props
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
 
+  // Kicks off an async order fetch - real network side-effect.
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     fetchApiOrderById(orderId)
       .then((o) => {

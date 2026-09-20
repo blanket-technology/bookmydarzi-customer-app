@@ -10,10 +10,9 @@
  *    UI can't display a figure that differs from the actual charge.
  */
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -288,7 +287,7 @@ export default function CartScreen() {
   const [scheduledDate, setScheduledDate] = useState<string | null>(null);
   const [scheduledSlot, setScheduledSlot] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
-  const pickupTimeSlots = useMemo(buildPickupTimeSlots, []);
+  const pickupTimeSlots = useMemo(() => buildPickupTimeSlots(), []);
   const [styleReferenceUri, setStyleReferenceUri] = useState<string | null>(null);
   // Order-level free-text notes (Bug Report cycle 1, item 3.1).
   const [orderNotes, setOrderNotes] = useState<string>("");
@@ -447,15 +446,31 @@ export default function CartScreen() {
   // silently hid every flat-amount offer (DiscountPercent is 0 for those;
   // the real value is in DiscountAmount - see app/models/offer.py).
   // Must be declared BEFORE listFooter which references it
+  //
+  // react-hooks/purity (React Compiler) correctly flags a bare Date.now()
+  // read during render as impure - the compiler can't safely memoize
+  // anything derived from it, and worse, a useMemo keyed only on
+  // specialOffers would never re-derive once time alone makes an offer
+  // expire, silently keeping it marked "valid" for as long as the cart
+  // screen stays mounted. useState's lazy initializer is the documented
+  // exception (runs exactly once, on mount) - refreshed every minute so an
+  // offer that expires while the customer is sitting on this screen
+  // disappears within a minute rather than needing a remount, matching
+  // the precision PickupInfoCard's useCountdown already uses for the same
+  // "time keeps moving during this screen's lifetime" problem.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
   const validOffers = useMemo(() => {
-    const now = Date.now();
     return (specialOffers ?? []).filter(
       (o) =>
         (o.DiscountType === "flat" ? (o.DiscountAmount ?? 0) > 0 : o.DiscountPercent > 0) &&
         (!o.ValidFrom || new Date(o.ValidFrom).getTime() <= now) &&
         (!o.ValidUntil || new Date(o.ValidUntil).getTime() > now),
     );
-  }, [specialOffers]);
+  }, [specialOffers, now]);
 
   const listFooter = useMemo(
     () => (

@@ -537,6 +537,7 @@ function mapDetailsOrderBlock(raw: Record<string, unknown>): OrderDetailsOrderBl
     customization_notes: nullableStr(order.customization_notes ?? order.CustomizationNotes),
     pickup_partner: mapBridgePartner(order, "pickup_partner", "pickupPartner"),
     delivery_partner: mapBridgePartner(order, "delivery_partner", "deliveryPartner"),
+    return_partner: mapBridgePartner(order, "return_partner", "returnPartner"),
   };
 }
 

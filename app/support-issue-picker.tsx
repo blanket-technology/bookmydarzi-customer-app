@@ -24,8 +24,10 @@ export default function SupportIssuePickerScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Kicks off an async order fetch - real network side-effect.
   useEffect(() => {
     if (!orderId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       setError("No order was selected. Please go back and pick an order.");
       return;

@@ -26,9 +26,12 @@ export interface BillingEstimate {
 export interface DirectOrderItem {
   service_id: number;
   quantity?: number;
-  /** Only meaningful on the primary (first) item - a "checked extra" tier
-   * never carries its own addons/design brief, matching Add to Cart's
-   * same convention. */
+  /** stitching_preferences (the Designer-tier design brief) is only ever
+   * meaningful on the primary (first) item - a "checked extra" tier has no
+   * stitching-type choice of its own. addons IS meaningful on every item,
+   * including a checked extra tier - each tier can have its own add-ons
+   * (e.g. Sleeve Repair's own Button Replacement), previously dropped
+   * entirely for extra tiers even when the customer had picked them. */
   stitching_preferences?: StitchingPreferences;
   addons?: SelectedAddon[];
 }
@@ -83,7 +86,22 @@ export async function getBillingEstimate(
   const qs = new URLSearchParams({ service_id: String(serviceId), quantity: String(quantity) });
   if (addonIds.length > 0) qs.set("addon_ids", addonIds.join(","));
   if (items?.length) {
-    qs.set("items", JSON.stringify(items.map((i) => ({ service_id: i.service_id, quantity: i.quantity ?? 1 }))));
+    // Previously dropped each item's own addons entirely (only service_id/
+    // quantity sent) - the billing estimate silently under-quoted any
+    // extra tier's add-on cost, then the real order created moments later
+    // charged the correct, higher amount. addon_ids is per-item here to
+    // match the backend's own items[].addon_ids shape (orders.py's
+    // get_billing_estimate).
+    qs.set(
+      "items",
+      JSON.stringify(
+        items.map((i) => ({
+          service_id: i.service_id,
+          quantity: i.quantity ?? 1,
+          addon_ids: i.addons?.length ? i.addons.map((a) => a.addonId) : undefined,
+        })),
+      ),
+    );
   }
   const raw = await request<unknown>(`/orders/billing-estimate?${qs.toString()}`);
   const r = asRecord(raw);

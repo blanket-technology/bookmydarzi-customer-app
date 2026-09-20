@@ -158,6 +158,15 @@ export default function ServiceDetailsScreen() {
   const [serviceRatings, setServiceRatings] = useState<ServiceRatings | null>(null);
   const [addons, setAddons] = useState<ServiceAddon[]>([]);
   const [selectedAddons, setSelectedAddons] = useState<SelectedAddon[]>([]);
+  // Per-extra-tier add-on catalog/selection, keyed by that tier's own
+  // service_id - "Add more work to this garment" previously let a customer
+  // check e.g. Sleeve Repair as an extra tier with no way to also pick its
+  // own add-ons (Button Replacement, etc), even though that same tier's
+  // own detail page has a full AddonPicker for it. Fetched lazily, only
+  // once a tier is actually checked, not for every tier up front.
+  const [extraTierAddons, setExtraTierAddons] = useState<Record<number, ServiceAddon[]>>({});
+  const [extraTierSelectedAddons, setExtraTierSelectedAddons] = useState<Record<number, SelectedAddon[]>>({});
+  const [extraTierAddonsLoading, setExtraTierAddonsLoading] = useState<Record<number, boolean>>({});
 
   const { t } = useAppLanguage();
 
@@ -341,7 +350,9 @@ export default function ServiceDetailsScreen() {
     ],
   );
 
+  // Kicks off an async service-data fetch - real network side-effect.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadServiceData(
       paramServiceLineId > 0 ? paramServiceLineId : undefined,
       serviceName,
@@ -356,8 +367,12 @@ export default function ServiceDetailsScreen() {
     }
   }, [paramBookableId, paramServiceLineId]);
 
+  // Syncs quantitiesByStitching from URL params (e.g. deep-linking back
+  // into this screen with a pre-set quantity) - reacts to a prop-derived
+  // param, not something computable purely during render.
   useEffect(() => {
     if (paramQuantity >= 1 && paramQuantity <= 99 && paramSelectedStitchingId > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuantitiesByStitching((prev) => ({
         ...prev,
         [paramSelectedStitchingId]: paramQuantity,
@@ -374,6 +389,7 @@ export default function ServiceDetailsScreen() {
   // any prior selection whenever the customer switches stitching type
   // (Normal/Designer), since one variant's extras don't apply to another.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedAddons([]);
     setCheckedTierIds(new Set());
     if (!selectedStitching || selectedStitching.service_id <= 0) {
@@ -516,16 +532,19 @@ export default function ServiceDetailsScreen() {
       // they're told exactly which one failed and can retry from cart.
       const failedNames: string[] = [];
       for (const tier of extraTiers) {
+        const tierAddons = extraTierSelectedAddons[tier.service_id];
         try {
           await useCartStore.getState().addServiceEntry({
             service_id: tier.service_id,
             quantity: 1,
+            addons: tierAddons && tierAddons.length > 0 ? tierAddons : undefined,
           }, { toastMessage: null });
         } catch {
           failedNames.push(stripQualityPrefix(tier.name));
         }
       }
       setCheckedTierIds(new Set());
+      setExtraTierSelectedAddons({});
       if (failedNames.length > 0) {
         useToastStore.getState().show(
           `Added to cart, but couldn't add: ${failedNames.join(", ")}. Try again from the cart.`,
@@ -548,7 +567,7 @@ export default function ServiceDetailsScreen() {
     selectedStitching, isAuthenticated, getQuantityForStitching,
     serviceLine, directService?.name, serviceName, catalogCategoryId, categoryName,
     displayImage, designStyle, embellishmentLevel, designNotes, selectedAddons,
-    allLineTiers, checkedTierIds,
+    allLineTiers, checkedTierIds, extraTierSelectedAddons,
     setPendingService, setBuyNowMode, setPendingRoute, buildReturnParams, router,
   ]);
 
@@ -584,11 +603,15 @@ export default function ServiceDetailsScreen() {
       // a genuine multi-item Book Now (no cart involved at all), not the
       // primary tier's own addons.
       extraItems: extraTiers.length > 0
-        ? extraTiers.map((t) => ({
-            serviceId: t.service_id,
-            name: stripQualityPrefix(t.name),
-            basePrice: t.base_price,
-          }))
+        ? extraTiers.map((t) => {
+            const tierAddons = extraTierSelectedAddons[t.service_id];
+            return {
+              serviceId: t.service_id,
+              name: stripQualityPrefix(t.name),
+              basePrice: t.base_price,
+              addons: tierAddons && tierAddons.length > 0 ? tierAddons : undefined,
+            };
+          })
         : undefined,
     };
     if (!isAuthenticated) {
@@ -601,6 +624,7 @@ export default function ServiceDetailsScreen() {
     setPendingService(pendingItem);
     setBuyNowMode(true);
     setCheckedTierIds(new Set());
+    setExtraTierSelectedAddons({});
     // Book Now skips the cart entirely, so (unlike Add to Cart) it does
     // need an address right away - measurement is still never collected
     // from the customer here; that's filled later by Bridge/employee at
@@ -612,6 +636,7 @@ export default function ServiceDetailsScreen() {
     catalogCategoryId, categoryName, displayImage, designStyle, embellishmentLevel, designNotes,
     selectedAddons, isAuthenticated, setPendingService, setBuyNowMode, setPendingRoute,
     buildReturnParams, router, setBookingFlowActive, allLineTiers, checkedTierIds,
+    extraTierSelectedAddons,
   ]);
 
   // Every other bookable tier on this same line, any group (e.g. "Button
@@ -627,11 +652,36 @@ export default function ServiceDetailsScreen() {
   const toggleTierChecked = useCallback((serviceId: number) => {
     setCheckedTierIds((prev) => {
       const next = new Set(prev);
-      if (next.has(serviceId)) next.delete(serviceId);
+      const wasChecked = next.has(serviceId);
+      if (wasChecked) next.delete(serviceId);
       else next.add(serviceId);
+
+      if (wasChecked) {
+        // Unchecked - drop this tier's addon selection so a stale pick
+        // doesn't silently resurface if it's checked again later, and
+        // free the fetched catalog (cheap to refetch if needed again).
+        setExtraTierSelectedAddons((prevSel) => {
+          if (!(serviceId in prevSel)) return prevSel;
+          const copy = { ...prevSel };
+          delete copy[serviceId];
+          return copy;
+        });
+      } else if (!(serviceId in extraTierAddons) && !extraTierAddonsLoading[serviceId]) {
+        // First time this tier is checked - fetch its own add-on catalog,
+        // same data every tier's own detail page already fetches for
+        // itself, just lazily and scoped to this one tier.
+        setExtraTierAddonsLoading((prevLoading) => ({ ...prevLoading, [serviceId]: true }));
+        void fetchServiceAddons(serviceId)
+          .then((result) => {
+            setExtraTierAddons((prevAddons) => ({ ...prevAddons, [serviceId]: result }));
+          })
+          .finally(() => {
+            setExtraTierAddonsLoading((prevLoading) => ({ ...prevLoading, [serviceId]: false }));
+          });
+      }
       return next;
     });
-  }, []);
+  }, [extraTierAddons, extraTierAddonsLoading]);
 
   const navigateToRelatedLine = useCallback(
     (relatedLine: CatalogServiceLine) => {
@@ -1072,44 +1122,76 @@ export default function ServiceDetailsScreen() {
                 <View style={styles.otherTiersList}>
                   {otherTiers.map((tier) => {
                     const checked = checkedTierIds.has(tier.service_id);
+                    const tierAddons = extraTierAddons[tier.service_id] ?? [];
+                    const tierAddonsLoading = !!extraTierAddonsLoading[tier.service_id];
                     return (
-                      <TouchableOpacity
+                      <View
                         key={tier.service_id}
                         style={[styles.otherTierCard, checked && styles.otherTierCardChecked]}
-                        activeOpacity={0.85}
-                        onPress={() => toggleTierChecked(tier.service_id)}
                       >
-                        {normalizeServiceImageUrl(tier.image_url) ? (
-                          <Image
-                            source={{ uri: normalizeServiceImageUrl(tier.image_url)! }}
-                            style={styles.otherTierImage}
-                            contentFit="cover"
-                            cachePolicy="memory-disk"
-                            transition={150}
-                          />
-                        ) : (
-                          <View style={styles.otherTierImageFallback}>
-                            <Ionicons name="cut-outline" size={20} color={COLORS.primaryDark} />
-                          </View>
-                        )}
-                        <View style={styles.otherTierBody}>
-                          <Text style={styles.otherTierName} numberOfLines={1}>
-                            {isAlterationsCategory ? stripQualityPrefix(tier.name) : tier.name}
-                          </Text>
-                          <View style={styles.otherTierMetaRow}>
-                            <Text style={styles.otherTierPrice}>{formatMoney(tier.base_price)}</Text>
-                            <Ionicons name="time-outline" size={11} color={COLORS.gray} />
-                            <Text style={styles.otherTierDays}>
-                              {tier.estimated_delivery_days ?? 7}d
+                        <TouchableOpacity
+                          style={styles.otherTierRow}
+                          activeOpacity={0.85}
+                          onPress={() => toggleTierChecked(tier.service_id)}
+                        >
+                          {normalizeServiceImageUrl(tier.image_url) ? (
+                            <Image
+                              source={{ uri: normalizeServiceImageUrl(tier.image_url)! }}
+                              style={styles.otherTierImage}
+                              contentFit="cover"
+                              cachePolicy="memory-disk"
+                              transition={150}
+                            />
+                          ) : (
+                            <View style={styles.otherTierImageFallback}>
+                              <Ionicons name="cut-outline" size={20} color={COLORS.primaryDark} />
+                            </View>
+                          )}
+                          <View style={styles.otherTierBody}>
+                            <Text style={styles.otherTierName} numberOfLines={1}>
+                              {isAlterationsCategory ? stripQualityPrefix(tier.name) : tier.name}
                             </Text>
+                            <View style={styles.otherTierMetaRow}>
+                              <Text style={styles.otherTierPrice}>{formatMoney(tier.base_price)}</Text>
+                              <Ionicons name="time-outline" size={11} color={COLORS.gray} />
+                              <Text style={styles.otherTierDays}>
+                                {tier.estimated_delivery_days ?? 7}d
+                              </Text>
+                            </View>
                           </View>
-                        </View>
-                        <Ionicons
-                          name={checked ? "checkmark-circle" : "ellipse-outline"}
-                          size={22}
-                          color={checked ? COLORS.primaryDark : COLORS.grayBorder}
-                        />
-                      </TouchableOpacity>
+                          <Ionicons
+                            name={checked ? "checkmark-circle" : "ellipse-outline"}
+                            size={22}
+                            color={checked ? COLORS.primaryDark : COLORS.grayBorder}
+                          />
+                        </TouchableOpacity>
+
+                        {/* Inline add-on picker for this tier, only once
+                            checked - same picker the primary tier already
+                            uses, so checking "Sleeve Repair" as extra work
+                            lets a customer pick ITS OWN add-ons (e.g.
+                            Button Replacement) exactly like booking it
+                            directly would. */}
+                        {checked ? (
+                          tierAddonsLoading ? (
+                            <View style={styles.otherTierAddonsLoading}>
+                              <ActivityIndicator size="small" color={COLORS.primaryDark} />
+                            </View>
+                          ) : tierAddons.length > 0 ? (
+                            <View style={styles.otherTierAddonsWrap}>
+                              <AddonPicker
+                                addons={tierAddons}
+                                onChange={(selected) =>
+                                  setExtraTierSelectedAddons((prev) => ({
+                                    ...prev,
+                                    [tier.service_id]: selected,
+                                  }))
+                                }
+                              />
+                            </View>
+                          ) : null
+                        ) : null}
+                      </View>
                     );
                   })}
                 </View>
@@ -1281,18 +1363,30 @@ const styles = StyleSheet.create({
     marginTop: SPACING.sm,
   },
   otherTierCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.grayBorder,
-    padding: SPACING.sm,
+    overflow: "hidden",
   },
   otherTierCardChecked: {
     borderColor: COLORS.primaryDark,
     backgroundColor: COLORS.primaryLight,
+  },
+  otherTierRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    padding: SPACING.sm,
+  },
+  otherTierAddonsWrap: {
+    paddingHorizontal: SPACING.sm,
+    paddingBottom: SPACING.sm,
+    paddingTop: 2,
+  },
+  otherTierAddonsLoading: {
+    paddingVertical: SPACING.sm,
+    alignItems: "center",
   },
   otherTierImage: {
     width: 48,
