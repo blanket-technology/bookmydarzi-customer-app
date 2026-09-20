@@ -106,6 +106,34 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** A selected add-on under a service line. Previously rendered through the
+ * generic InfoRow with a literal "+ " prefixed onto the label text - just a
+ * plain text row indistinguishable from "Base price"/"Quantity" above it,
+ * reading as a raw string concatenation rather than a designed line item.
+ * This gives the add-on its own visual identity (a small teal plus-circle
+ * badge instead of a "+" character, slightly indented to read as nested
+ * under the service rather than a peer row) - the same "included extra"
+ * treatment a polished checkout/receipt UI gives optional line items. */
+function AddonRow({ name, price }: { name: string; price: string }) {
+  return (
+    <View
+      style={styles.addonRow}
+      accessible
+      accessibilityLabel={`Add-on: ${name}, ${price}`}
+    >
+      <View style={styles.addonLabelGroup}>
+        <View style={styles.addonBadge}>
+          <Ionicons name="add" size={11} color={COLORS.primaryDark} />
+        </View>
+        <Text style={styles.addonLabel} numberOfLines={2}>
+          {name}
+        </Text>
+      </View>
+      <Text style={styles.addonValue}>{price}</Text>
+    </View>
+  );
+}
+
 function RowDivider() {
   return <View style={styles.infoDivider} />;
 }
@@ -1151,9 +1179,9 @@ export default function OrderDetailsScreen() {
               {item.addons.map((addon, ai) => (
                 <React.Fragment key={addon.addon_id ?? ai}>
                   <RowDivider />
-                  <InfoRow
-                    label={`+ ${addon.name}`}
-                    value={detailsMoney(addon.price)}
+                  <AddonRow
+                    name={detailsText(addon.name)}
+                    price={detailsMoney(addon.price)}
                   />
                 </React.Fragment>
               ))}
@@ -1811,6 +1839,42 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: "#ECEEF2",
     marginVertical: 2,
+  },
+  addonRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 7,
+    // Indented under the service's own rows above it (Base price, etc) -
+    // reads as "part of this line item" rather than a sibling row at the
+    // same visual weight as the service's core price.
+    paddingLeft: 6,
+  },
+  addonLabelGroup: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  addonBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#E6F5F6",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  addonLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  addonValue: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#1F2937",
   },
   pickupPartnerRow: {
     flexDirection: "row",

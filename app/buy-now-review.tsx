@@ -477,7 +477,14 @@ export default function BuyNowReviewScreen() {
             <View style={s.addonsSummary}>
               {pendingService.addons.map((a) => (
                 <View key={a.addonId} style={s.addonSummaryRow}>
-                  <Text style={s.addonSummaryName}>+ {a.name}</Text>
+                  <View style={s.addonSummaryLabelGroup}>
+                    <View style={s.addonSummaryBadge}>
+                      <Ionicons name="add" size={11} color={COLORS.primaryDark} />
+                    </View>
+                    <Text style={s.addonSummaryName} numberOfLines={2}>
+                      {a.name}
+                    </Text>
+                  </View>
                   <Text style={s.addonSummaryPrice}>
                     ₹{a.price.toLocaleString("en-IN")}
                   </Text>
@@ -487,9 +494,20 @@ export default function BuyNowReviewScreen() {
           ) : null}
           {pendingService.extraItems && pendingService.extraItems.length > 0 ? (
             <View style={s.addonsSummary}>
+              {/* Extra service tiers added via "Add more work to this
+                  garment" - a distinct concept from an addon (a whole other
+                  billable tier, not a small extra on this one), so it gets
+                  its own icon rather than reusing the addon's plus-badge. */}
               {pendingService.extraItems.map((e) => (
                 <View key={e.serviceId} style={s.addonSummaryRow}>
-                  <Text style={s.addonSummaryName}>+ {e.name}</Text>
+                  <View style={s.addonSummaryLabelGroup}>
+                    <View style={[s.addonSummaryBadge, s.extraItemBadge]}>
+                      <Ionicons name="cut-outline" size={10} color={COLORS.primaryDark} />
+                    </View>
+                    <Text style={s.addonSummaryName} numberOfLines={2}>
+                      {e.name}
+                    </Text>
+                  </View>
                   <Text style={s.addonSummaryPrice}>
                     ₹{e.basePrice.toLocaleString("en-IN")}
                   </Text>
@@ -793,8 +811,15 @@ const s = StyleSheet.create({
     paddingHorizontal: SPACING.md, paddingBottom: SPACING.sm, paddingTop: 2,
     gap: 4,
   },
-  addonSummaryRow: { flexDirection: "row", justifyContent: "space-between" },
-  addonSummaryName: { fontSize: 12, color: COLORS.gray, flexShrink: 1 },
+  addonSummaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  addonSummaryLabelGroup: { flex: 1, flexDirection: "row", alignItems: "center", gap: 7 },
+  addonSummaryBadge: {
+    width: 16, height: 16, borderRadius: 8,
+    backgroundColor: "#E6F5F6",
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
+  },
+  extraItemBadge: { backgroundColor: "#E6F5F6" },
+  addonSummaryName: { fontSize: 12, color: COLORS.gray, flex: 1 },
   addonSummaryPrice: { fontSize: 12, fontWeight: "700", color: COLORS.gray },
   tagRow: {
     flexDirection: "row", alignItems: "center", gap: 6,
