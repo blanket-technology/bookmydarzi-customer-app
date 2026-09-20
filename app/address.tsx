@@ -109,7 +109,9 @@ function SavedAddressCard({
         </View>
         <View style={{ flex: 1 }}>
           <View style={styles.savedCardHeader}>
-            <Text style={styles.savedCardName}>{address.full_name}</Text>
+            <Text style={styles.savedCardName} numberOfLines={1}>
+              {address.full_name}
+            </Text>
             {address.is_default && (
               <View style={styles.defaultBadge}>
                 <Text style={styles.defaultBadgeText}>Default</Text>
@@ -1474,8 +1476,9 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     marginBottom: 2,
   },
-  savedCardName: { fontSize: 14, fontWeight: "700", color: COLORS.black },
+  savedCardName: { flexShrink: 1, fontSize: 14, fontWeight: "700", color: COLORS.black },
   defaultBadge: {
+    flexShrink: 0,
     backgroundColor: COLORS.primaryLight,
     borderRadius: RADIUS.full,
     paddingHorizontal: 6,
