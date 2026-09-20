@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { fetchApiOrderById } from "../../services/apiOrderService";
 import { getIssueLabel } from "../../constants/supportIssues";
+import { formatShortDate } from "../../utils/formatters";
 import type { ApiOrder } from "../../types/api";
 
 interface Props {
@@ -11,13 +12,6 @@ interface Props {
   /** Shown as a small action on the right - lets the customer switch which
    * order this conversation is about without leaving the chat. */
   onChangeOrder?: () => void;
-}
-
-function formatDate(iso?: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
 /**
@@ -60,8 +54,8 @@ export function PinnedOrderCard({ orderId, issueCategory, onChangeOrder }: Props
 
   if (!order) return null;
 
-  const pickupDate = formatDate(order.scheduledPickupAt);
-  const deliveryDate = formatDate(order.expected_delivery_date);
+  const pickupDate = formatShortDate(order.scheduledPickupAt);
+  const deliveryDate = formatShortDate(order.expected_delivery_date);
   const issueLabel = issueCategory ? getIssueLabel(issueCategory) : null;
 
   return (
