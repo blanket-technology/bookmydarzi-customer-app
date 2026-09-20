@@ -80,7 +80,7 @@ export default function SlideToConfirm({
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     setConfirmed(true);
     onConfirm();
-  }, [onConfirm]);
+  }, [onConfirm, setConfirmed]);
 
   const snapBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -232,12 +232,12 @@ const styles = StyleSheet.create({
     elevation: 7,
   },
   track: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: RADIUS.full,
   },
   trackDisabled: { opacity: 0.45 },
   successOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: RADIUS.full,
     alignItems: "center",
     justifyContent: "center",

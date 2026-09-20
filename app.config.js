@@ -128,7 +128,9 @@ module.exports = {
           targetSdkVersion: 36,
         },
         ios: {
-          deploymentTarget: "15.1",
+          // SDK 57 requires 16.4+ (expo-build-properties hard-fails config
+          // resolution below this) - was 15.1 under SDK 54.
+          deploymentTarget: "16.4",
         },
       },
     ],

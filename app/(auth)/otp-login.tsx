@@ -77,7 +77,9 @@ export default function OtpLoginScreen() {
     setError(null);
 
     if (!mobile.trim()) return setError("Phone number is required.");
-    if (!/^\d{10}$/.test(mobile.trim())) return setError("Enter a valid 10-digit mobile number.");
+    // Mirrors backend's _validate_mobile_10_digit (app/schemas/auth.py) -
+    // must also start with 6/7/8/9, not just be 10 digits.
+    if (!/^[6-9]\d{9}$/.test(mobile.trim())) return setError("Enter a valid 10-digit mobile number starting with 6-9.");
 
     isSubmittingRef.current = true;
     try {

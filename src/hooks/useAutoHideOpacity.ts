@@ -21,6 +21,12 @@ export function useAutoHideOpacity(): {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const notifyActivity = useCallback(() => {
+    // react-hooks/immutability (React Compiler) doesn't yet recognize
+    // Reanimated's SharedValue.value as an intentional, opt-in mutable
+    // proxy - assigning to .value is the only documented way to drive a
+    // Reanimated animation. Not a bug; the compiler's ref/purity rules
+    // predate widespread Reanimated support.
+    // eslint-disable-next-line react-hooks/immutability
     opacity.value = withTiming(1, { duration: FADE_DURATION, easing: Easing.out(Easing.cubic) });
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {

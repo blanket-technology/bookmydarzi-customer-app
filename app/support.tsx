@@ -5,8 +5,7 @@
  * viewable for continuity but no new ones can be raised from here.
  */
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import React, { useCallback } from "react";
 import {
     ActivityIndicator,

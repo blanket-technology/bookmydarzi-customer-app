@@ -1,4 +1,4 @@
-import type { Router } from "expo-router";
+import type { ImperativeRouter } from "expo-router";
 import { Alert } from "react-native";
 
 import { useAuthStore } from "../../store/useAuthStore";
@@ -33,7 +33,7 @@ let checkoutInFlight = false;
  * Skips Order Summary / review screen.
  */
 export async function executeCheckoutFromCart(
-  router: Router,
+  router: ImperativeRouter,
   scheduled?: { scheduledPickupAt: string; pickupTimeSlot: string },
   paymentMethod: PaymentMethodOption = "online",
   extras?: { customizationNotes?: string; imageReferences?: string[] },

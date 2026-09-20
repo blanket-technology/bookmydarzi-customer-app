@@ -1,3 +1,7 @@
+/* eslint-disable react-hooks/refs -- classic RN Animated.Value refs, read
+ * in JSX to drive the bouncing-dots animation. See the identical disable
+ * comment in app/(auth)/otp-verify-success.tsx for why this is the
+ * standard, safe RN Animated pattern rather than a bug. */
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
 import { View, Animated, StyleSheet, Text } from "react-native";

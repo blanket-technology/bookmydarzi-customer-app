@@ -15,7 +15,7 @@
  *   2.60s  → App
  */
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import Animated, {
   Easing,
@@ -52,8 +52,16 @@ export default function SplashScreen({ onComplete }: Props) {
   // Read via ref so the exit animation's completion callback always calls
   // the latest onComplete, even if the parent re-renders with a new
   // function reference during the ~2.6s animation before it fires.
+  // Assigned in useLayoutEffect rather than inline during render - mutating
+  // a ref during render is what react-hooks/refs (React Compiler) flags,
+  // since it can behave unexpectedly under Strict Mode's double-render or
+  // concurrent rendering; a layout effect runs synchronously right after
+  // commit, before the browser/native paints, so onCompleteRef.current is
+  // still guaranteed current by the time anything can read it.
   const onCompleteRef = useRef(onComplete);
-  onCompleteRef.current = onComplete;
+  useLayoutEffect(() => {
+    onCompleteRef.current = onComplete;
+  });
 
   // runOnJS requires a stable, top-level function reference - it captures/
   // schedules this closure to run back on the JS thread from the UI/worklet
@@ -130,7 +138,7 @@ const styles = StyleSheet.create({
     backgroundColor: BG,
   },
   center: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 32,

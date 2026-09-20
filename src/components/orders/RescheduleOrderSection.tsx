@@ -42,7 +42,7 @@ function formatSelectedDate(iso: string): string {
 // order-details.tsx's RESCHEDULABLE_STATUSES) - the backend hard-rejects
 // every other status.
 export function RescheduleOrderSection({ orderId, currentPickupAt, onRescheduled }: Props) {
-  const pickupTimeSlots = useMemo(buildPickupTimeSlots, []);
+  const pickupTimeSlots = useMemo(() => buildPickupTimeSlots(), []);
   const [modalVisible, setModalVisible] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [date, setDate] = useState<string | null>(() => {

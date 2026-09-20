@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { COLORS, RADIUS, SPACING } from "../../../constants/theme";
@@ -119,15 +119,26 @@ export function CouponSection({
 }) {
   const [expanded, setExpanded] = useState(false);
 
+  // See the matching comment in (tabs)/cart.tsx's validOffers - Date.now()
+  // during render is flagged by react-hooks/purity (React Compiler);
+  // useState's lazy initializer + a periodic refresh is the correct fix,
+  // not just a style preference, since a useMemo keyed only on `offers`
+  // would otherwise never notice an offer expiring while this screen
+  // stays mounted.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const validOffers = useMemo(() => {
-    const now = Date.now();
     return offers.filter(
       (o) =>
         (o.DiscountType === "flat" ? (o.DiscountAmount ?? 0) > 0 : o.DiscountPercent > 0) &&
         (!o.ValidFrom || new Date(o.ValidFrom).getTime() <= now) &&
         (!o.ValidUntil || new Date(o.ValidUntil).getTime() > now),
     );
-  }, [offers]);
+  }, [offers, now]);
 
   const visible = expanded ? validOffers : validOffers.slice(0, 2);
 

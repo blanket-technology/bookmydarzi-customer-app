@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { resolveApiOrigin } from "../../services/api";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useToastStore } from "../store/useToastStore";
@@ -16,6 +16,14 @@ export function useChatWS(sessionUuid: string | null) {
   const reconnectDelay = useRef(1000);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(true);
+  // connect() calls itself (via socket.onclose's reconnect timer) before
+  // its own useCallback has finished being assigned on the first render -
+  // react-hooks/immutability (React Compiler) flags this as "accessed
+  // before declared" since it can't statically prove the closure always
+  // resolves to the latest version. Indirecting through a ref (updated
+  // right after connect is defined below) sidesteps that entirely and is
+  // the standard pattern for a self-reconnecting callback.
+  const connectRef = useRef<() => void>(() => {});
   // client_id -> ack timer, so a late/duplicate ack or a resend can clear
   // the right timer without racing a stale one from a previous attempt.
   const pendingAcks = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -237,7 +245,7 @@ export function useChatWS(sessionUuid: string | null) {
       setWsStatus("disconnected");
       reconnectTimer.current = setTimeout(() => {
         reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30000);
-        connect();
+        connectRef.current();
       }, reconnectDelay.current);
     };
 
@@ -246,6 +254,10 @@ export function useChatWS(sessionUuid: string | null) {
       socket.close();
     };
   }, [sessionUuid, handleFrame, setWsStatus, dispatchSend]);
+
+  useLayoutEffect(() => {
+    connectRef.current = connect;
+  });
 
   useEffect(() => {
     mounted.current = true;

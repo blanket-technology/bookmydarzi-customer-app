@@ -127,7 +127,7 @@ export default function BuyNowReviewScreen() {
   const [scheduledDate, setScheduledDate] = useState<string | null>(null);
   const [scheduledSlot, setScheduledSlot] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
-  const pickupTimeSlots = useMemo(buildPickupTimeSlots, []);
+  const pickupTimeSlots = useMemo(() => buildPickupTimeSlots(), []);
   const [showAddressPicker, setShowAddressPicker] = useState(false);
   // Reference style image + order notes, mirroring the cart (item 4.1).
   const [styleReferenceUri, setStyleReferenceUri] = useState<string | null>(null);
@@ -172,10 +172,14 @@ export default function BuyNowReviewScreen() {
     fetchAddresses().catch(() => {});
   }, [fetchAddresses]);
 
+  // Default-select an address once the async fetch resolves - genuinely
+  // needs to be an effect, same "adjust state after data arrives" case
+  // used throughout this app's screens (see address.tsx).
   useEffect(() => {
     if (!addresses.length || selectedAddressId !== null) return;
     const fromParam = addressId ? Number(addressId) : null;
     if (fromParam && addresses.find((a) => a.id === fromParam)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedAddressId(fromParam);
       return;
     }
@@ -183,8 +187,11 @@ export default function BuyNowReviewScreen() {
     if (def) setSelectedAddressId(def.id);
   }, [addresses, selectedAddressId, addressId]);
 
+  // Kicks off an async billing-estimate fetch whenever the selected service/
+  // addons change - a real network side-effect, not derivable during render.
   useEffect(() => {
     if (!pendingService?.bookableServiceId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBillingLoading(false);
       setBillingError("No service selected. Please go back and pick a service.");
       return;
@@ -196,7 +203,11 @@ export default function BuyNowReviewScreen() {
     const items = extraItems.length > 0
       ? [
           { service_id: pendingService.bookableServiceId, quantity: pendingService.quantity ?? 1 },
-          ...extraItems.map((e) => ({ service_id: e.serviceId, quantity: 1 })),
+          ...extraItems.map((e) => ({
+            service_id: e.serviceId,
+            quantity: 1,
+            addons: e.addons,
+          })),
         ]
       : undefined;
     getBillingEstimate(pendingService.bookableServiceId, 1, addonIds, items)
@@ -296,7 +307,17 @@ export default function BuyNowReviewScreen() {
                   stitching_preferences: pendingService.stitchingPreferences,
                   addons: pendingService.addons,
                 },
-                ...extraItems.map((e) => ({ service_id: e.serviceId, quantity: 1 })),
+                // Each extra tier's own selected add-ons (e.g. Sleeve
+                // Repair checked as extra work, with its own Button
+                // Replacement add-on picked) - previously dropped
+                // entirely, so an extra tier's add-ons never reached the
+                // real order even after the customer explicitly chose
+                // them on this same screen.
+                ...extraItems.map((e) => ({
+                  service_id: e.serviceId,
+                  quantity: 1,
+                  addons: e.addons,
+                })),
               ],
             }
           : {}),
@@ -499,18 +520,40 @@ export default function BuyNowReviewScreen() {
                   billable tier, not a small extra on this one), so it gets
                   its own icon rather than reusing the addon's plus-badge. */}
               {pendingService.extraItems.map((e) => (
-                <View key={e.serviceId} style={s.addonSummaryRow}>
-                  <View style={s.addonSummaryLabelGroup}>
-                    <View style={[s.addonSummaryBadge, s.extraItemBadge]}>
-                      <Ionicons name="cut-outline" size={10} color={COLORS.primaryDark} />
+                <View key={e.serviceId}>
+                  <View style={s.addonSummaryRow}>
+                    <View style={s.addonSummaryLabelGroup}>
+                      <View style={[s.addonSummaryBadge, s.extraItemBadge]}>
+                        <Ionicons name="cut-outline" size={10} color={COLORS.primaryDark} />
+                      </View>
+                      <Text style={s.addonSummaryName} numberOfLines={2}>
+                        {e.name}
+                      </Text>
                     </View>
-                    <Text style={s.addonSummaryName} numberOfLines={2}>
-                      {e.name}
+                    <Text style={s.addonSummaryPrice}>
+                      ₹{e.basePrice.toLocaleString("en-IN")}
                     </Text>
                   </View>
-                  <Text style={s.addonSummaryPrice}>
-                    ₹{e.basePrice.toLocaleString("en-IN")}
-                  </Text>
+                  {/* This extra tier's own add-ons (e.g. Sleeve Repair's
+                      Button Replacement) - nested under it so it's clear
+                      which tier they belong to, matching what actually
+                      gets charged now that both the billing estimate and
+                      the real order include them. */}
+                  {(e.addons ?? []).map((a) => (
+                    <View key={a.addonId} style={[s.addonSummaryRow, s.extraItemAddonRow]}>
+                      <View style={s.addonSummaryLabelGroup}>
+                        <View style={s.addonSummaryBadge}>
+                          <Ionicons name="add" size={10} color={COLORS.primaryDark} />
+                        </View>
+                        <Text style={[s.addonSummaryName, s.extraItemAddonName]} numberOfLines={2}>
+                          {a.name}
+                        </Text>
+                      </View>
+                      <Text style={s.addonSummaryPrice}>
+                        ₹{a.price.toLocaleString("en-IN")}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               ))}
             </View>
@@ -821,6 +864,8 @@ const s = StyleSheet.create({
   extraItemBadge: { backgroundColor: "#E6F5F6" },
   addonSummaryName: { fontSize: 12, color: COLORS.gray, flex: 1 },
   addonSummaryPrice: { fontSize: 12, fontWeight: "700", color: COLORS.gray },
+  extraItemAddonRow: { paddingLeft: 22 },
+  extraItemAddonName: { fontSize: 11.5 },
   tagRow: {
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: SPACING.md, paddingVertical: 8,

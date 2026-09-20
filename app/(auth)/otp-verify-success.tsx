@@ -1,3 +1,12 @@
+/* eslint-disable react-hooks/refs -- classic RN Animated.Value refs, read
+ * throughout this component's JSX to drive entrance/pulse/bounce
+ * animations. React Compiler's stricter ref rule flags every downstream
+ * use of a ref-derived value, not just the .current access itself, which
+ * would require rewriting this whole screen off Animated.Value to satisfy
+ * a lint rule rather than fixing a real bug - this is the standard,
+ * documented RN Animated pattern (see RN's own Animated docs), safe here
+ * since these refs are never reassigned and never used to branch what
+ * renders, only passed straight into style props. */
 import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { useRouter } from "expo-router";

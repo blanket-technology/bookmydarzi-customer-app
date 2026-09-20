@@ -141,7 +141,10 @@ export default function PaymentScreen() {
     }
   }, [orderId, amountRupee, razorpayAvailable, finishSuccess]);
 
+  // Kicks off the async payment-session load on mount - a real network
+  // side-effect, not derivable during render.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadSession();
   }, [loadSession]);
 

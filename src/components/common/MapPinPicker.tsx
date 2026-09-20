@@ -3,6 +3,10 @@
  * Drag the map; the pin stays centred and lifts with a shadow.
  * Address updates live as the map settles.
  */
+/* eslint-disable react-hooks/refs -- classic RN Animated.Value refs, read
+ * in JSX/styles to drive the pin lift/drop animation. See the identical
+ * disable comment in app/(auth)/otp-verify-success.tsx for why this is
+ * the standard, safe RN Animated pattern rather than a bug. */
 
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useRef, useState } from "react";
@@ -279,7 +283,7 @@ export function MapPinPicker({ visible, initialCoords, onConfirm, onClose }: Pro
         {/* ── Map ── */}
         <MapView
           ref={mapRef}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           initialRegion={initialRegion}
           onRegionChange={handleRegionChange}
           onRegionChangeComplete={handleRegionChangeComplete}
@@ -381,7 +385,7 @@ const styles = StyleSheet.create({
 
   // ── Pin ──────────────────────────────────────────────────────────────────
   pinContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
   },

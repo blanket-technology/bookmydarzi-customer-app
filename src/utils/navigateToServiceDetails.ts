@@ -1,4 +1,4 @@
-import type { Router } from "expo-router";
+import type { ImperativeRouter } from "expo-router";
 import type { ApiServiceCategory, PopularServiceRow } from "../types/homeApi";
 import { resolveCatalogCategoryId } from "./catalogCategoryMap";
 import { safeRouterPush } from "./safeNavigation";
@@ -28,7 +28,7 @@ export async function buildServiceDetailsParams(
 }
 
 export async function navigateToServiceDetails(
-  router: Router,
+  router: ImperativeRouter,
   row: PopularServiceRow,
   homeCategories: ApiServiceCategory[] = [],
 ): Promise<void> {

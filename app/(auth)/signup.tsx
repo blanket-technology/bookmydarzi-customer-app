@@ -74,7 +74,10 @@ function validateForm(
   if (!email.trim())       return "Email is required.";
   if (!EMAIL_REGEX.test(email.trim())) return "Enter a valid email address.";
   if (!mobile.trim())      return "Mobile number is required.";
-  if (!/^[0-9]{10}$/.test(mobile.trim())) return "Enter a valid 10-digit mobile number.";
+  // Mirrors backend's _validate_mobile_10_digit (app/schemas/auth.py) - must
+  // also start with 6/7/8/9, not just be 10 digits. Was previously looser,
+  // so e.g. a mistyped/landline-style number passed here and 422'd server-side.
+  if (!/^[6-9][0-9]{9}$/.test(mobile.trim())) return "Enter a valid 10-digit mobile number starting with 6-9.";
   const pwErr = firstPasswordError(password);
   if (pwErr) return pwErr;
   if (password !== confirmPassword) return "Passwords do not match.";

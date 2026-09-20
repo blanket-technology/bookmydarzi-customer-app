@@ -162,6 +162,11 @@ export interface PickupPartner {
  * to be the same person as pickup_partner. */
 export type DeliveryPartner = PickupPartner;
 
+/** Return-leg equivalent of PickupPartner - who's bringing the garment
+ * back after a cancellation past custody. Never assumed to be the same
+ * person as pickup_partner/delivery_partner. */
+export type ReturnPartner = PickupPartner;
+
 /** GET /customer/orders/{id}/details - nested API payload */
 export interface OrderDetailsOrderBlock {
   order_code: string | null;
@@ -178,6 +183,7 @@ export interface OrderDetailsOrderBlock {
   customization_notes?: string | null;
   pickup_partner?: PickupPartner | null;
   delivery_partner?: DeliveryPartner | null;
+  return_partner?: ReturnPartner | null;
 }
 
 export interface OrderDetailsServiceBlock {

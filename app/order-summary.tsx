@@ -14,10 +14,9 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../store/useAuthStore";
-import { useFocusEffect } from "@react-navigation/native";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import { fetchCustomerOrderSummary } from "../src/services/customerOrderService";
 import { parsePositiveId } from "../src/services/paymentService";

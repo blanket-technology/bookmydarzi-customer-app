@@ -5,9 +5,8 @@
  * then places the order and navigates to the Orders tab.
  */
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect, useNavigation } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
@@ -252,13 +251,24 @@ export default function AddressScreen() {
     resetForm();
     setMode("form");
     setScrollToForm(true);
-    // Auto-detect location when opening a new address form
+    // Auto-detect location when opening a new address form. Safe despite
+    // handleUseMyLocation being declared later in this component: the
+    // setTimeout callback only runs ~300ms later, by which point every
+    // const in this render pass (including handleUseMyLocation below) is
+    // already bound - react-hooks/immutability's static ordering check
+    // can't see that the actual call is deferred.
     setTimeout(() => {
+      // eslint-disable-next-line react-hooks/immutability
       void handleUseMyLocation();
     }, 300);
   }, [resetForm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // In buy-now mode: auto-select default address; auto-open form if none exist.
+  // Genuinely needs to be an effect - addresses loads asynchronously, and
+  // this reacts to that load completing, not to a value derivable during
+  // render. react-hooks/set-state-in-effect (React Compiler) flags this
+  // pattern generally; React's own docs cover exactly this "adjust state
+  // when a fetch completes" case as a legitimate use of an effect.
   const autoOpenedBuyNowFormRef = useRef(false);
   useEffect(() => {
     if (!isBuyNowFlow || loading) return;
@@ -271,6 +281,7 @@ export default function AddressScreen() {
     }
     if (!selectedAddressId) {
       const def = addresses.find((a) => a.is_default) ?? addresses[0];
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (def) setSelectedAddressIdLocal(def.id);
     }
   }, [isBuyNowFlow, loading, addresses, selectedAddressId, openNewAddressForm]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -380,11 +391,13 @@ export default function AddressScreen() {
     ]);
   };
 
-  // Auto-select default address (selection screen only)
+  // Auto-select default address (selection screen only) - same
+  // "adjust state once async data arrives" case as the effect above.
   useEffect(() => {
     if (mode !== "select") return;
     if (addresses.length > 0 && selectedAddressId === null) {
       const def = addresses.find((a) => a.is_default) ?? addresses[0];
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedAddressIdLocal(def.id);
     }
   }, [addresses, mode, selectedAddressId]);
@@ -548,8 +561,10 @@ export default function AddressScreen() {
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!fullName.trim()) errs.fullName = "Full name is required";
-    if (!mobile.trim() || !/^\d{10}$/.test(mobile.trim()))
-      errs.mobile = "Enter a valid 10-digit mobile number";
+    // Mirrors backend's AddressCreateSchema.validate_mobile (app/schemas/
+    // address.py) - must also start with 6/7/8/9, not just be 10 digits.
+    if (!mobile.trim() || !/^[6-9]\d{9}$/.test(mobile.trim()))
+      errs.mobile = "Enter a valid 10-digit mobile number starting with 6-9";
     if (!line1.trim()) errs.line1 = "Address line 1 is required";
     if (!city.trim()) errs.city = "City is required";
     if (!state.trim()) errs.state = "State is required";
