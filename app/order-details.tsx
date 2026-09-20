@@ -215,6 +215,8 @@ function BridgePartnerCard({
               style={styles.imageViewerClose}
               onPress={() => setViewerOpen(false)}
               hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Close photo"
             >
               <Ionicons name="close" size={26} color="#fff" />
             </TouchableOpacity>
@@ -297,7 +299,13 @@ function ReferenceImagesSection({ urls }: { urls: string[] }) {
       {/* Fullscreen viewer */}
       <Modal visible={!!viewer} transparent animationType="fade" onRequestClose={() => setViewer(null)}>
         <View style={styles.imageViewerOverlay}>
-          <TouchableOpacity style={styles.imageViewerClose} onPress={() => setViewer(null)} hitSlop={12}>
+          <TouchableOpacity
+            style={styles.imageViewerClose}
+            onPress={() => setViewer(null)}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Close photo"
+          >
             <Ionicons name="close" size={26} color="#fff" />
           </TouchableOpacity>
           {viewer ? (
