@@ -12,7 +12,6 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -29,6 +28,7 @@ import { getProfileDisplayEmail } from "../src/utils/email";
 import { getUserMobile } from "../src/utils/userPhone";
 import { updateProfile } from "../src/services/profileService";
 import { useAuthStore } from "../store/useAuthStore";
+import { useToastStore } from "../src/store/useToastStore";
 
 const GENDERS = ["Male", "Female", "Other", "Prefer not to say"] as const;
 
@@ -89,14 +89,12 @@ export default function EditProfileScreen() {
       }
 
       await fetchProfile();
-      Alert.alert("Saved", "Profile updated successfully!", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      useToastStore.getState().show("Profile updated successfully!");
+      router.back();
     } catch (err: any) {
-      Alert.alert(
-        "Error",
-        err?.message ?? "Failed to update profile. Please try again.",
-      );
+      useToastStore
+        .getState()
+        .show(err?.message ?? "Failed to update profile. Please try again.", "error");
     } finally {
       setSaving(false);
     }

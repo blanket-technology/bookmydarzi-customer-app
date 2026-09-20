@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -21,7 +21,6 @@ import { UserAvatar } from "../../src/components/common/UserAvatar";
 import { useAppLanguage } from "../../src/i18n/useAppLanguage";
 import {
     deleteAccount,
-    updateProfile,
     uploadProfileAvatar,
 } from "../../src/services/profileService";
 import { useAddressStore } from "../../src/store/useAddressStore";
@@ -35,6 +34,7 @@ import {
 } from "../../src/utils/profilePhotoPicker";
 import { getUserMobile } from "../../src/utils/userPhone";
 import { useAuthStore } from "../../store/useAuthStore";
+import { useToastStore } from "../../src/store/useToastStore";
 
 const MENU_ITEMS = [
   // My Orders, Payments, Notifications, Wishlist, and Change Password
@@ -68,19 +68,12 @@ export default function ProfileScreen() {
     fetchMeasurements,
   } = useMeasurementStore();
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
-  const [firstName, setFirstName] = useState(user?.first_name ?? "");
-  const [lastName, setLastName] = useState(user?.last_name ?? "");
-  const [email, setEmail] = useState("");
-  const normalizeGender = (g?: string | null) =>
-    g ? g.charAt(0).toUpperCase() + g.slice(1) : "";
-  const [gender, setGender] = useState<string>(normalizeGender(user?.gender));
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [avatarPreviewUri, setAvatarPreviewUri] = useState<string | null>(null);
+  const normalizeGender = (g?: string | null) =>
+    g ? g.charAt(0).toUpperCase() + g.slice(1) : "";
 
   const displayEmail = getProfileDisplayEmail(user?.email);
   const displayImageUri = avatarPreviewUri ?? user?.profile_image ?? null;
@@ -97,26 +90,6 @@ export default function ProfileScreen() {
       ]).finally(() => setProfileLoading(false));
     }, [isAuthenticated, fetchProfile, fetchAddresses, fetchMeasurements]),
   );
-
-  const prefillEmail = () => displayEmail;
-
-  // Sync local edit state when user data updates from backend
-  useEffect(() => {
-    if (!isEditing) {
-      setFirstName(user?.first_name ?? "");
-      setLastName(user?.last_name ?? "");
-      setEmail(prefillEmail());
-      setGender(normalizeGender(user?.gender));
-    }
-  }, [user, isEditing, displayEmail]);
-
-  const finishProfileSave = async (
-    message = "Profile updated successfully!",
-  ) => {
-    await fetchProfile();
-    setIsEditing(false);
-    Alert.alert("Saved", message);
-  };
 
   const handlePickProfilePhoto = async () => {
     try {
@@ -137,9 +110,14 @@ export default function ProfileScreen() {
       }
 
       await fetchProfile();
-      Alert.alert("Updated", "Profile photo updated.");
+      useToastStore.getState().show("Profile photo updated.");
     } catch (err: unknown) {
       if (err instanceof ProfilePhotoPickerUnavailableError) {
+        // Developer-facing message with multi-line CLI instructions, only
+        // ever hit in a dev build missing a native module - a toast can't
+        // show this legibly (auto-dismisses, no room for multiple lines),
+        // so this one genuinely needs the blocking dialog, unlike the
+        // other feedback in this flow.
         Alert.alert(
           "Photo picker unavailable",
           PROFILE_PHOTO_PICKER_REBUILD_MSG,
@@ -147,15 +125,14 @@ export default function ProfileScreen() {
         return;
       }
       if (err instanceof Error && err.message === "PERMISSION_DENIED") {
-        Alert.alert(
-          "Permission needed",
-          "Allow photo access to update your profile picture.",
-        );
+        useToastStore
+          .getState()
+          .show("Allow photo access to update your profile picture.", "error");
         return;
       }
       const msg =
         err instanceof Error ? err.message : "Failed to upload photo.";
-      Alert.alert("Upload failed", msg);
+      useToastStore.getState().show(msg, "error");
     } finally {
       setUploadingPhoto(false);
       setAvatarPreviewUri(null);
@@ -221,65 +198,6 @@ export default function ProfileScreen() {
         },
       ],
     );
-  };
-
-  const validateForm = () => {
-    const errs: Record<string, string> = {};
-    if (!firstName.trim()) errs.firstName = "First name is required";
-    if (!lastName.trim()) errs.lastName = "Last name is required";
-    const emailTrimmed = email.trim();
-    if (emailTrimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
-      errs.email = "Enter a valid email address";
-    }
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleSave = async () => {
-    if (!validateForm()) return;
-    setSaving(true);
-    try {
-      await updateProfile(user?.id ?? "", {
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        email: email.trim() || undefined,
-        gender: gender || undefined,
-      });
-
-      const current = useAuthStore.getState().user;
-      if (current) {
-        useAuthStore.setState({
-          user: {
-            ...current,
-            first_name: firstName.trim(),
-            last_name: lastName.trim(),
-            name: `${firstName.trim()} ${lastName.trim()}`.trim(),
-            email: email.trim() || current.email,
-            gender,
-          },
-        });
-      }
-
-      await fetchProfile();
-      setIsEditing(false);
-      Alert.alert("Saved", "Profile updated successfully!");
-    } catch (err: any) {
-      Alert.alert(
-        "Error",
-        err?.message ?? "Failed to update profile. Please try again.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setFirstName(user?.first_name ?? "");
-    setLastName(user?.last_name ?? "");
-    setEmail(prefillEmail());
-    setGender(normalizeGender(user?.gender));
-    setErrors({});
-    setIsEditing(false);
   };
 
   if (!isAuthenticated) {
