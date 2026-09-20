@@ -1693,16 +1693,6 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 6,
   },
-  statusBadge: {
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "capitalize",
-  },
   urgencyBadge: {
     borderRadius: 20,
     paddingHorizontal: 10,

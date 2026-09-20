@@ -69,10 +69,7 @@ import {
 } from "../../src/utils/addressDisplay";
 import { fetchCatalogTree } from "../../src/services/catalogService";
 import { resolveCatalogCategoryId } from "../../src/utils/catalogCategoryMap";
-import {
-  formatCustomerOrderStatusLabel,
-  isCompletedCustomerOrderStatus,
-} from "../../src/utils/customerOrderStatus";
+import { isCompletedCustomerOrderStatus } from "../../src/utils/customerOrderStatus";
 import { navigateToServiceDetails } from "../../src/utils/navigateToServiceDetails";
 import { normalizeProfileImageUrl } from "../../src/utils/profileImage";
 import { useAuthStore } from "../../store/useAuthStore";
@@ -133,35 +130,6 @@ function findServiceImageUrl(
     }
   }
   return null;
-}
-
-type StatusBadgeStyle = { bg: string; text: string; label: string };
-
-function getRecentOrderStatusStyle(status: string, statusLabel: string): StatusBadgeStyle {
-  const normalized = status.trim().toLowerCase().replace(/\s+/g, "_");
-
-  if (normalized.includes("cancel")) {
-    return { bg: "#FEE2E2", text: "#DC2626", label: "Cancelled" };
-  }
-  if (
-    normalized.includes("complete") ||
-    normalized.includes("delivered") ||
-    normalized.includes("done")
-  ) {
-    return { bg: "#D1FAE5", text: "#059669", label: "Completed" };
-  }
-  if (normalized.includes("progress") || normalized.includes("in_progress")) {
-    return { bg: "#EDE9FE", text: "#7C3AED", label: "In Progress" };
-  }
-  if (normalized.includes("confirm")) {
-    return { bg: "#DBEAFE", text: "#2563EB", label: "Confirmed" };
-  }
-  if (normalized.includes("pending")) {
-    return { bg: "#FFEDD5", text: "#EA580C", label: "Pending" };
-  }
-
-  const formatted = formatCustomerOrderStatusLabel(statusLabel || status);
-  return { bg: "#F3F4F6", text: "#6B7280", label: formatted || "-" };
 }
 
 /** Extract duration text from API description when present (e.g. "1-2 days"). */
@@ -950,16 +918,6 @@ const recent = StyleSheet.create({
     fontWeight: "800",
     color: "#111827",
     letterSpacing: -0.15,
-  },
-  statusBadge: {
-    borderRadius: RADIUS.full,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    maxWidth: 96,
-  },
-  statusText: {
-    fontSize: 9,
-    fontWeight: "700",
   },
   meta: {
     fontSize: 11,

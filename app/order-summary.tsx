@@ -23,6 +23,7 @@ import { fetchCustomerOrderSummary } from "../src/services/customerOrderService"
 import { parsePositiveId } from "../src/services/paymentService";
 import type { CustomerOrderSummaryPayload } from "../src/types/customerOrders";
 import OrderScreenSection from "../src/components/orders/OrderScreenSection";
+import StatusBadge from "../src/components/orders/StatusBadge";
 import { cardShadow } from "../src/utils/cardShadow";
 import {
   BOOKING_LINK_GREEN,
@@ -153,11 +154,7 @@ function SummaryStatusHero({ payload }: { payload: CustomerOrderSummaryPayload }
           <Ionicons name={iconStyle.iconName} size={22} color={iconStyle.icon} />
         </View>
         <View style={styles.heroText}>
-          <View style={[styles.statusBadge, { backgroundColor: iconStyle.bg }]}>
-            <Text style={[styles.statusBadgeText, { color: iconStyle.icon }]}>
-              {meta.customerLabel}
-            </Text>
-          </View>
+          <StatusBadge status={payload.order.status} size="sm" style={styles.statusBadgeMargin} />
 
           {/* What did I book */}
           <Text style={styles.headline} numberOfLines={2}>
@@ -479,14 +476,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   heroText: { flex: 1, minWidth: 0 },
-  statusBadge: {
-    alignSelf: "flex-start",
-    borderRadius: RADIUS.full,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 8,
-  },
-  statusBadgeText: { fontSize: 11, fontWeight: "700", textTransform: "capitalize" },
+  statusBadgeMargin: { marginBottom: 8 },
   headline: {
     fontSize: 19,
     fontWeight: "800",
