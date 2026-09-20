@@ -132,10 +132,20 @@ function SavedAddressCard({
         {selected ? (
           <Ionicons name="checkmark-circle" size={22} color={COLORS.primaryDark} />
         ) : null}
-        <TouchableOpacity onPress={onEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity
+          onPress={onEdit}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Edit address"
+        >
           <Ionicons name="pencil-outline" size={18} color={COLORS.primaryDark} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity
+          onPress={onDelete}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Delete address"
+        >
           <Ionicons name="trash-outline" size={18} color={COLORS.error} />
         </TouchableOpacity>
       </View>
