@@ -715,19 +715,26 @@ export interface OrderRatingInfo {
   rating: number;
   comment: string | null;
   already_rated: boolean;
+  edited?: boolean;
+  updated_at?: string | null;
 }
 
 export async function fetchOrderRating(orderId: number): Promise<OrderRatingInfo> {
   return request<OrderRatingInfo>(`${BASE}/${orderId}/rating`);
 }
 
+// isEdit selects PATCH (edit a previously-submitted rating - the backend's
+// update_order_rating, no time limit) vs POST (submit_order_rating, only
+// ever creates the first rating - a second POST 409s). Mirrors the
+// website's RatingCard (already_rated ? "PATCH" : "POST").
 export async function submitOrderRating(
   orderId: number,
   rating: number,
   comment?: string,
+  isEdit = false,
 ): Promise<OrderRatingInfo> {
   return request<OrderRatingInfo>(`${BASE}/${orderId}/rating`, {
-    method: "POST",
+    method: isEdit ? "PATCH" : "POST",
     body: { rating, comment: comment || null },
   });
 }

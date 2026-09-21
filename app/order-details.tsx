@@ -699,9 +699,16 @@ export default function OrderDetailsScreen() {
   // Rating state
   const [ratingValue, setRatingValue] = useState(0);
   const [ratingComment, setRatingComment] = useState("");
+  const [existingComment, setExistingComment] = useState<string | null>(null);
   const [alreadyRated, setAlreadyRated] = useState(false);
   const [existingRating, setExistingRating] = useState(0);
   const [ratingBusy, setRatingBusy] = useState(false);
+  // True while the submission form is shown for an order that already has a
+  // rating - either mid-edit (tapped "Edit") or right after a first-time
+  // submit before alreadyRated flips true. PATCH has no time limit (matches
+  // the website's RatingCard), unlike the old behavior where a rating was
+  // permanent the instant it was submitted.
+  const [editingRating, setEditingRating] = useState(false);
   // Order tracking is collapsed by default; the "Track Order" button in the
   // first (hero) section expands it (Bug Report cycle 1, item 6.2).
   const [trackingExpanded, setTrackingExpanded] = useState(false);
@@ -745,14 +752,24 @@ export default function OrderDetailsScreen() {
       if (requestId !== loadRequestRef.current) return;
       setPayload(data);
       const normalizedStatus = normalizeOrderStatus(data.order.status);
-      // Fetch existing rating once the order has reached the true terminal state.
-      if (normalizedStatus === "completed") {
+      // Fetch existing rating once the order is rateable - matches the
+      // backend's own _RATEABLE_STATUSES (customer_orders.py): "delivered"
+      // is the normal resting state after delivery, "completed" is a
+      // currently-unused-but-valid terminal stage after that. This
+      // previously only checked "completed", which is not the status real
+      // orders actually reach - meaning the "already rated"/edit check
+      // silently never ran for the vast majority of delivered orders, and
+      // a customer who'd already rated would hit the submission form again
+      // (then a confusing 409 on submit) instead of seeing their rating.
+      if (normalizedStatus === "delivered" || normalizedStatus === "completed") {
         try {
           const ratingInfo = await fetchOrderRating(orderId);
           if (ratingInfo.already_rated) {
             setAlreadyRated(true);
             setExistingRating(ratingInfo.rating);
+            setExistingComment(ratingInfo.comment);
             setRatingValue(ratingInfo.rating);
+            setRatingComment(ratingInfo.comment ?? "");
           }
         } catch {
           // non-critical
@@ -965,17 +982,20 @@ export default function OrderDetailsScreen() {
   );
 
   const handleSubmitRating = async () => {
-    if (orderId === null || ratingValue < 1 || ratingBusy || alreadyRated)
-      return;
+    if (orderId === null || ratingValue < 1 || ratingBusy) return;
+    if (alreadyRated && !editingRating) return;
     setRatingBusy(true);
     try {
       await submitOrderRating(
         orderId,
         ratingValue,
         ratingComment.trim() || undefined,
+        alreadyRated, // PATCH when editing an existing rating, POST otherwise
       );
       setAlreadyRated(true);
       setExistingRating(ratingValue);
+      setExistingComment(ratingComment.trim() || null);
+      setEditingRating(false);
       Alert.alert("Thank you!", "Your rating has been submitted.");
     } catch (err) {
       Alert.alert(
@@ -985,6 +1005,12 @@ export default function OrderDetailsScreen() {
     } finally {
       setRatingBusy(false);
     }
+  };
+
+  const startEditRating = () => {
+    setRatingValue(existingRating);
+    setRatingComment(existingComment ?? "");
+    setEditingRating(true);
   };
 
   const isDelivered =
@@ -1519,13 +1545,28 @@ export default function OrderDetailsScreen() {
 
           {isDelivered ? (
             <OrderScreenSection title="Rate your experience">
-              {alreadyRated ? (
-                <View style={ratingStyles.doneWrap}>
-                  <Ionicons name="star" size={22} color="#F59E0B" />
-                  <Text style={ratingStyles.doneText}>
-                    You rated this order {existingRating} star
-                    {existingRating !== 1 ? "s" : ""}. Thank you!
-                  </Text>
+              {alreadyRated && !editingRating ? (
+                <View>
+                  <View style={ratingStyles.doneWrap}>
+                    <Ionicons name="star" size={22} color="#F59E0B" />
+                    <Text style={ratingStyles.doneText}>
+                      You rated this order {existingRating} star
+                      {existingRating !== 1 ? "s" : ""}. Thank you!
+                    </Text>
+                  </View>
+                  {existingComment ? (
+                    <Text style={ratingStyles.doneComment}>
+                      &ldquo;{existingComment}&rdquo;
+                    </Text>
+                  ) : null}
+                  <TouchableOpacity
+                    onPress={startEditRating}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit your rating"
+                  >
+                    <Text style={ratingStyles.editLink}>Edit rating</Text>
+                  </TouchableOpacity>
                 </View>
               ) : (
                 <>
@@ -1574,7 +1615,9 @@ export default function OrderDetailsScreen() {
                     {ratingBusy ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                      <Text style={ratingStyles.submitText}>Submit rating</Text>
+                      <Text style={ratingStyles.submitText}>
+                        {editingRating ? "Save changes" : "Submit rating"}
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </>
@@ -2100,4 +2143,18 @@ const ratingStyles = StyleSheet.create({
     paddingVertical: 8,
   },
   doneText: { fontSize: 14, fontWeight: "600", color: "#92400E", flex: 1 },
+  doneComment: {
+    fontSize: 13,
+    color: COLORS.gray,
+    fontStyle: "italic",
+    marginTop: 8,
+    lineHeight: 19,
+  },
+  editLink: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+    marginTop: 10,
+    textDecorationLine: "underline",
+  },
 });
