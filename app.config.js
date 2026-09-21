@@ -138,29 +138,37 @@ module.exports = {
     [
       "expo-splash-screen",
       {
-        image: "./assets/images/splash-icon.png",
-        imageWidth: 200,
+        // Same asset app/splash.tsx renders (the JS-driven splash that
+        // follows this native frame) - previously this pointed at
+        // splash-icon.png, the round teal-circle app-icon artwork, which is
+        // a visibly different image (different crop, different background
+        // shape/color) from the actual coded splash screen. That produced
+        // exactly the "two disconnected screens flashing in sequence" this
+        // comment already warned about, just with the wrong fix: matching
+        // colors alone isn't enough if the image itself doesn't match too.
+        image: "./assets/logo_cropped.png",
+        imageWidth: 260,
         resizeMode: "contain",
         backgroundColor: "#ffffff",
         dark: {
-          backgroundColor: "#000000",
+          backgroundColor: "#ffffff",
         },
         // Android 12+ (API 31+) forces its OWN native splash on cold start,
         // shown before any JS loads - and without this block it falls back
         // to the app's raw adaptiveIcon (the full round mascot artwork)
         // blown up on a plain background, completely unstyled and jarring
         // against the branded splash that follows a beat later. Explicitly
-        // pointing Android at the same splash-icon.png/colors as above
+        // pointing Android at the same logo_cropped.png/colors as above
         // makes that forced native frame match the branded splash exactly,
         // so the two blend into what reads as one continuous splash
         // instead of two visibly different screens flashing in sequence.
         android: {
-          image: "./assets/images/splash-icon.png",
-          imageWidth: 200,
+          image: "./assets/logo_cropped.png",
+          imageWidth: 260,
           resizeMode: "contain",
           backgroundColor: "#ffffff",
           dark: {
-            backgroundColor: "#000000",
+            backgroundColor: "#ffffff",
           },
         },
       },
