@@ -1357,8 +1357,13 @@ export default function OrderDetailsScreen() {
                 <RowDivider />
                 <BillRow label="Add-ons" value={detailsMoney(addonsTotal)} />
                 <RowDivider />
+                {/* pricing.base_amount is Service subtotal + Add-ons combined
+                    (order-wide, same "base + addons" semantics as
+                    item.unit_price above) - "Order subtotal" here instead of
+                    "Base amount" so it doesn't read as yet another base-only
+                    figure right below two rows that already are. */}
                 <BillRow
-                  label="Base amount"
+                  label="Order subtotal"
                   value={detailsMoney(payload.pricing.base_amount)}
                 />
               </>
