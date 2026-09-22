@@ -269,6 +269,23 @@ export async function fetchOrderTrackingPayload(id: number): Promise<OrderTracki
 }
 
 // ---------------------------------------------------------------------------
+// POST /orders/{id}/report-issue
+// Customer reports a problem during the 2-hour post-delivery inspection
+// window - routes the order back to the same tailor, no fresh broadcast.
+// Only valid while OrderTrackingPayload.can_report_issue is true.
+// ---------------------------------------------------------------------------
+export async function reportOrderIssue(
+  id: number,
+  description: string,
+  photoUrls?: string[],
+): Promise<ApiOrder> {
+  return request<ApiOrder>(`${BASE}/${id}/report-issue`, {
+    method: "POST",
+    body: { description, ...(photoUrls?.length ? { photo_urls: photoUrls } : {}) },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // POST /orders/voice-note
 // Uploads a recorded voice note (M4A/WAV/MP3), returning an ImageKit URL to
 // pass as voice_note_url on order creation (POST /orders or /orders/direct)
