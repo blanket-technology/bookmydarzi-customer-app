@@ -297,6 +297,12 @@ export interface OrderTrackingPayload {
   expected_delivery_date: string | null;
   /** e.g. "Delivery by 5 Jun", server-calculated. */
   display_eta: string | null;
+  /** True only while the order is in the 2-hour post-delivery inspection
+   * window - controls whether the "Report an issue" action renders. */
+  can_report_issue: boolean;
+  /** ISO datetime the current inspection window closes, present only when
+   * can_report_issue is true. */
+  inspection_window_expires_at: string | null;
   timeline: OrderTimelineStage[];
 }
 

@@ -5,6 +5,35 @@ import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from "../../../../constants/theme
 import { fetchOrderTrackingPayload } from "../../../services/apiOrderService";
 import type { OrderTrackingPayload } from "../../../types/api";
 import OrderTimelineItem from "../OrderTimelineItem";
+import ReportIssueSheet from "../ReportIssueSheet";
+
+function useCountdown(expiresAt: string | null): string | null {
+  const [label, setLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!expiresAt) {
+      setLabel(null);
+      return;
+    }
+    const target = new Date(expiresAt).getTime();
+    const tick = () => {
+      const diffMs = target - Date.now();
+      if (diffMs <= 0) {
+        setLabel(null);
+        return;
+      }
+      const mins = Math.floor(diffMs / 60000);
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      setLabel(h > 0 ? `${h}h ${m}m left` : `${m}m left`);
+    };
+    tick();
+    const interval = setInterval(tick, 30000);
+    return () => clearInterval(interval);
+  }, [expiresAt]);
+
+  return label;
+}
 
 export interface OrderTimelineProps {
   orderId: number;
@@ -22,6 +51,8 @@ const OrderTimeline = memo(({ orderId, payload, onLoaded }: OrderTimelineProps) 
   const [data, setData] = useState<OrderTrackingPayload | null>(payload ?? null);
   const [loading, setLoading] = useState(!payload);
   const [error, setError] = useState<string | null>(null);
+  const [reportSheetVisible, setReportSheetVisible] = useState(false);
+  const countdown = useCountdown(data?.can_report_issue ? data.inspection_window_expires_at : null);
 
   const load = useCallback(async () => {
     if (!Number.isFinite(orderId) || orderId <= 0) {
@@ -103,6 +134,21 @@ const OrderTimeline = memo(({ orderId, payload, onLoaded }: OrderTimelineProps) 
           />
         ))}
       </View>
+
+      {data.can_report_issue ? (
+        <TouchableOpacity style={styles.reportIssueBtn} onPress={() => setReportSheetVisible(true)}>
+          <Ionicons name="alert-circle-outline" size={16} color={COLORS.error} />
+          <Text style={styles.reportIssueText}>Report an issue</Text>
+          {countdown ? <Text style={styles.reportIssueCountdown}>{countdown}</Text> : null}
+        </TouchableOpacity>
+      ) : null}
+
+      <ReportIssueSheet
+        visible={reportSheetVisible}
+        orderId={orderId}
+        onClose={() => setReportSheetVisible(false)}
+        onReported={load}
+      />
     </View>
   );
 });
@@ -131,6 +177,29 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingTop: SPACING.xs,
+  },
+  reportIssueBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    borderRadius: RADIUS.md,
+    backgroundColor: "#FEF2F2",
+  },
+  reportIssueText: {
+    ...TYPOGRAPHY.body.md,
+    fontWeight: "700",
+    color: COLORS.error,
+    flex: 1,
+  },
+  reportIssueCountdown: {
+    ...TYPOGRAPHY.body.sm,
+    color: COLORS.error,
+    opacity: 0.8,
   },
   centerBox: {
     alignItems: "center",
