@@ -29,6 +29,7 @@ import CodConfirmModal from "../src/components/cart/CodConfirmModal";
 import { CouponSection, type AppliedOffer } from "../src/components/cart/CouponSection";
 import SlideToConfirm from "../src/components/cart/SlideToConfirm";
 import StyleReferencePicker from "../src/components/cart/StyleReferencePicker";
+import VoiceNoteRecorder from "../src/components/cart/VoiceNoteRecorder";
 import PickupDateCalendarModal from "../src/components/common/PickupDateCalendarModal";
 import ScreenHeader from "../src/components/common/ScreenHeader";
 import PaymentMethodSelector from "../src/components/orders/PaymentMethodSelector";
@@ -132,6 +133,7 @@ export default function BuyNowReviewScreen() {
   // Reference style image + order notes, mirroring the cart (item 4.1).
   const [styleReferenceUri, setStyleReferenceUri] = useState<string | null>(null);
   const [orderNotes, setOrderNotes] = useState<string>("");
+  const [voiceNoteUrl, setVoiceNoteUrl] = useState<string | null>(null);
 
   const handlePickStyleReference = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -293,6 +295,7 @@ export default function BuyNowReviewScreen() {
         ...(styleReferenceUri && /^https?:\/\//.test(styleReferenceUri)
           ? { image_references: [styleReferenceUri] }
           : {}),
+        ...(voiceNoteUrl ? { voice_note_url: voiceNoteUrl } : {}),
         ...(extraItems.length > 0
           ? {
               // Backend ignores the top-level service_id/stitching_preferences/
@@ -415,7 +418,7 @@ export default function BuyNowReviewScreen() {
   }, [
     pendingService, selectedAddressId, billing, appliedOffer,
     pickupType, scheduledDate, scheduledSlot, pickupTimeSlots, paymentMethod,
-    orderNotes, styleReferenceUri,
+    orderNotes, styleReferenceUri, voiceNoteUrl,
     clearPendingService, clearBuyNowMode, user, router,
   ]);
 
@@ -701,6 +704,11 @@ export default function BuyNowReviewScreen() {
               numberOfLines={3}
               maxLength={1000}
               textAlignVertical="top"
+            />
+            <VoiceNoteRecorder
+              url={voiceNoteUrl}
+              onUploaded={setVoiceNoteUrl}
+              onRemove={() => setVoiceNoteUrl(null)}
             />
           </View>
         </View>

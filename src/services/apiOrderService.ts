@@ -269,6 +269,30 @@ export async function fetchOrderTrackingPayload(id: number): Promise<OrderTracki
 }
 
 // ---------------------------------------------------------------------------
+// POST /orders/voice-note
+// Uploads a recorded voice note (M4A/WAV/MP3), returning an ImageKit URL to
+// pass as voice_note_url on order creation (POST /orders or /orders/direct)
+// - an optional alternative to typing notes, for a customer who finds
+// speaking easier than writing.
+// ---------------------------------------------------------------------------
+export interface VoiceNoteUploadResult {
+  url: string;
+  file_id?: string;
+  mime_type?: string;
+}
+
+export async function uploadOrderVoiceNote(fileUri: string): Promise<VoiceNoteUploadResult> {
+  const filename = fileUri.split("/").pop() ?? "voice-note.m4a";
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "m4a";
+  const mime = ext === "wav" ? "audio/wav" : ext === "mp3" ? "audio/mpeg" : "audio/m4a";
+
+  const form = new FormData();
+  form.append("file", { uri: fileUri, name: filename, type: mime } as any);
+
+  return request<VoiceNoteUploadResult>(`${BASE}/voice-note`, { method: "POST", body: form });
+}
+
+// ---------------------------------------------------------------------------
 // POST /orders
 // Creates a draft order for the current authenticated user.
 // ---------------------------------------------------------------------------

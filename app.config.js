@@ -194,6 +194,13 @@ module.exports = {
         microphonePermission: false,
       },
     ],
+    [
+      "expo-audio",
+      {
+        microphonePermission:
+          "Allow BookMyDarzi to access your microphone to record a voice note for your tailor.",
+      },
+    ],
     ...(isLocalDevBuild ? ["./plugins/withCleartextTraffic.js"] : []),
     "./plugins/withRazorpayGradle.js",
     // Sentry's build-time source-map/debug-symbol upload is disabled via
