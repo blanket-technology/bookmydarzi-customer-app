@@ -30,6 +30,7 @@ import { CouponSection, type AppliedOffer } from "../src/components/cart/CouponS
 import SlideToConfirm from "../src/components/cart/SlideToConfirm";
 import StyleReferencePicker from "../src/components/cart/StyleReferencePicker";
 import VoiceNoteRecorder from "../src/components/cart/VoiceNoteRecorder";
+import { trackOrderPlaced } from "../src/services/mixpanelService";
 import PickupDateCalendarModal from "../src/components/common/PickupDateCalendarModal";
 import ScreenHeader from "../src/components/common/ScreenHeader";
 import PaymentMethodSelector from "../src/components/orders/PaymentMethodSelector";
@@ -324,6 +325,13 @@ export default function BuyNowReviewScreen() {
               ],
             }
           : {}),
+      });
+
+      trackOrderPlaced({
+        order_id: result.orderId,
+        service_id: pendingService.bookableServiceId,
+        payment_method: paymentMethod,
+        final_amount: result.finalAmount,
       });
 
       clearPendingService();

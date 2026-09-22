@@ -26,8 +26,10 @@ import AppToast from "../src/components/common/AppToast";
 import { ErrorBoundary } from "../src/components/common/ErrorBoundary";
 import SessionExpiredModal from "../src/components/common/SessionExpiredModal";
 import { initSentry } from "../src/services/sentryService";
+import { initMixpanel } from "../src/services/mixpanelService";
 
 initSentry();
+initMixpanel();
 import AppSplashScreen from "./splash";
 import OfflineBanner from "../components/OfflineBanner";
 import { useAuthStore } from "../store/useAuthStore";

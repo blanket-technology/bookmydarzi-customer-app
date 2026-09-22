@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from "../../../constants/theme";
 import { reportOrderIssue } from "../../services/apiOrderService";
+import { trackIssueReported } from "../../services/mixpanelService";
 
 export interface ReportIssueSheetProps {
   visible: boolean;
@@ -46,6 +47,7 @@ export default function ReportIssueSheet({ visible, orderId, onClose, onReported
     setError(null);
     try {
       await reportOrderIssue(orderId, description.trim());
+      trackIssueReported({ order_id: orderId });
       setDescription("");
       onReported();
       onClose();
