@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { memo, useCallback, useEffect, useState } from "react";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from "../../../../constants/theme";
 import { fetchOrderTrackingPayload } from "../../../services/apiOrderService";
+import { trackOrderCompleted, trackOrderDelivered } from "../../../services/mixpanelService";
 import type { OrderTrackingPayload } from "../../../types/api";
 import OrderTimelineItem from "../OrderTimelineItem";
 import ReportIssueSheet from "../ReportIssueSheet";
@@ -53,6 +54,11 @@ const OrderTimeline = memo(({ orderId, payload, onLoaded }: OrderTimelineProps) 
   const [error, setError] = useState<string | null>(null);
   const [reportSheetVisible, setReportSheetVisible] = useState(false);
   const countdown = useCountdown(data?.can_report_issue ? data.inspection_window_expires_at : null);
+  // Fire order_delivered/order_completed once per status observed on this
+  // order, not on every re-render/poll - a Set survives across renders
+  // (not remounts) via useRef, which is enough here since this component
+  // stays mounted for the tracking view's lifetime.
+  const trackedStatusesRef = useRef<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     if (!Number.isFinite(orderId) || orderId <= 0) {
@@ -87,6 +93,19 @@ const OrderTimeline = memo(({ orderId, payload, onLoaded }: OrderTimelineProps) 
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId, payload]);
+
+  useEffect(() => {
+    if (!data) return;
+    const seen = trackedStatusesRef.current;
+    if (data.status === "inspection_window" && !seen.has("delivered")) {
+      seen.add("delivered");
+      trackOrderDelivered({ order_id: orderId });
+    }
+    if (data.status === "completed" && !seen.has("completed")) {
+      seen.add("completed");
+      trackOrderCompleted({ order_id: orderId });
+    }
+  }, [data, orderId]);
 
   if (loading) {
     return (
