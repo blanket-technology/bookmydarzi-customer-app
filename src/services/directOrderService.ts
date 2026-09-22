@@ -51,6 +51,11 @@ export interface DirectOrderPayload {
   customization_notes?: string;
   /** Reference style image URLs. */
   image_references?: string[];
+  /** Optional voice-note recording (from uploadOrderVoiceNote), an
+   * alternative to typing notes for a customer who finds speaking easier -
+   * or, on the tailor's end, gives a tailor who reads slowly something to
+   * listen to instead of text-only instructions. */
+  voice_note_url?: string;
   /** Extras selected on the service detail screen - see AddonPicker. */
   addons?: SelectedAddon[];
   /** Multi-item Book Now (e.g. a primary alteration tier plus other tiers
@@ -164,6 +169,11 @@ export async function createDirectOrder(
       offer_id: payload.offer_id,
       scheduled_pickup_at: payload.scheduled_pickup_at,
       pickup_time_slot: payload.pickup_time_slot,
+      ...(payload.customization_notes?.trim()
+        ? { customization_notes: payload.customization_notes.trim() }
+        : {}),
+      ...(payload.image_references?.length ? { image_references: payload.image_references } : {}),
+      ...(payload.voice_note_url ? { voice_note_url: payload.voice_note_url } : {}),
       ...(payload.items?.length
         ? {
             items: payload.items.map((i) => ({
