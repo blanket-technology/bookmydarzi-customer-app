@@ -199,6 +199,17 @@ module.exports = {
       {
         microphonePermission:
           "Allow BookMyDarzi to access your microphone to record a voice note for your tailor.",
+        // Voice notes are recorded and played back only while the customer
+        // is actively in the app (checkout/order screens) - never in the
+        // background. expo-audio defaults enableBackgroundPlayback to true,
+        // which pulls in the Android FOREGROUND_SERVICE_MEDIA_PLAYBACK
+        // permission - Play Console then requires a video demonstrating
+        // genuine background media playback to justify that permission,
+        // which this app doesn't have and doesn't need. Disabling both
+        // background flags removes the permission from the manifest
+        // entirely, matching what this feature actually does.
+        enableBackgroundPlayback: false,
+        enableBackgroundRecording: false,
       },
     ],
     ...(isLocalDevBuild ? ["./plugins/withCleartextTraffic.js"] : []),
