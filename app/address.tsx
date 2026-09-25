@@ -621,17 +621,16 @@ export default function AddressScreen() {
 
   const handleSaveAddress = async (): Promise<ApiAddress | null> => {
     // A fully manually-typed address (no "Use my location" / map pin) has no
-    // coordinates at all yet. The backend now requires them (it can't check
-    // serviceability, and won't save an address, without a real lat/lng) -
-    // block here with a clear, specific message instead of letting the
-    // generic backend 422 surface after a save attempt with no coordinates.
-    if (!gpsCoords) {
-      Alert.alert(
-        "Location needed",
-        "Please use \"Use my location\" or pin your address on the map so we can confirm we deliver there.",
-      );
-      return null;
-    }
+    // coordinates yet - this used to be blocked here on the (incorrect)
+    // assumption that the backend requires lat/lng to save an address. It
+    // doesn't: address_service.create_address only runs the serviceability
+    // check "when the customer actually provided" coordinates
+    // (app/services/users/address_service.py) - an address with none saves
+    // fine, serviceability is simply deferred to order time instead, which
+    // is the whole point of allowing a manually-typed address at all.
+    // Coordinates are still captured normally whenever "Use my location" or
+    // the map pin is used - this only stops treating their absence as an
+    // error.
 
     const wasEditing = editingId != null;
     const saved = await performSaveAddress();
