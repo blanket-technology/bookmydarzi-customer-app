@@ -1,6 +1,6 @@
-import { Directory, File, Paths } from "expo-file-system";
 import { request, API_V1_BASE_URL, getAccessToken } from "../../services/api";
 import { normalizeProfileImageUrl } from "../utils/profileImage";
+import { toLocalFileUri } from "../utils/localFileUri";
 import {
   normalizeTenDigitMobile,
   parseMobileFromProfileApi,
@@ -67,35 +67,6 @@ function imageFileFromUri(localUri: string): { uri: string; name: string; type: 
     return { uri: localUri, name: "file.webp", type: "image/webp" };
   }
   return { uri: localUri, name: "file.jpg", type: "image/jpeg" };
-}
-
-/**
- * Bug fix: expo-image-picker's launchImageLibraryAsync can return a
- * content:// URI on Android (Google's system photo picker, the default
- * picker backend since Android 13, but also reachable on older versions
- * depending on the device/gallery app) instead of a plain file:// path.
- * React Native's fetch/FormData implementation cannot reliably attach a
- * content:// URI as a multipart part - it fails with "Unsupported
- * FormDataPart implementation" before the request is even sent, which is
- * exactly the error seen here. order photo upload (orderPhotoService.ts)
- * doesn't hit this because camera captures normally hand back a real
- * file:// path already.
- *
- * Fix: copy the picked asset into the app's own cache directory first
- * (expo-file-system's File/Directory API, the same package already used
- * for downloads in invoiceService.ts, though that file imports the older
- * `expo-file-system/legacy` shim rather than this class-based API) - this
- * always yields a real file:// path FormData can attach regardless of
- * what the picker originally returned.
- */
-async function toLocalFileUri(uri: string): Promise<string> {
-  if (uri.startsWith("file://")) return uri;
-
-  const extension = uri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
-  const source = new File(uri);
-  const destination = new File(new Directory(Paths.cache), `profile-photo-${Date.now()}.${extension}`);
-  await source.copy(destination);
-  return destination.uri;
 }
 
 function parseUploadError(data: unknown, status: number): string {
