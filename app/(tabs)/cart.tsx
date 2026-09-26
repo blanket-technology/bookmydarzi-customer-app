@@ -39,6 +39,7 @@ import ErrorState from "../../src/components/common/ErrorState";
 import PickupDateCalendarModal from "../../src/components/common/PickupDateCalendarModal";
 import PaymentMethodSelector from "../../src/components/orders/PaymentMethodSelector";
 import { useAppLanguage } from "../../src/i18n/useAppLanguage";
+import { uploadOrderStyleReference } from "../../src/services/apiOrderService";
 import { useAddressStore } from "../../src/store/useAddressStore";
 import { useCartStore } from "../../src/store/useCartStore";
 import { useCheckoutPreferencesStore } from "../../src/store/useCheckoutPreferencesStore";
@@ -288,7 +289,13 @@ export default function CartScreen() {
   const [scheduledSlot, setScheduledSlot] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
   const pickupTimeSlots = useMemo(() => buildPickupTimeSlots(), []);
+  // styleReferenceUri holds the local picker preview immediately, then the
+  // uploaded https:// url once uploadOrderStyleReference resolves - the
+  // checkout call below only sends it once it's the uploaded url (see the
+  // /^https?:\/\// check further down), so this used to silently drop the
+  // photo entirely: nothing here ever uploaded it.
   const [styleReferenceUri, setStyleReferenceUri] = useState<string | null>(null);
+  const [styleReferenceUploading, setStyleReferenceUploading] = useState(false);
   // Order-level free-text notes (Bug Report cycle 1, item 3.1).
   const [orderNotes, setOrderNotes] = useState<string>("");
   const [checkingOut, setCheckingOut] = useState(false);
@@ -310,8 +317,22 @@ export default function CartScreen() {
       allowsEditing: false,
       quality: 0.8,
     });
-    if (!result.canceled && result.assets[0]?.uri) {
-      setStyleReferenceUri(result.assets[0].uri);
+    if (result.canceled || !result.assets[0]?.uri) return;
+
+    const localUri = result.assets[0].uri;
+    setStyleReferenceUri(localUri);
+    setStyleReferenceUploading(true);
+    try {
+      const uploaded = await uploadOrderStyleReference(localUri);
+      setStyleReferenceUri(uploaded.url);
+    } catch {
+      Alert.alert(
+        "Upload failed",
+        "Couldn't upload the style reference photo. Please try again.",
+      );
+      setStyleReferenceUri(null);
+    } finally {
+      setStyleReferenceUploading(false);
     }
   };
 
@@ -352,10 +373,12 @@ export default function CartScreen() {
   const runCheckout = useCallback(() => {
     setCheckingOut(true);
     const finish = () => setCheckingOut(false);
-    // Order-level notes go straight through. The style reference is a local
-    // device URI (file://); only forward it as an image_reference if it is
-    // already a hosted URL, so we never send an unusable local path to the
-    // backend. (Uploading the local image to get a URL is a follow-up.)
+    // Order-level notes go straight through. handlePickStyleReference now
+    // uploads the picked photo immediately (uploadOrderStyleReference), so
+    // by the time checkout can run, styleReferenceUri is either null or
+    // already the uploaded https:// url - this check stays as a defensive
+    // guard (never send a local file:// path to the backend), not the
+    // primary gate it used to be before the upload step existed.
     const extras = {
       customizationNotes: orderNotes.trim() || undefined,
       imageReferences:
@@ -379,6 +402,10 @@ export default function CartScreen() {
   }, [pickupType, scheduledDate, scheduledSlot, pickupTimeSlots, paymentMethod, router, orderNotes, styleReferenceUri]);
 
   const handleConfirmSlide = useCallback(() => {
+    if (styleReferenceUploading) {
+      Alert.alert("Please wait", "Your style reference photo is still uploading.");
+      return;
+    }
     if (paymentMethod === "cod") {
       // Keep the slider's processing state on through the confirmation
       // sheet so the thumb doesn't visually "unlock" mid-decision; reset it
@@ -388,7 +415,7 @@ export default function CartScreen() {
       return;
     }
     runCheckout();
-  }, [paymentMethod]);
+  }, [paymentMethod, runCheckout, styleReferenceUploading]);
 
   const handleCodCancel = useCallback(() => {
     setCodModalVisible(false);
@@ -490,6 +517,7 @@ export default function CartScreen() {
             uri={styleReferenceUri}
             onPick={() => void handlePickStyleReference()}
             onRemove={() => setStyleReferenceUri(null)}
+            uploading={styleReferenceUploading}
           />
         </View>
 
