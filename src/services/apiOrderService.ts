@@ -13,6 +13,7 @@
  * No user_id is sent - the backend identifies the user from the JWT token.
  */
 import { request } from "../../services/api";
+import { toLocalFileUri } from "../utils/localFileUri";
 import { getOrderStatusMeta } from "../constants/orderStatus";
 import { generateIdempotencyKey } from "../utils/idempotencyKey";
 import type {
@@ -307,6 +308,36 @@ export async function uploadOrderVoiceNote(fileUri: string): Promise<VoiceNoteUp
   form.append("file", { uri: fileUri, name: filename, type: mime } as any);
 
   return request<VoiceNoteUploadResult>(`${BASE}/voice-note`, { method: "POST", body: form });
+}
+
+// ---------------------------------------------------------------------------
+// POST /orders/style-reference
+// Uploads a style-reference photo/sketch picked from the gallery, returning
+// an ImageKit URL to pass in image_references on order creation. Fixes a
+// real gap: Buy Now review's and Cart's style-reference pickers previously
+// had nowhere to upload the picked photo to - image_references was only
+// ever populated when the uri already looked like an https:// URL, which
+// the gallery picker never produces, so the photo was silently dropped
+// from every order.
+// ---------------------------------------------------------------------------
+export interface StyleReferenceUploadResult {
+  url: string;
+  file_id?: string;
+  mime_type?: string;
+}
+
+export async function uploadOrderStyleReference(fileUri: string): Promise<StyleReferenceUploadResult> {
+  // Gallery picks can be a content:// URI on Android, which RN's FormData
+  // can't attach directly (see src/utils/localFileUri.ts) - normalize first.
+  const localUri = await toLocalFileUri(fileUri);
+  const filename = localUri.split("/").pop() ?? "style-reference.jpg";
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "jpg";
+  const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+
+  const form = new FormData();
+  form.append("file", { uri: localUri, name: filename, type: mime } as any);
+
+  return request<StyleReferenceUploadResult>(`${BASE}/style-reference`, { method: "POST", body: form });
 }
 
 // ---------------------------------------------------------------------------

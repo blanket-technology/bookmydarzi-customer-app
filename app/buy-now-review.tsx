@@ -39,6 +39,7 @@ import {
   getBillingEstimate,
   type BillingEstimate,
 } from "../src/services/directOrderService";
+import { uploadOrderStyleReference } from "../src/services/apiOrderService";
 import { registerServiceAreaInterest } from "../src/services/locationService";
 import { useAddressStore } from "../src/store/useAddressStore";
 import { useCartStore } from "../src/store/useCartStore";
@@ -132,7 +133,14 @@ export default function BuyNowReviewScreen() {
   const pickupTimeSlots = useMemo(() => buildPickupTimeSlots(), []);
   const [showAddressPicker, setShowAddressPicker] = useState(false);
   // Reference style image + order notes, mirroring the cart (item 4.1).
+  // styleReferenceUri holds the local picker preview immediately, then the
+  // final https:// url once uploadOrderStyleReference resolves - the
+  // order-create call below only sends it once it's the uploaded url (see
+  // the /^https?:\/\// check), so this used to silently drop the photo
+  // entirely: nothing here ever uploaded it. Fixed by uploading right after
+  // picking, same shape as VoiceNoteRecorder's own record-then-upload flow.
   const [styleReferenceUri, setStyleReferenceUri] = useState<string | null>(null);
+  const [styleReferenceUploading, setStyleReferenceUploading] = useState(false);
   const [orderNotes, setOrderNotes] = useState<string>("");
   const [voiceNoteUrl, setVoiceNoteUrl] = useState<string | null>(null);
 
@@ -152,8 +160,22 @@ export default function BuyNowReviewScreen() {
       allowsEditing: false,
       quality: 0.8,
     });
-    if (!result.canceled && result.assets[0]?.uri) {
-      setStyleReferenceUri(result.assets[0].uri);
+    if (result.canceled || !result.assets[0]?.uri) return;
+
+    const localUri = result.assets[0].uri;
+    setStyleReferenceUri(localUri);
+    setStyleReferenceUploading(true);
+    try {
+      const uploaded = await uploadOrderStyleReference(localUri);
+      setStyleReferenceUri(uploaded.url);
+    } catch {
+      Alert.alert(
+        "Upload failed",
+        "Couldn't upload the style reference photo. Please try again.",
+      );
+      setStyleReferenceUri(null);
+    } finally {
+      setStyleReferenceUploading(false);
     }
   }, []);
   const [placing, setPlacing] = useState(false);
@@ -432,6 +454,10 @@ export default function BuyNowReviewScreen() {
 
   const handlePlaceOrder = useCallback(() => {
     if (!billing) return;
+    if (styleReferenceUploading) {
+      Alert.alert("Please wait", "Your style reference photo is still uploading.");
+      return;
+    }
 
     if (paymentMethod === "cod") {
       // Keep the slider's processing state on through the confirmation
@@ -443,7 +469,7 @@ export default function BuyNowReviewScreen() {
     }
 
     void placeOrder();
-  }, [billing, paymentMethod, placeOrder]);
+  }, [billing, paymentMethod, placeOrder, styleReferenceUploading]);
 
   const handleCodCancel = useCallback(() => {
     setCodModalVisible(false);
@@ -579,6 +605,7 @@ export default function BuyNowReviewScreen() {
               uri={styleReferenceUri}
               onPick={() => void handlePickStyleReference()}
               onRemove={() => setStyleReferenceUri(null)}
+              uploading={styleReferenceUploading}
             />
           </View>
         </View>

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
-import { Image, LayoutAnimation, Platform, StyleSheet, Text, TouchableOpacity, UIManager, View } from "react-native";
+import { ActivityIndicator, Image, LayoutAnimation, Platform, StyleSheet, Text, TouchableOpacity, UIManager, View } from "react-native";
 import { COLORS, RADIUS } from "../../../constants/theme";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -8,9 +8,16 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export interface StyleReferencePickerProps {
+  /** Local preview uri (shown immediately after picking, before upload
+   * finishes) or the final uploaded https:// url - either way, "a photo is
+   * attached" from this component's point of view. */
   uri: string | null;
   onPick: () => void;
   onRemove: () => void;
+  /** True while the picked photo is uploading in the background (the
+   * screen's own handlePickStyleReference does pick+upload; this only
+   * reflects that state for the thumbnail spinner). */
+  uploading?: boolean;
 }
 
 /**
@@ -19,7 +26,7 @@ export interface StyleReferencePickerProps {
  * expands into the upload UI only on tap, and collapses back into a compact
  * confirmation row once a photo is attached.
  */
-export default function StyleReferencePicker({ uri, onPick, onRemove }: StyleReferencePickerProps) {
+export default function StyleReferencePicker({ uri, onPick, onRemove, uploading = false }: StyleReferencePickerProps) {
   const [expanded, setExpanded] = useState(false);
 
   const toggle = () => {
@@ -30,19 +37,40 @@ export default function StyleReferencePicker({ uri, onPick, onRemove }: StyleRef
   if (uri) {
     return (
       <View style={styles.addedRow}>
-        <Image source={{ uri }} style={styles.thumb} resizeMode="cover" />
+        <View>
+          <Image source={{ uri }} style={styles.thumb} resizeMode="cover" />
+          {uploading ? (
+            <View style={styles.thumbOverlay}>
+              <ActivityIndicator size="small" color="#fff" />
+            </View>
+          ) : null}
+        </View>
         <View style={styles.addedTextWrap}>
           <View style={styles.addedTitleRow}>
-            <Ionicons name="checkmark-circle" size={13} color="#16a34a" />
-            <Text style={styles.addedTitle}>Style reference added</Text>
+            <Ionicons
+              name={uploading ? "cloud-upload-outline" : "checkmark-circle"}
+              size={13}
+              color={uploading ? "#0c6c75" : "#16a34a"}
+            />
+            <Text style={styles.addedTitle}>
+              {uploading ? "Uploading style reference…" : "Style reference added"}
+            </Text>
           </View>
           <View style={styles.addedActions}>
-            <TouchableOpacity onPress={onPick} hitSlop={8}>
-              <Text style={styles.actionLink}>Change photo</Text>
+            <TouchableOpacity onPress={onPick} hitSlop={8} disabled={uploading}>
+              <Text style={[styles.actionLink, uploading && styles.actionLinkDisabled]}>Change photo</Text>
             </TouchableOpacity>
             <Text style={styles.actionDivider}>·</Text>
-            <TouchableOpacity onPress={onRemove} hitSlop={8}>
-              <Text style={[styles.actionLink, styles.removeLink]}>Remove</Text>
+            <TouchableOpacity onPress={onRemove} hitSlop={8} disabled={uploading}>
+              <Text
+                style={[
+                  styles.actionLink,
+                  styles.removeLink,
+                  uploading && styles.actionLinkDisabled,
+                ]}
+              >
+                Remove
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -137,11 +165,19 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
     backgroundColor: COLORS.grayLight,
   },
+  thumbOverlay: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: RADIUS.sm,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   addedTextWrap: { flex: 1, gap: 3 },
   addedTitleRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   addedTitle: { fontSize: 12.5, fontWeight: "700", color: COLORS.black },
   addedActions: { flexDirection: "row", alignItems: "center", gap: 6 },
   actionLink: { fontSize: 11.5, fontWeight: "600", color: "#0c6c75" },
+  actionLinkDisabled: { opacity: 0.5 },
   actionDivider: { fontSize: 11.5, color: COLORS.grayBorder },
   removeLink: { color: COLORS.error },
 });
