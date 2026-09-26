@@ -157,14 +157,25 @@ module.exports = {
         // shown before any JS loads - and without this block it falls back
         // to the app's raw adaptiveIcon (the full round mascot artwork)
         // blown up on a plain background, completely unstyled and jarring
-        // against the branded splash that follows a beat later. Explicitly
-        // pointing Android at the same logo_cropped.png/colors as above
-        // makes that forced native frame match the branded splash exactly,
-        // so the two blend into what reads as one continuous splash
-        // instead of two visibly different screens flashing in sequence.
+        // against the branded splash that follows a beat later.
+        //
+        // Bug fix: this used to point at the same wide logo_cropped.png as
+        // the JS splash above ("so the two frames match exactly"), but that
+        // reasoning missed that Android 12+'s native SplashScreen API
+        // renders this image inside a fixed circular icon window (~240dp,
+        // the same mask shape adaptive icons use) - a wide rectangular logo
+        // with text ("BookMyDarzi") gets clipped by that circular mask
+        // regardless of resizeMode/imageWidth, which only govern the later
+        // JS-driven splash (app/splash.tsx), not this native frame. That's
+        // what produced the "kMyDar" cropped text seen on real devices.
+        // android-icon-foreground.png is the adaptive-icon-safe asset
+        // (square canvas, content already kept inside the safe zone for
+        // exactly this kind of circular mask) - using it here avoids the
+        // clip. The JS splash a beat later still shows the full wide logo
+        // via logo_cropped.png/imageWidth above, unaffected by this.
         android: {
-          image: "./assets/logo_cropped.png",
-          imageWidth: 260,
+          image: "./assets/images/android-icon-foreground.png",
+          imageWidth: 200,
           resizeMode: "contain",
           backgroundColor: "#ffffff",
           dark: {
