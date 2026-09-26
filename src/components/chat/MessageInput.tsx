@@ -3,6 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import React, { useRef, useState } from "react";
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { AttachmentPreview, type AttachmentUploadStatus } from "./AttachmentPreview";
+import { toLocalFileUri } from "../../utils/localFileUri";
 
 const MAX_LENGTH = 1000;
 
@@ -65,7 +66,11 @@ export function MessageInput({
     if (!onSendImage) return;
     setPendingImage({ uri, status: "uploading" });
     try {
-      await onSendImage(uri);
+      // Gallery picks can be a content:// URI on Android, which RN's
+      // FormData can't attach (see localFileUri.ts) - normalize to a real
+      // file:// path before handing off to onSendImage's upload call.
+      const localUri = await toLocalFileUri(uri);
+      await onSendImage(localUri);
       setPendingImage(null);
     } catch {
       setPendingImage({ uri, status: "failed" });

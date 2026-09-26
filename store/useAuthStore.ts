@@ -29,6 +29,40 @@ import {
 } from "../services/api";
 import { getUserMobile, mergeUserMobile } from "../src/utils/userPhone";
 import { useSessionStore } from "../src/store/useSessionStore";
+import { useChatStore } from "../src/store/useChatStore";
+import { useSupportChatStore } from "../src/store/useSupportChatStore";
+import { useSupportStore } from "../src/store/useSupportStore";
+import { useNotificationStore } from "../src/store/useNotificationStore";
+import { useAddressStore } from "../src/store/useAddressStore";
+import { useMeasurementStore } from "../src/store/useMeasurementStore";
+import { useOrderStore } from "../src/store/useOrderStore";
+import { useCustomerOrdersStore } from "../src/store/useCustomerOrdersStore";
+import { useCartStore } from "../src/store/useCartStore";
+
+/**
+ * Bug fix: every one of these stores is a plain in-memory (or, for cart,
+ * AsyncStorage-persisted) Zustand singleton scoped to the app process, not
+ * to the logged-in user. logout() used to only clear auth state (tokens,
+ * user) - it never called any of these stores' own reset()/clearCartState()
+ * methods, even though 8 of them already had a reset() built specifically
+ * for this. If a second account logs in on the same device/session without
+ * a full app restart in between (shared phones, QA/demo devices, testers
+ * switching accounts), the new user would see the previous user's chat
+ * messages, addresses, orders, measurements and notifications still sitting
+ * in memory until each screen's own fetch happened to overwrite it -
+ * reported live as "chat shows my previous chat to other users."
+ */
+function clearPerUserStores(): void {
+  useChatStore.getState().reset();
+  useSupportChatStore.getState().reset();
+  useSupportStore.getState().reset();
+  useNotificationStore.getState().reset();
+  useAddressStore.getState().reset();
+  useMeasurementStore.getState().reset();
+  useOrderStore.getState().reset();
+  useCustomerOrdersStore.getState().reset();
+  useCartStore.getState().clearCartState();
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -230,6 +264,7 @@ export const useAuthStore = create<AuthState>()(
             // ignore - local logout always proceeds
           }
           await clearTokens();
+          clearPerUserStores();
           set({
             user: null,
             accessToken: null,
@@ -241,7 +276,7 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
           if (__DEV__) {
-            console.log("[AuthStore] logout complete - tokens cleared");
+            console.log("[AuthStore] logout complete - tokens and per-user stores cleared");
           }
         } finally {
           setLoggingOut(false);
@@ -387,6 +422,7 @@ registerLogoutCallback(async () => {
   setLoggingOut(true);
   try {
     await clearTokens();
+    clearPerUserStores();
     useAuthStore.setState({
       user: null,
       accessToken: null,
@@ -399,7 +435,7 @@ registerLogoutCallback(async () => {
     });
     useSessionStore.getState().markExpired();
     if (__DEV__) {
-      console.log("[AuthStore] forced logout - session cleared");
+      console.log("[AuthStore] forced logout - session and per-user stores cleared");
     }
   } finally {
     setLoggingOut(false);
