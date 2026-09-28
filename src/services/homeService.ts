@@ -167,9 +167,16 @@ export function buildPopularFromCategories(
       });
     }
   }
-  return items
-    .sort((a, b) => (a.sub.DisplayOrder ?? 0) - (b.sub.DisplayOrder ?? 0))
-    .slice(0, 12);
+  items.sort((a, b) => (a.sub.DisplayOrder ?? 0) - (b.sub.DisplayOrder ?? 0));
+  // Bug fix: no backend "popular" curation exists (/services?popular=true
+  // isn't a real filter), so this fallback used to be a flat top-12 by
+  // DisplayOrder across every category - Custom Alterations items were
+  // routinely crowded out entirely if clothing categories sorted first.
+  // Reserve a few slots so alteration services always appear here too.
+  const alterations = items.filter((r) => r.category.Name === "Custom Alterations");
+  const others = items.filter((r) => r.category.Name !== "Custom Alterations");
+  const reserved = alterations.slice(0, 3);
+  return [...others.slice(0, 12 - reserved.length), ...reserved];
 }
 
 /** GET /home - banners, categories, offers, tailors */
