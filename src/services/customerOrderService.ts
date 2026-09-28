@@ -641,6 +641,7 @@ function mapDetailsLineItems(raw: Record<string, unknown>): OrderDetailsLineItem
         row.stitching_preferences && typeof row.stitching_preferences === "object"
           ? (row.stitching_preferences as OrderDetailsLineItem["stitching_preferences"])
           : null,
+      notes: nullableStr(row.notes),
       addons: mapLineItemAddons(row.addons),
     };
   });

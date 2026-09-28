@@ -1369,6 +1369,12 @@ export default function OrderDetailsScreen() {
                   ) : null}
                 </>
               ) : null}
+              {item.notes ? (
+                <>
+                  <RowDivider />
+                  <InfoRow label="Note for this item" value={item.notes} />
+                </>
+              ) : null}
             </AccordionSection>
           ))}
 
@@ -1512,6 +1518,12 @@ export default function OrderDetailsScreen() {
               </TouchableOpacity>
             ) : null}
           </AccordionSection>
+
+          {payload.order.customization_notes ? (
+            <AccordionSection title="Order notes">
+              <Text style={styles.orderNotesText}>{payload.order.customization_notes}</Text>
+            </AccordionSection>
+          ) : null}
 
           <AccordionSection title="Delivery address">
             <InfoRow
@@ -1714,6 +1726,11 @@ export default function OrderDetailsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F5F7FA" },
+  orderNotesText: {
+    fontSize: 13.5,
+    color: "#374151",
+    lineHeight: 20,
+  },
   // Single source of truth for vertical rhythm between sections - each section
   // no longer sets its own marginBottom, so the spacing is uniform everywhere.
   scroll: { padding: SPACING.md, paddingTop: SPACING.sm, gap: SPACING.md },
