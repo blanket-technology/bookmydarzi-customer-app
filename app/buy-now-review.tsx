@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import CodConfirmModal from "../src/components/cart/CodConfirmModal";
+import ServiceAreaModal from "../src/components/common/ServiceAreaModal";
 import { CouponSection, type AppliedOffer } from "../src/components/cart/CouponSection";
 import SlideToConfirm from "../src/components/cart/SlideToConfirm";
 import StyleReferencePicker from "../src/components/cart/StyleReferencePicker";
@@ -143,6 +144,12 @@ export default function BuyNowReviewScreen() {
   const [styleReferenceUploading, setStyleReferenceUploading] = useState(false);
   const [orderNotes, setOrderNotes] = useState<string>("");
   const [voiceNoteUrl, setVoiceNoteUrl] = useState<string | null>(null);
+  const [serviceAreaModal, setServiceAreaModal] = useState<{
+    visible: boolean;
+    message: string;
+    notifyable: boolean;
+    notifyState: "idle" | "submitting" | "done";
+  }>({ visible: false, message: "", notifyable: false, notifyState: "idle" });
 
   const handlePickStyleReference = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -439,28 +446,7 @@ export default function BuyNowReviewScreen() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
       if (/outside our current service area/i.test(message) && selectedAddress) {
-        Alert.alert("Could not place order", message, [
-          {
-            text: "I'm interested — notify me",
-            onPress: () => {
-              registerServiceAreaInterest({
-                latitude: selectedAddress.latitude ?? null,
-                longitude: selectedAddress.longitude ?? null,
-                city: selectedAddress.city ?? null,
-                pincode: selectedAddress.pincode ?? null,
-                address_text: [selectedAddress.address_line_1, selectedAddress.city]
-                  .filter(Boolean)
-                  .join(", "),
-              }).catch(() => {
-                // Best-effort - the customer already saw the "could not
-                // place order" message either way, don't chain a second
-                // error alert on top of it if this fails silently.
-              });
-              Alert.alert("Thanks!", "We'll notify you when we launch in your area.");
-            },
-          },
-          { text: "OK", style: "cancel" },
-        ]);
+        setServiceAreaModal({ visible: true, message, notifyable: true, notifyState: "idle" });
       } else if (/precise location/i.test(message) && selectedAddressId) {
         // Legacy address saved before serviceability was checked at
         // save-time (see address_service.py's create_address/
@@ -918,6 +904,36 @@ export default function BuyNowReviewScreen() {
         itemCount={1}
         onCancel={handleCodCancel}
         onConfirm={handleCodConfirm}
+      />
+
+      <ServiceAreaModal
+        visible={serviceAreaModal.visible}
+        title="Could not place order"
+        message={serviceAreaModal.message}
+        notifyState={serviceAreaModal.notifyState}
+        onNotifyMe={
+          serviceAreaModal.notifyable && selectedAddress
+            ? () => {
+                setServiceAreaModal((s) => ({ ...s, notifyState: "submitting" }));
+                registerServiceAreaInterest({
+                  latitude: selectedAddress.latitude ?? null,
+                  longitude: selectedAddress.longitude ?? null,
+                  city: selectedAddress.city ?? null,
+                  pincode: selectedAddress.pincode ?? null,
+                  address_text: [selectedAddress.address_line_1, selectedAddress.city]
+                    .filter(Boolean)
+                    .join(", "),
+                })
+                  .then(() => setServiceAreaModal((s) => ({ ...s, notifyState: "done" })))
+                  .catch(() => setServiceAreaModal((s) => ({ ...s, notifyState: "idle" })));
+              }
+            : undefined
+        }
+        onExploreServices={() => {
+          setServiceAreaModal((s) => ({ ...s, visible: false }));
+          router.replace("/(tabs)");
+        }}
+        onDismiss={() => setServiceAreaModal((s) => ({ ...s, visible: false, notifyState: "idle" }))}
       />
     </View>
   );

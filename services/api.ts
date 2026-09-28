@@ -736,12 +736,18 @@ async function _fetch<T = unknown>(
             JSON.stringify(detail, null, 2),
         );
       }
-      // Join all validation messages into a readable string
+      // Join all validation messages into a readable string. The field-name
+      // prefix only earns its keep when several different fields failed at
+      // once (e.g. a form with 2+ bad inputs) - a single-item detail array
+      // (the common case: one ValidationException(msg, field=...) raised
+      // for one business-rule rejection, like an out-of-service-area
+      // address) doesn't need "latitude: " glued onto an otherwise complete,
+      // human-written sentence.
       message = detail
         .map((e: any) => {
           const field = Array.isArray(e?.loc) ? e.loc.slice(1).join(".") : "";
           const msg = e?.msg ?? "Invalid value";
-          return field ? `${field}: ${msg}` : msg;
+          return field && detail.length > 1 ? `${field}: ${msg}` : msg;
         })
         .join("\n");
     } else {
