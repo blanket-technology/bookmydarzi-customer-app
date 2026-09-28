@@ -224,28 +224,27 @@ function GroupCard({
   // generic icon whenever any photo exists anywhere on this line.
   const imageUrl = group.tiers.find((t) => t.image_url)?.image_url ?? lineImageUrl;
   return (
-    <TouchableOpacity style={tc.card} onPress={onPress} activeOpacity={0.78}>
+    <TouchableOpacity style={gr.row} onPress={onPress} activeOpacity={0.78}>
       {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={tc.image} contentFit="cover" cachePolicy="memory-disk" transition={150} />
+        <Image source={{ uri: imageUrl }} style={gr.image} contentFit="cover" cachePolicy="memory-disk" transition={150} />
       ) : (
-        <View style={[tc.iconBox, { backgroundColor: COLORS.primaryLight }]}>
-          <Ionicons name={GROUP_ICONS[group.key]} size={26} color={COLORS.primaryDark} />
+        <View style={[gr.iconBox, { backgroundColor: COLORS.primaryLight }]}>
+          <Ionicons name={GROUP_ICONS[group.key]} size={24} color={COLORS.primaryDark} />
         </View>
       )}
-      <View style={tc.textBlock}>
-        <Text style={tc.name} numberOfLines={2}>{group.label}</Text>
-        <Text style={tc.desc}>{GROUP_DESCRIPTIONS[group.key]}</Text>
-      </View>
-      <View style={tc.footer}>
-        {cheapest != null && (
-          <Text style={[tc.price, { color: COLORS.primaryDark }]}>
-            from ₹{cheapest.toLocaleString("en-IN")}
-          </Text>
-        )}
-        <View style={tc.pill}>
-          <Text style={tc.pillText}>{group.tiers.length} opts</Text>
+      <View style={gr.body}>
+        <Text style={gr.name} numberOfLines={1}>{group.label}</Text>
+        <Text style={gr.desc} numberOfLines={2}>{GROUP_DESCRIPTIONS[group.key]}</Text>
+        <View style={gr.footer}>
+          {cheapest != null && (
+            <Text style={gr.price}>from ₹{cheapest.toLocaleString("en-IN")}</Text>
+          )}
+          <View style={gr.pill}>
+            <Text style={gr.pillText}>{group.tiers.length} opts</Text>
+          </View>
         </View>
       </View>
+      <Ionicons name="chevron-forward" size={20} color={COLORS.gray} />
     </TouchableOpacity>
   );
 }
@@ -730,11 +729,14 @@ export default function SubServicesScreen() {
             </View>
 
             {showAlterationGroups ? (
-              <View style={rp.grid}>
+              // List of side-by-side rows (image left, text right) instead
+              // of a tile grid - matches alteration-group.tsx's tier-list
+              // style, per explicit request, since Repair/Resize/Restyle
+              // group cards read better as a scannable list than as tiles.
+              <View style={rp.list}>
                 {alterationGroups.map((group, idx) => (
                   <Animated.View
                     key={group.key}
-                    style={[rp.gridItem, { width: gridItemWidthPct }]}
                     entering={FadeInRight.delay(idx * 50).duration(180)}
                   >
                     <GroupCard
@@ -1023,6 +1025,45 @@ const rp = StyleSheet.create({
   // width set inline per-render now (gridItemWidthPct - 2/3/4 columns
   // depending on the right panel's actual available width, not always 2).
   gridItem: {},
+  list: { gap: SPACING.md },
+});
+
+// ─── Alteration group row (Repair/Resize/Restyle) ─────────────────────────────
+// Same side-by-side row shape as alteration-group.tsx's tierCard/stitching-
+// type.tsx's optionCard, so this selection step looks consistent with the
+// next one instead of a tile grid.
+const gr = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(12, 108, 117, 0.12)",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#0c6c75",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+      },
+      android: { elevation: 3 },
+    }),
+  },
+  image: { width: 52, height: 52, borderRadius: RADIUS.lg, backgroundColor: COLORS.grayLight },
+  iconBox: {
+    width: 52, height: 52, borderRadius: RADIUS.lg,
+    alignItems: "center", justifyContent: "center",
+  },
+  body: { flex: 1, minWidth: 0 },
+  name: { fontSize: 16, fontWeight: "800", color: COLORS.black, marginBottom: 4 },
+  desc: { fontSize: 12, color: COLORS.gray, lineHeight: 16, marginBottom: 8 },
+  footer: { flexDirection: "row", alignItems: "center", gap: 8 },
+  price: { fontSize: 15, fontWeight: "800", color: COLORS.primaryDark },
+  pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.full, backgroundColor: COLORS.grayLight },
+  pillText: { fontSize: 11, fontWeight: "600", color: COLORS.gray },
 });
 
 const sk = StyleSheet.create({
