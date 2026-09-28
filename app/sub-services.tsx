@@ -37,10 +37,9 @@ import type {
     CatalogServiceLine,
     CatalogStitchingType,
 } from "../src/types/catalogApi";
+import { useResponsiveLayout } from "../src/hooks/useResponsiveLayout";
 import { safeRouterPush } from "../src/utils/safeNavigation";
 import { useAuthStore } from "../store/useAuthStore";
-
-const SIDEBAR_W = 112;
 
 // ─── Fallback descriptions ─────────────────────────────────────────────────────
 
@@ -407,6 +406,24 @@ function DirectPanel({
 
 export default function SubServicesScreen() {
   const insets = useSafeAreaInsets();
+  const { screenWidth, isTablet } = useResponsiveLayout();
+  // Bug fix: the sidebar was a hardcoded 112px regardless of screen size.
+  // On a small phone (~320-360px) that squeezed the right content panel
+  // into ~200-240px, cramming the 2-column TypeCard grid's price/pill row
+  // into columns too narrow for their own content. On a tablet, 112px
+  // read as disproportionately narrow next to a much wider right panel.
+  // Clamped so it stays usable at both ends instead of a single fixed value.
+  const sidebarWidth = Math.round(
+    Math.min(160, Math.max(96, screenWidth * (isTablet ? 0.18 : 0.28))),
+  );
+  // The right panel's 2-column grid (rp.grid/gridItem below) has the same
+  // "always 2 columns regardless of available width" problem - a tablet's
+  // much wider right panel (screenWidth - sidebarWidth) has room for 3-4
+  // columns without cards shrinking below a sane minimum; a small phone
+  // stays at 2 (any fewer would waste the panel's width on oversized cards).
+  const rightPanelWidth = screenWidth - sidebarWidth;
+  const gridColumns = isTablet && rightPanelWidth > 700 ? 4 : isTablet && rightPanelWidth > 500 ? 3 : 2;
+  const gridItemWidthPct = `${100 / gridColumns - 2}%` as const;
   const router = useRouter();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const {
@@ -717,7 +734,7 @@ export default function SubServicesScreen() {
                 {alterationGroups.map((group, idx) => (
                   <Animated.View
                     key={group.key}
-                    style={rp.gridItem}
+                    style={[rp.gridItem, { width: gridItemWidthPct }]}
                     entering={FadeInRight.delay(idx * 50).duration(180)}
                   >
                     <GroupCard
@@ -737,7 +754,7 @@ export default function SubServicesScreen() {
                 {stitchGroups.map((group, idx) => (
                   <Animated.View
                     key={group.baseName}
-                    style={rp.gridItem}
+                    style={[rp.gridItem, { width: gridItemWidthPct }]}
                     entering={FadeInRight.delay(idx * 50).duration(180)}
                   >
                     <TypeCard group={group} onPress={() => navigateToDetail(group)} />
@@ -811,7 +828,7 @@ export default function SubServicesScreen() {
         ) : (
           <>
             {/* Left sidebar */}
-            <View style={scr.sidebar}>
+            <View style={[scr.sidebar, { width: sidebarWidth }]}>
               {loading
                 ? [0, 1, 2, 3, 4, 5].map((i) => (
                     <View key={i} style={sk.item}>
@@ -875,7 +892,8 @@ const scr = StyleSheet.create({
   headerIcon: { width: 28, height: 28, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 16, fontWeight: "700", color: COLORS.black, letterSpacing: -0.2 },
   body: { flex: 1, flexDirection: "row" },
-  sidebar: { width: SIDEBAR_W, backgroundColor: COLORS.white },
+  // width set inline per-render now (see sidebarWidth in the component body).
+  sidebar: { backgroundColor: COLORS.white },
   sideDivider: { width: StyleSheet.hairlineWidth, backgroundColor: COLORS.grayBorder },
   rightPanel: { flex: 1, backgroundColor: COLORS.offWhite },
   fullEmpty: {
@@ -1002,7 +1020,9 @@ const rp = StyleSheet.create({
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 48, gap: 8 },
   emptyText: { fontSize: 13, color: COLORS.gray, textAlign: "center" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  gridItem: { width: "47.5%" },
+  // width set inline per-render now (gridItemWidthPct - 2/3/4 columns
+  // depending on the right panel's actual available width, not always 2).
+  gridItem: {},
 });
 
 const sk = StyleSheet.create({
