@@ -883,7 +883,14 @@ export default function BuyNowReviewScreen() {
 
       <CodConfirmModal
         visible={codModalVisible}
-        amountDisplay={billing?.total_amount_display ?? ""}
+        // Bug fix: this always showed the pre-discount billing.total_amount_
+        // display, even when a coupon was applied - the Bill Details total
+        // (a few lines up) correctly falls back to the discount-aware
+        // displayTotalText once estimatedDiscount > 0, but this modal was
+        // missed when that pattern was added, so a customer could see e.g.
+        // "Total ₹447" on the bill but "Amount to pay in cash ₹547" on the
+        // very next screen for the same order.
+        amountDisplay={estimatedDiscount > 0 ? displayTotalText : (billing?.total_amount_display ?? "")}
         itemCount={1}
         onCancel={handleCodCancel}
         onConfirm={handleCodConfirm}
