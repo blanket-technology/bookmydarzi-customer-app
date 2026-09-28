@@ -86,6 +86,10 @@ interface CartState {
   pickupType: "instant" | "scheduled";
   /** Service Details → Address booking path */
   bookingFlowActive: boolean;
+  /** Timestamp (Date.now()) of the last time a pending-booking field was
+   * set - used only to detect and clear a stale persisted booking on
+   * rehydration (see onRehydrateStorage below); never read by any screen. */
+  pendingSavedAt: number | null;
 
   /** True when the user tapped "Order Now" (quantity=1 direct flow, bypasses cart) */
   buyNowMode: boolean;
@@ -177,6 +181,7 @@ export const useCartStore = create<CartState>()(
       checkoutFlow: false,
       pickupType: "instant",
       bookingFlowActive: false,
+      pendingSavedAt: null,
       buyNowMode: false,
       appliedOfferId: null,
       appliedOfferDiscountType: "percentage",
@@ -419,13 +424,13 @@ export const useCartStore = create<CartState>()(
         }
       },
 
-      setBuyNowMode: (v) => set({ buyNowMode: v }),
+      setBuyNowMode: (v) => set({ buyNowMode: v, pendingSavedAt: v ? Date.now() : get().pendingSavedAt }),
       clearBuyNowMode: () => set({ buyNowMode: false }),
 
-      setPendingService: (item) => set({ pendingService: item }),
+      setPendingService: (item) => set({ pendingService: item, pendingSavedAt: Date.now() }),
       clearPendingService: () => set({ pendingService: null }),
       setPendingRoute: (route, params = {}) =>
-        set({ pendingRoute: route, pendingRouteParams: params }),
+        set({ pendingRoute: route, pendingRouteParams: params, pendingSavedAt: Date.now() }),
       clearPendingRoute: () =>
         set({ pendingRoute: null, pendingRouteParams: null }),
       setAddressId: (id) => set({ selectedAddressId: id }),
@@ -442,14 +447,57 @@ export const useCartStore = create<CartState>()(
           pickupType: "instant",
           bookingFlowActive: false,
           buyNowMode: false,
+          pendingSavedAt: null,
         }),
     }),
     {
       name: "cart-storage",
       storage: createJSONStorage(() => AsyncStorage),
+      // Bug fix: only cartId used to be persisted here - every Book Now
+      // field (pendingService, pendingRoute, bookingFlowActive, buyNowMode,
+      // selectedAddressId) was memory-only, so it silently vanished on any
+      // app reload/kill - most commonly during the unauthenticated-user
+      // login detour (service-details.tsx sets these before redirecting to
+      // /(auth)/login, then resumes the booking after auth), which is
+      // exactly the kind of moment an OTP flow can background/reload the
+      // app. Persisting these fields fixes that. pendingSavedAt is a
+      // bookkeeping timestamp (not read by any screen) purely so
+      // onRehydrateStorage below can tell a genuinely-just-set pending
+      // booking apart from a month-old one that should never resurrect.
       partialize: (state) => ({
         cartId: state.cartId,
+        pendingService: state.pendingService,
+        pendingRoute: state.pendingRoute,
+        pendingRouteParams: state.pendingRouteParams,
+        selectedAddressId: state.selectedAddressId,
+        checkoutFlow: state.checkoutFlow,
+        pickupType: state.pickupType,
+        bookingFlowActive: state.bookingFlowActive,
+        buyNowMode: state.buyNowMode,
+        pendingSavedAt: state.pendingSavedAt,
       }),
+      // Guards against a stale pending booking resurrecting on a fresh
+      // app launch days/weeks later (e.g. the user abandoned a booking,
+      // then comes back much later for something unrelated) - anything
+      // older than 30 minutes is treated as abandoned and cleared right
+      // after rehydration, same reset shape as resetBookingFlow().
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        const savedAt = state.pendingSavedAt;
+        const isStale =
+          savedAt == null || Date.now() - savedAt > 30 * 60 * 1000;
+        if (isStale && (state.pendingService || state.bookingFlowActive || state.buyNowMode)) {
+          state.pendingService = null;
+          state.pendingRoute = null;
+          state.pendingRouteParams = null;
+          state.selectedAddressId = null;
+          state.checkoutFlow = false;
+          state.pickupType = "instant";
+          state.bookingFlowActive = false;
+          state.buyNowMode = false;
+          state.pendingSavedAt = null;
+        }
+      },
     },
   ),
 );

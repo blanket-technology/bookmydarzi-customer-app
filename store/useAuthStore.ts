@@ -62,6 +62,13 @@ function clearPerUserStores(): void {
   useOrderStore.getState().reset();
   useCustomerOrdersStore.getState().reset();
   useCartStore.getState().clearCartState();
+  // Book Now's pendingService/pendingRoute/etc. are now persisted
+  // (useCartStore.ts) precisely so they survive a reload mid-login - but
+  // that same persistence means they'd otherwise also survive a genuine
+  // logout, letting the next account on this device pick up wherever a
+  // previous customer's in-progress booking left off. clearCartState()
+  // only resets the cart-server-state fields, not these.
+  useCartStore.getState().resetBookingFlow();
 }
 
 // ---------------------------------------------------------------------------
