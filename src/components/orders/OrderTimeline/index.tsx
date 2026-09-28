@@ -60,6 +60,20 @@ const OrderTimeline = memo(({ orderId, payload, onLoaded }: OrderTimelineProps) 
   // stays mounted for the tracking view's lifetime.
   const trackedStatusesRef = useRef<Set<string>>(new Set());
 
+  // Bug fix: fetchOrderTrackingPayload's promise could resolve/reject after
+  // this component unmounted (e.g. the user navigated away while a slow or
+  // failing request - such as the tracking 500 - was still in flight),
+  // triggering "Can't perform a React state update on a component that
+  // hasn't mounted yet" from the setError/setData calls below. Guarded
+  // with a mounted ref, same pattern used elsewhere in this app.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const load = useCallback(async () => {
     if (!Number.isFinite(orderId) || orderId <= 0) {
       setError("Invalid order.");
@@ -70,16 +84,18 @@ const OrderTimeline = memo(({ orderId, payload, onLoaded }: OrderTimelineProps) 
     setError(null);
     try {
       const result = await fetchOrderTrackingPayload(orderId);
+      if (!isMountedRef.current) return;
       setData(result);
       onLoaded?.(result);
     } catch (e) {
+      if (!isMountedRef.current) return;
       setError(
         e instanceof Error && e.message
           ? e.message
           : "Couldn't load tracking. Pull to retry.",
       );
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   }, [orderId, onLoaded]);
 
