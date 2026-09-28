@@ -1,4 +1,4 @@
-import { Directory, File, Paths } from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 
 /**
  * expo-image-picker's launchImageLibraryAsync can return a content:// URI
@@ -13,16 +13,25 @@ import { Directory, File, Paths } from "expo-file-system";
  *
  * Fix: copy the picked asset into the app's own cache directory first -
  * this always yields a real file:// path FormData can attach regardless of
- * what the picker originally returned. Call this on every URI from
- * launchImageLibraryAsync before building a multipart upload; camera-only
- * URIs can skip it (the file:// check below makes it a no-op either way).
+ * what the picker originally returned.
+ *
+ * Bug fix (v2): the first version of this fix used expo-file-system's new
+ * File/Directory class API (`new File(uri).copy(...)`), but that
+ * constructor is documented to accept only file:/// URIs - passed a
+ * content:// URI (exactly the case this function exists to handle), it
+ * silently failed to produce a usable copy, so the original
+ * "Unsupported FormDataPart implementation" crash kept happening even
+ * after this fix landed. Switched to the older expo-file-system/legacy
+ * copyAsync(), whose `from` param is explicitly documented to accept a
+ * content:// / SAF URI - already proven to work in this codebase
+ * (invoiceService.ts uses this same legacy import for its own file
+ * handling).
  */
 export async function toLocalFileUri(uri: string): Promise<string> {
   if (uri.startsWith("file://")) return uri;
 
   const extension = uri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
-  const source = new File(uri);
-  const destination = new File(new Directory(Paths.cache), `upload-${Date.now()}.${extension}`);
-  await source.copy(destination);
-  return destination.uri;
+  const destination = `${FileSystem.cacheDirectory ?? ""}upload-${Date.now()}.${extension}`;
+  await FileSystem.copyAsync({ from: uri, to: destination });
+  return destination;
 }
