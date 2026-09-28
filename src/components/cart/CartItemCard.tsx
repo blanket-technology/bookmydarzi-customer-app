@@ -179,9 +179,19 @@ export default function CartItemCard({
           </TouchableOpacity>
           <Text style={styles.qtyValue}>{item.quantity}</Text>
           <TouchableOpacity
-            style={styles.qtyBtn} onPress={onIncrease} disabled={mutating}
+            style={styles.qtyBtn}
+            onPress={onIncrease}
+            // Capped at 5 (matches the backend's own cap) - without this,
+            // tapping "+" past the cap silently did nothing (the request
+            // was rejected and swallowed), with zero feedback to the
+            // customer about why the button stopped responding.
+            disabled={mutating || item.quantity >= 5}
             hitSlop={7} accessibilityLabel="Increase quantity">
-            <Ionicons name="add" size={15} color={COLORS.primaryDark} />
+            <Ionicons
+              name="add"
+              size={15}
+              color={item.quantity >= 5 ? COLORS.grayBorder : COLORS.primaryDark}
+            />
           </TouchableOpacity>
         </View>
       </View>

@@ -170,17 +170,22 @@ export default function ServiceDetailsScreen() {
 
   const { t } = useAppLanguage();
 
+  // Capped at 5 (was 99) - matches the backend's own cap (cart.py schema),
+  // and a doorstep-tailoring order this large per line item is almost
+  // always a mistake, not a genuine home-customer order.
+  const MAX_QUANTITY = 5;
+
   const getQuantityForStitching = useCallback(
     (stitchingId: number) => {
       const qty = quantitiesByStitching[stitchingId] ?? 1;
-      return Math.min(99, Math.max(1, qty));
+      return Math.min(MAX_QUANTITY, Math.max(1, qty));
     },
     [quantitiesByStitching],
   );
 
   const updateStitchingQuantity = useCallback(
     (stitchingId: number, next: number) => {
-      const clamped = Math.min(99, Math.max(1, next));
+      const clamped = Math.min(MAX_QUANTITY, Math.max(1, next));
       setQuantitiesByStitching((prev) => ({
         ...prev,
         [stitchingId]: clamped,
