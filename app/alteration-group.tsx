@@ -32,6 +32,7 @@ import type { CatalogStitchingType } from "../src/types/catalogApi";
 import { safeRouterPush } from "../src/utils/safeNavigation";
 import { normalizeServiceImageUrl } from "../src/utils/serviceImage";
 import { fallbackTierDescription } from "../src/services/fallbackDescription";
+import { useResponsiveLayout } from "../src/hooks/useResponsiveLayout";
 
 const GROUP_ICONS: Record<AlterationGroupKey, keyof typeof Ionicons.glyphMap> = {
   repair: "hammer-outline",
@@ -49,6 +50,14 @@ const GROUP_LABELS: Record<AlterationGroupKey, string> = {
 
 export default function AlterationGroupScreen() {
   const insets = useSafeAreaInsets();
+  const { screenWidth, isTablet } = useResponsiveLayout();
+  // Per explicit request: this tier-selection screen ("2 options
+  // available") now uses the same side-by-side tile grid as the
+  // Repair/Resize/Restyle group screen it follows (sub-services.tsx's
+  // GroupCard), instead of a single-column row list - responsive same
+  // way, 2/3/4 columns depending on available width.
+  const gridColumns = isTablet && screenWidth > 900 ? 4 : isTablet && screenWidth > 650 ? 3 : 2;
+  const gridItemWidthPct = `${100 / gridColumns - 2}%` as const;
   const router = useRouter();
   const params = useLocalSearchParams<{
     catalogCategoryId: string;
@@ -211,11 +220,15 @@ export default function AlterationGroupScreen() {
                   <Text style={styles.emptyText}>No options available in this group yet.</Text>
                 </View>
               ) : (
-                <View style={styles.list}>
+                <View style={styles.grid}>
                   {tiers.map((tier, idx) => {
                     const tierImage = normalizeServiceImageUrl(tier.image_url) ?? heroImage;
                     return (
-                    <Animated.View key={tier.service_id} entering={FadeInDown.delay(idx * 40).duration(220)}>
+                    <Animated.View
+                      key={tier.service_id}
+                      style={[styles.gridItem, { width: gridItemWidthPct }]}
+                      entering={FadeInDown.delay(idx * 40).duration(220)}
+                    >
                       <TouchableOpacity
                         style={styles.tierCard}
                         onPress={() => navigateToDetail(tier)}
@@ -224,26 +237,27 @@ export default function AlterationGroupScreen() {
                         {tierImage ? (
                           <Image
                             source={{ uri: tierImage }}
-                            style={styles.tierImage}
+                            style={styles.tierCardImage}
                             contentFit="cover"
                             cachePolicy="memory-disk"
                             transition={150}
                           />
                         ) : (
-                          <View style={styles.tierImageFallback}>
-                            <Ionicons name="cut-outline" size={24} color={COLORS.primaryDark} />
+                          <View style={styles.tierCardImageFallback}>
+                            <Ionicons name="cut-outline" size={26} color={COLORS.primaryDark} />
                           </View>
                         )}
 
-                        <View style={styles.tierBody}>
-                          <Text style={styles.tierName}>{stripQualityPrefix(tier.name)}</Text>
-                          <Text style={styles.tierDesc}>
+                        <View style={styles.tierCardBody}>
+                          <Text style={styles.tierCardName} numberOfLines={2}>
+                            {stripQualityPrefix(tier.name)}
+                          </Text>
+                          <Text style={styles.tierCardDesc}>
                             {tier.estimated_delivery_days} day{tier.estimated_delivery_days === 1 ? "" : "s"} turnaround
                           </Text>
-                          <Text style={styles.tierPrice}>₹{tier.base_price.toLocaleString("en-IN")}</Text>
                         </View>
 
-                        <Ionicons name="chevron-forward" size={20} color={COLORS.gray} />
+                        <Text style={styles.tierCardPrice}>₹{tier.base_price.toLocaleString("en-IN")}</Text>
                       </TouchableOpacity>
                     </Animated.View>
                   );})}
@@ -326,41 +340,33 @@ const styles = StyleSheet.create({
   skeleton: { height: 84, borderRadius: RADIUS.lg, backgroundColor: COLORS.grayLight },
   empty: { alignItems: "center", justifyContent: "center", paddingVertical: 48, gap: 10 },
   emptyText: { fontSize: 13, color: COLORS.gray, textAlign: "center" },
-  // Matches stitching-type.tsx's optionCard/optionIcon/optionBody/
-  // optionTitle/optionDesc/optionPrice exactly, so the "pick a bookable
-  // tier" screen looks the same whether it got here via a Custom
-  // Alterations Repair/Resize/Restyle group or via a normal Men's/Women's/
-  // Kids service line's Normal/Designer choice - previously this screen
-  // used a visually different image-left/price-top-right/small-pill layout
-  // that read as a different, less-finished screen for no real reason.
-  list: { gap: SPACING.md },
+  // Side-by-side tile grid, matching sub-services.tsx's GroupCard/TypeCard
+  // shape, per explicit request - this "pick a bookable tier" screen now
+  // looks like the Repair/Resize/Restyle group screen it follows, not a
+  // single-column row list. Responsive: 2/3/4 columns depending on screen
+  // width (see gridItemWidthPct in the component body).
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  gridItem: {},
   tierCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
+    flex: 1,
     backgroundColor: COLORS.white,
-    borderRadius: RADIUS.xl,
-    padding: SPACING.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(12, 108, 117, 0.12)",
+    borderRadius: RADIUS.lg,
+    padding: 14,
+    alignItems: "flex-start",
+    gap: 10,
     ...Platform.select({
-      ios: {
-        shadowColor: "#0c6c75",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-      },
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8 },
       android: { elevation: 3 },
     }),
   },
-  tierImage: { width: 52, height: 52, borderRadius: RADIUS.lg, backgroundColor: COLORS.grayLight },
-  tierImageFallback: {
-    width: 52, height: 52, borderRadius: RADIUS.lg,
+  tierCardImage: { width: "100%", height: 90, borderRadius: RADIUS.md, backgroundColor: COLORS.grayLight },
+  tierCardImageFallback: {
+    width: "100%", height: 90, borderRadius: RADIUS.md,
     backgroundColor: COLORS.primaryLight,
     alignItems: "center", justifyContent: "center",
   },
-  tierBody: { flex: 1, minWidth: 0 },
-  tierName: { fontSize: 16, fontWeight: "800", color: COLORS.black, marginBottom: 4 },
-  tierDesc: { fontSize: 12, color: COLORS.gray, lineHeight: 16, marginBottom: 8 },
-  tierPrice: { fontSize: 15, fontWeight: "800", color: COLORS.primaryDark },
+  tierCardBody: { gap: 4, width: "100%" },
+  tierCardName: { fontSize: 13, fontWeight: "700", color: COLORS.black, lineHeight: 18 },
+  tierCardDesc: { fontSize: 11, color: COLORS.gray, lineHeight: 15 },
+  tierCardPrice: { fontSize: 12, fontWeight: "800", color: COLORS.primaryDark },
 });
