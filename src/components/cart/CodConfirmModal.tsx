@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
@@ -64,7 +64,7 @@ export default function CodConfirmModal({
 
           <Text style={styles.title}>Confirm Cash on Delivery</Text>
           <Text style={styles.subtitle}>
-            {itemCount} service{itemCount === 1 ? "" : "s"} · pay when your order arrives
+        {itemCount === 1 ? "" : "s"} · Pay when your Order Arrives
           </Text>
 
           <View style={styles.amountCard}>
