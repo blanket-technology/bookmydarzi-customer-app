@@ -104,7 +104,7 @@ export default function BuyNowReviewScreen() {
     addressId?: string;
   }>();
 
-  const { pendingService, clearPendingService, clearBuyNowMode } = useCartStore();
+  const { pendingService, resetBookingFlow } = useCartStore();
   const { addresses, fetchAddresses, loading: addrLoading } = useAddressStore();
   const { user } = useAuthStore();
   const serviceImageUri = useMemo(
@@ -356,8 +356,11 @@ export default function BuyNowReviewScreen() {
         final_amount: result.finalAmount,
       });
 
-      clearPendingService();
-      clearBuyNowMode();
+      // Full reset (not just clearPendingService/clearBuyNowMode) now that
+      // these Book Now fields are persisted (useCartStore.ts) - a
+      // successful order is exactly the "done, nothing pending" condition
+      // resetBookingFlow was built for but never actually wired up to.
+      resetBookingFlow();
       useOrderStore.getState().invalidateCache();
       useCustomerOrdersStore.getState().invalidateCache();
 
@@ -449,7 +452,7 @@ export default function BuyNowReviewScreen() {
     pendingService, selectedAddressId, billing, appliedOffer,
     pickupType, scheduledDate, scheduledSlot, pickupTimeSlots, paymentMethod,
     orderNotes, styleReferenceUri, voiceNoteUrl,
-    clearPendingService, clearBuyNowMode, user, router,
+    resetBookingFlow, user, router,
   ]);
 
   const handlePlaceOrder = useCallback(() => {
