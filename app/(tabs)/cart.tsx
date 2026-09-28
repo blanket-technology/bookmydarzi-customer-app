@@ -1034,7 +1034,11 @@ export default function CartScreen() {
 
       <CodConfirmModal
         visible={codModalVisible}
-        amountDisplay={billing.totalAmountDisplay}
+        // Bug fix: this always showed the pre-discount billing.totalAmount
+        // Display, even with a coupon applied - the bill rows above already
+        // correctly use displayTotal (which subtracts the applied discount)
+        // in the same scenario, this modal was just missed.
+        amountDisplay={displayTotal}
         itemCount={itemCount}
         onCancel={handleCodCancel}
         onConfirm={handleCodConfirm}
