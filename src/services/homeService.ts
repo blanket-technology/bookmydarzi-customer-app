@@ -158,6 +158,15 @@ export function buildPopularFromCategories(
 ): PopularServiceRow[] {
   const items: PopularServiceRow[] = [];
   for (const cat of categories) {
+    // Popular Services is now Custom Alterations only, by explicit
+    // request - previously this mixed every category together (with a
+    // few reserved slots for alterations so they weren't crowded out
+    // entirely), but the homepage's Popular Services block is meant to be
+    // a dedicated, direct-to-booking shortcut for alteration services
+    // specifically, not a general "top 12 across everything" grab bag.
+    // Routing already goes straight to /service-details (no intermediate
+    // screen) via navigateToServiceDetails - only the filtering changes here.
+    if (cat.Name !== "Custom Alterations") continue;
     for (const sub of cat.SubCategories ?? []) {
       if (!sub.Name?.trim()) continue;
       items.push({
@@ -168,15 +177,7 @@ export function buildPopularFromCategories(
     }
   }
   items.sort((a, b) => (a.sub.DisplayOrder ?? 0) - (b.sub.DisplayOrder ?? 0));
-  // Bug fix: no backend "popular" curation exists (/services?popular=true
-  // isn't a real filter), so this fallback used to be a flat top-12 by
-  // DisplayOrder across every category - Custom Alterations items were
-  // routinely crowded out entirely if clothing categories sorted first.
-  // Reserve a few slots so alteration services always appear here too.
-  const alterations = items.filter((r) => r.category.Name === "Custom Alterations");
-  const others = items.filter((r) => r.category.Name !== "Custom Alterations");
-  const reserved = alterations.slice(0, 3);
-  return [...others.slice(0, 12 - reserved.length), ...reserved];
+  return items.slice(0, 12);
 }
 
 /** GET /home - banners, categories, offers, tailors */
@@ -194,6 +195,15 @@ export async function fetchHomeData(): Promise<HomeApiResponse> {
 /**
  * GET /services?popular=true (fallback: /services?limit=12)
  * Dedicated popular services feed for the Home screen.
+ *
+ * Bug fix: the backend has no real "popular" curation behind ?popular=true
+ * (confirmed: it isn't a real filter, just returns the same catalog list
+ * as ?limit=12) - so this always returned a plain top-N across every
+ * category, unfiltered. Popular Services is Custom Alterations only now,
+ * by explicit request, so filter here too - otherwise this API result
+ * would win over useHomeStore's categories-derived fallback (which IS
+ * correctly filtered, see buildPopularFromCategories) since it's tried
+ * first and almost never comes back empty.
  */
 export async function fetchPopularServicesForHome(): Promise<PopularServiceRow[]> {
   let res = await request<unknown>("/services?popular=true", { skipAuth: true });
@@ -207,6 +217,7 @@ export async function fetchPopularServicesForHome(): Promise<PopularServiceRow[]
   return items
     .map((item) => mapServiceItemToPopularRow(item))
     .filter((row): row is PopularServiceRow => row != null)
+    .filter((row) => row.category.Name === "Custom Alterations")
     .sort((a, b) => (a.sub.DisplayOrder ?? 0) - (b.sub.DisplayOrder ?? 0))
     .slice(0, 12);
 }
