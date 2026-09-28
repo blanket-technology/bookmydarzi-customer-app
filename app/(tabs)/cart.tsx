@@ -11,8 +11,8 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter, useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -29,7 +29,6 @@ import {
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
-import { formatCurrency } from "../../src/utils/formatters";
 import CartItemCard from "../../src/components/cart/CartItemCard";
 import CodConfirmModal from "../../src/components/cart/CodConfirmModal";
 import { CouponCodeInput } from "../../src/components/cart/CouponCodeInput";
@@ -52,8 +51,9 @@ import {
   executeCheckoutFromCart,
   resolveCheckoutAddressId,
 } from "../../src/utils/checkoutNavigation";
-import { buildPickupTimeSlots } from "../../src/utils/pickupTimeSlots";
 import { estimateCouponDiscount } from "../../src/utils/couponDiscount";
+import { formatCurrency } from "../../src/utils/formatters";
+import { buildPickupTimeSlots } from "../../src/utils/pickupTimeSlots";
 
 // ─── Scheduled-pickup helpers ─────────────────────────────────────────────────
 

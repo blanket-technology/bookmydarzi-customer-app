@@ -4,77 +4,76 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    LayoutAnimation,
-    Linking,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
+  ActivityIndicator,
+  Alert,
+  LayoutAnimation,
+  Linking,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { API_BASE_URL } from "../src/config/api";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
-import { CancelOrderSection } from "../src/components/orders/CancelOrderSection";
-import { RescheduleOrderSection } from "../src/components/orders/RescheduleOrderSection";
-import OrderScreenSection from "../src/components/orders/OrderScreenSection";
-import OrderStatusModal, {
-    type OrderCelebrationKind,
-} from "../src/components/orders/OrderStatusModal";
-import OrderTimeline from "../src/components/orders/OrderTimeline";
-import OrderDetailsSkeleton from "../src/components/skeletons/OrderDetailsSkeleton";
 import ErrorState from "../src/components/common/ErrorState";
 import ScreenHeader from "../src/components/common/ScreenHeader";
+import { CancelOrderSection } from "../src/components/orders/CancelOrderSection";
+import OrderScreenSection from "../src/components/orders/OrderScreenSection";
+import OrderStatusModal, {
+  type OrderCelebrationKind,
+} from "../src/components/orders/OrderStatusModal";
+import OrderTimeline from "../src/components/orders/OrderTimeline";
 import ProgressGallery from "../src/components/orders/ProgressGallery";
+import { RescheduleOrderSection } from "../src/components/orders/RescheduleOrderSection";
+import OrderDetailsSkeleton from "../src/components/skeletons/OrderDetailsSkeleton";
+import { API_BASE_URL } from "../src/config/api";
 import {
-    CUSTOMER_CANCELLABLE_STATUSES,
-    PHOTO_VISIBLE_STAGES,
-    normalizeOrderStatus,
-    type OrderStatus,
+  CUSTOMER_CANCELLABLE_STATUSES,
+  PHOTO_VISIBLE_STAGES,
+  normalizeOrderStatus,
+  type OrderStatus,
 } from "../src/constants/orderStatus";
 import {
-    fetchCustomerOrderDetails,
-    fetchOrderRating,
-    submitOrderRating,
+  fetchCustomerOrderDetails,
+  fetchOrderRating,
+  submitOrderRating,
 } from "../src/services/customerOrderService";
 import { downloadAndShareInvoice } from "../src/services/invoiceService";
 import {
-    PaymentAlreadyCompletedError,
-    confirmRazorpayPayment,
-    parsePositiveId,
-    resolveBalancePaymentSessionForOrder,
+  PaymentAlreadyCompletedError,
+  confirmRazorpayPayment,
+  parsePositiveId,
+  resolveBalancePaymentSessionForOrder,
 } from "../src/services/paymentService";
 import { wsService } from "../src/services/wsService";
 import { useCustomerOrdersStore } from "../src/store/useCustomerOrdersStore";
 import type {
-    CustomerOrderDetailsPayload,
+  CustomerOrderDetailsPayload,
 } from "../src/types/customerOrders";
 import { cardShadow } from "../src/utils/cardShadow";
 import {
-    STATUS_ICON_STYLES,
-    formatCustomerOrderStatusLabel,
-    getCustomerOrderStatusTone,
-    getOrderStatusNarrative,
+  STATUS_ICON_STYLES,
+  formatCustomerOrderStatusLabel,
+  getCustomerOrderStatusTone,
+  getOrderStatusNarrative,
 } from "../src/utils/customerOrderStatus";
 import {
-    DETAILS_NA,
-    detailsDateTime,
-    detailsMeasurement,
-    detailsMoney,
-    detailsText,
-    getDetailsStatusHeadline,
+  DETAILS_NA,
+  detailsMeasurement,
+  detailsMoney,
+  detailsText,
+  getDetailsStatusHeadline
 } from "../src/utils/orderDetailsDisplay";
 import {
-    PaymentCancelledError,
-    openRazorpayCheckout,
+  PaymentCancelledError,
+  openRazorpayCheckout,
 } from "../src/utils/razorpayCheckout";
 import { normalizeServiceImageUrl } from "../src/utils/serviceImage";
 import { useAuthStore } from "../store/useAuthStore";
@@ -1217,7 +1216,7 @@ export default function OrderDetailsScreen() {
                 </>
               ) : null}
               <InfoRow
-                label="Base price"
+                label="Service Price"
                 // item.unit_price is base + this item's own addons combined
                 // (backend: unit_price = base + selected addons) - showing
                 // it raw here read as "Base price ₹228" with the addon rows

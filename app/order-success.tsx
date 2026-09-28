@@ -7,12 +7,11 @@
  *   short stagger. All native-driver transforms/opacity - no layout thrash.
  */
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -22,6 +21,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import { useHardwareBackHandler } from "../src/hooks/useHardwareBackHandler";
 import { PAYMENT_METHOD_META } from "../src/types/payment";
@@ -169,7 +169,7 @@ export default function OrderSuccessScreen() {
         <Animated.Text style={[styles.title, titleStyle]}>Order Confirmed</Animated.Text>
         <Animated.Text style={[styles.subtitle, subtitleStyle]}>
           {isCod
-            ? "Your order has been placed. Pay in cash when it's delivered."
+            ? "Your order has been placed. Please keep your garments and requirements ready for faster pickup"
             : "Your payment was successful and your order is confirmed."}
         </Animated.Text>
 
@@ -215,7 +215,7 @@ export default function OrderSuccessScreen() {
 
         <Animated.Text style={[styles.note, noteStyle]}>
           {isCod
-            ? "Our team will arrange cloth pickup shortly. Please keep the cash ready at delivery. You'll receive a notification with updates."
+            ? "Our team will arrange cloth pickup shortly. You'll receive a notification with updates."
             : "Our team will arrange cloth pickup shortly. You will receive a notification with updates."}
         </Animated.Text>
       </ScrollView>

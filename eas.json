@@ -11,7 +11,8 @@
       "env": {
         "APP_VARIANT": "development",
         "EXPO_PUBLIC_API_URL": "http://192.168.1.43:8000",
-        "EXPO_PUBLIC_RAZORPAY_KEY": "rzp_test_T89VuoTdxvTzi1"
+        "EXPO_PUBLIC_RAZORPAY_KEY": "rzp_test_T89VuoTdxvTzi1",
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
       },
       "android": {
         "buildType": "apk"
@@ -28,7 +29,8 @@
         "APP_VARIANT": "development",
         "EXPO_PUBLIC_API_URL": "https://web-production-efff7.up.railway.app",
         "EXPO_PUBLIC_RAZORPAY_KEY": "rzp_test_T89VuoTdxvTzi1",
-        "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis"
+        "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis",
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
       },
       "android": {
         "buildType": "apk"
@@ -43,7 +45,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://account-faculty-commute.ngrok-free.dev",
         "EXPO_PUBLIC_RAZORPAY_KEY": "rzp_test_T89VuoTdxvTzi1",
-        "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis"
+        "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis",
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
       },
       "android": {
         "buildType": "app-bundle"
@@ -54,7 +57,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://web-production-efff7.up.railway.app",
         "EXPO_PUBLIC_RAZORPAY_KEY": "rzp_test_T89VuoTdxvTzi1",
-        "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis"
+        "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis",
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
       },
       "android": {
         "buildType": "app-bundle"
@@ -66,7 +70,8 @@
         "EXPO_PUBLIC_API_URL": "https://web-production-efff7.up.railway.app",
         "EXPO_PUBLIC_MERCHANT_UPI_ID": "blankettechnolo974972.rzp@raxis",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
-        "SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD": "true"
+        "SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD": "true",
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
       },
       "android": {
         "buildType": "app-bundle"
