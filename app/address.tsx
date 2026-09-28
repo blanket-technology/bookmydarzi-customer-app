@@ -26,6 +26,7 @@ import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import { LocationSelectField } from "../src/components/common/LocationSelectField";
 import { MapPinPicker, type PickedLocation } from "../src/components/common/MapPinPicker";
 import ScreenHeader from "../src/components/common/ScreenHeader";
+import ServiceAreaModal from "../src/components/common/ServiceAreaModal";
 import {
     DEFAULT_CITY,
     DEFAULT_STATE,
@@ -222,6 +223,12 @@ export default function AddressScreen() {
   // "Notify me" capture for the unserviceable-area badge below - see
   // registerServiceAreaInterest.
   const [interestState, setInterestState] = useState<"idle" | "submitting" | "done">("idle");
+  const [saveErrorModal, setSaveErrorModal] = useState<{
+    visible: boolean;
+    message: string;
+    notifyable: boolean;
+    notifyState: "idle" | "submitting" | "done";
+  }>({ visible: false, message: "", notifyable: false, notifyState: "idle" });
 
   useFocusEffect(
     useCallback(() => {
@@ -682,28 +689,12 @@ export default function AddressScreen() {
         // placement does (address_service.py) - a manually-typed address
         // that's too vague to geocode, or one that geocodes outside a
         // service area, is caught right here instead of only surfacing
-        // deep in checkout.
-        Alert.alert("Could not save address", msg, [
-          {
-            text: "I'm interested — notify me",
-            onPress: () => {
-              registerServiceAreaInterest({
-                latitude: gpsCoords?.latitude ?? null,
-                longitude: gpsCoords?.longitude ?? null,
-                city: city || null,
-                pincode: pincode || null,
-                address_text: [line1, city].filter(Boolean).join(", ") || null,
-              }).catch(() => {
-                // Best-effort - the customer already saw the "could not
-                // save address" message either way.
-              });
-              Alert.alert("Thanks!", "We'll notify you when we launch in your area.");
-            },
-          },
-          { text: "OK", style: "cancel" },
-        ]);
+        // deep in checkout. Themed modal (ServiceAreaModal), not a native
+        // OS Alert - matches the rest of the app and never shows the raw
+        // backend "field: message" string.
+        setSaveErrorModal({ visible: true, message: msg, notifyable: true, notifyState: "idle" });
       } else {
-        Alert.alert("Error", msg);
+        setSaveErrorModal({ visible: true, message: msg, notifyable: false, notifyState: "idle" });
       }
     }
     return null;
@@ -1375,6 +1366,34 @@ export default function AddressScreen() {
         initialCoords={gpsCoords}
         onConfirm={handleMapConfirm}
         onClose={() => setMapPickerVisible(false)}
+      />
+
+      <ServiceAreaModal
+        visible={saveErrorModal.visible}
+        title="Could not save address"
+        message={saveErrorModal.message}
+        notifyState={saveErrorModal.notifyState}
+        onNotifyMe={
+          saveErrorModal.notifyable
+            ? () => {
+                setSaveErrorModal((s) => ({ ...s, notifyState: "submitting" }));
+                registerServiceAreaInterest({
+                  latitude: gpsCoords?.latitude ?? null,
+                  longitude: gpsCoords?.longitude ?? null,
+                  city: city || null,
+                  pincode: pincode || null,
+                  address_text: [line1, city].filter(Boolean).join(", ") || null,
+                })
+                  .then(() => setSaveErrorModal((s) => ({ ...s, notifyState: "done" })))
+                  .catch(() => setSaveErrorModal((s) => ({ ...s, notifyState: "idle" })));
+              }
+            : undefined
+        }
+        onExploreServices={() => {
+          setSaveErrorModal((s) => ({ ...s, visible: false }));
+          router.replace("/(tabs)");
+        }}
+        onDismiss={() => setSaveErrorModal((s) => ({ ...s, visible: false, notifyState: "idle" }))}
       />
     </KeyboardAvoidingView>
   );

@@ -40,6 +40,12 @@ module.exports = {
         "Allow BookMyDarzi to use your camera to capture order progress photos.",
       NSLocationWhenInUseUsageDescription:
         "BookMyDarzi uses your location to find your address for pickup and delivery, and to show nearby service availability.",
+      // Required for expo-audio's voice-note recording feature (checkout/
+      // order screens) - without this, iOS refuses the mic permission
+      // prompt outright and App Store review rejects the build for using
+      // a restricted API (microphone) with no usage-description string.
+      NSMicrophoneUsageDescription:
+        "Allow BookMyDarzi to access your microphone to record a voice note for your tailor.",
     },
     // Lets Razorpay/UPI apps (GPay, PhonePe, Paytm) return to this app via a
     // verified https link instead of only the bare darziapp:// custom scheme,
