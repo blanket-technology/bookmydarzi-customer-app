@@ -26,8 +26,23 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import * as ExpoSplashScreen from "expo-splash-screen";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants/theme";
+
+// Bug fix: nothing in this app ever called preventAutoHideAsync/hideAsync,
+// so Expo's default behavior applied - the native splash (Android 12+'s
+// own forced circular-icon-mask frame) auto-hid the instant the JS bundle
+// finished its first render, which happens BEFORE this component's fade-in
+// animation even starts. That left an uncontrolled gap: native icon frame
+// -> (auto-hides) -> blank white flash -> this screen fades in from
+// opacity 0. Preventing auto-hide and only hiding it once this component
+// has actually mounted (see the onLayout below) closes that gap - the
+// native frame now stays up until this screen is ready to take over, and
+// the logo starts at full, settled opacity/scale (no fade-from-zero) so
+// the handoff itself is invisible; the animation below is a secondary
+// flourish on an already-visible screen, not part of the transition.
+ExpoSplashScreen.preventAutoHideAsync().catch(() => {});
 
 // White canvas (matches welcome.tsx) - the logo is a full-color illustrated
 // mascot with light skin tones/gold accents, not a flat icon mark, so it
@@ -83,14 +98,46 @@ export default function SplashScreen({ onComplete }: Props) {
   const logoWidth = Math.min(Math.min(SW, SH) * 0.72, 420);
   const logoHeight = logoWidth * LOGO_ASPECT;
 
-  const logoO = useSharedValue(0);
-  const logoScale = useSharedValue(0.85);
+  // Bug fix: these used to start at 0/0.85 and fade+scale in - fine on its
+  // own, but combined with the native splash's uncontrolled auto-hide (see
+  // the module-level preventAutoHideAsync above), the very first thing a
+  // user saw on this screen was a blank gap then a fade-from-nothing,
+  // right after a completely different-looking native icon frame. Starting
+  // already fully visible/settled means the moment the native frame is
+  // hidden (in the onLayout below), this screen is already showing its
+  // final resting state - no second animation stacked on top of the
+  // handoff. The subtle scale bounce is kept, but now overshoots FROM 1
+  // rather than fading in TO 1, so it reads as a small flourish on an
+  // already-present logo, not part of the transition itself.
+  const logoO = useSharedValue(1);
+  const logoScale = useSharedValue(1);
   const footerO = useSharedValue(0);
   const rootO = useSharedValue(1);
+  const nativeSplashHidden = useRef(false);
+
+  const onRootLayout = useCallback(() => {
+    if (nativeSplashHidden.current) return;
+    nativeSplashHidden.current = true;
+    ExpoSplashScreen.hideAsync().catch(() => {});
+  }, []);
+
+  // Safety net: onLayout should fire almost immediately (this view has no
+  // async data dependency, just a require()'d local image), but if it
+  // somehow never does, preventAutoHideAsync above would otherwise leave
+  // the native splash stuck on screen forever - worse than the original
+  // bug. Forces the same hide after a short ceiling.
+  useEffect(() => {
+    const t = setTimeout(onRootLayout, 800);
+    return () => clearTimeout(t);
+  }, [onRootLayout]);
 
   useEffect(() => {
-    logoO.value = withDelay(LOGO_DELAY, withTiming(1, { duration: 480, easing: ENT }));
-    logoScale.value = withDelay(LOGO_DELAY, withSpring(1, { damping: 14, stiffness: 140 }));
+    // Tiny pre-bounce so the spring below has somewhere to spring FROM,
+    // without ever passing through a visibly "not yet arrived" state -
+    // 0.97 is close enough to 1 that it never reads as a fade-in, just a
+    // small settle.
+    logoScale.value = 0.97;
+    logoScale.value = withDelay(LOGO_DELAY, withSpring(1, { damping: 10, stiffness: 120 }));
 
     footerO.value = withDelay(FOOTER_DELAY, withTiming(1, { duration: 350, easing: ENT }));
 
@@ -113,7 +160,10 @@ export default function SplashScreen({ onComplete }: Props) {
   const rootStyle = useAnimatedStyle(() => ({ opacity: rootO.value }));
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, styles.root, rootStyle]}>
+    <Animated.View
+      style={[StyleSheet.absoluteFill, styles.root, rootStyle]}
+      onLayout={onRootLayout}
+    >
       <View style={styles.center} pointerEvents="none">
         <Animated.Image
           source={require("../assets/logo_cropped.png")}
