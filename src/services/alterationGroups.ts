@@ -17,10 +17,13 @@ const GROUP_LABELS: Record<AlterationGroupKey, string> = {
   other: "Other",
 };
 
+// Kept short enough to fit fully within GroupCard's numberOfLines={2} at its
+// actual card size (sub-services.tsx) without clipping mid-sentence - the
+// original wording ran ~90 chars and visibly truncated on most devices.
 export const GROUP_DESCRIPTIONS: Record<AlterationGroupKey, string> = {
-  repair: "Fix a tear, broken zip, worn seam, or missing button - restore the garment to working order.",
-  resize: "Adjust the fit - length, waist, shoulder, or sleeve - to match your exact measurements.",
-  restyle: "Update the look - a design change, redesign, or styling refresh on an existing garment.",
+  repair: "Fix tears, broken zips, worn seams, or missing buttons.",
+  resize: "Adjust length, waist, shoulder, or sleeve to fit you.",
+  restyle: "Refresh the look with a design change or restyling.",
   other: "Additional alteration work for this garment.",
 };
 
