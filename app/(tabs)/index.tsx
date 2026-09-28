@@ -1878,7 +1878,21 @@ export default function HomeScreen() {
                   </View>
                   <View style={styles.recentList}>
                     {recentOrders.map((item) => {
-                      const imageUrl = findServiceImageUrl(item.serviceTitle, serviceCategories);
+                      // Bug fix: this used to ONLY do a client-side name
+                      // lookup against the homepage's category tree,
+                      // discarding the backend's own already-resolved
+                      // thumbnail (order.thumbnail, from
+                      // _primary_thumbnail's subcategory -> line ->
+                      // category fallback chain) entirely. That lookup is
+                      // fragile - it only works if serviceTitle happens to
+                      // string-match a name in serviceCategories - so any
+                      // alteration/repair leaf whose name doesn't appear
+                      // verbatim in that tree fell back to a generic icon
+                      // even though the order genuinely has a real photo.
+                      // Prefer the backend's own resolved thumbnail; only
+                      // fall back to the name lookup if it's missing.
+                      const imageUrl =
+                        item.thumbnail ?? findServiceImageUrl(item.serviceTitle, serviceCategories);
                       const categoryStyle = getCategoryStyle(
                         item.serviceSubtitle !== ORDER_DISPLAY_FALLBACK
                           ? item.serviceSubtitle
