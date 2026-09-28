@@ -677,6 +677,31 @@ export default function AddressScreen() {
             "• Check the backend is running",
           [{ text: "OK" }],
         );
+      } else if (/outside our current service area/i.test(msg)) {
+        // Address save now runs the same serviceability check order
+        // placement does (address_service.py) - a manually-typed address
+        // that's too vague to geocode, or one that geocodes outside a
+        // service area, is caught right here instead of only surfacing
+        // deep in checkout.
+        Alert.alert("Could not save address", msg, [
+          {
+            text: "I'm interested — notify me",
+            onPress: () => {
+              registerServiceAreaInterest({
+                latitude: gpsCoords?.latitude ?? null,
+                longitude: gpsCoords?.longitude ?? null,
+                city: city || null,
+                pincode: pincode || null,
+                address_text: [line1, city].filter(Boolean).join(", ") || null,
+              }).catch(() => {
+                // Best-effort - the customer already saw the "could not
+                // save address" message either way.
+              });
+              Alert.alert("Thanks!", "We'll notify you when we launch in your area.");
+            },
+          },
+          { text: "OK", style: "cancel" },
+        ]);
       } else {
         Alert.alert("Error", msg);
       }
