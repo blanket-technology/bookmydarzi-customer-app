@@ -96,7 +96,9 @@ function StatusBanner({ status, agentName }: { status: string; agentName: string
     return (
       <View style={[banner.root, { backgroundColor: "#fffbeb", borderColor: "#fde68a" }]}>
         <ActivityIndicator size="small" color="#d97706" style={{ marginRight: 8 }} />
-        <Text style={[banner.text, { color: "#92400e" }]}>Finding you an agent - hold on...</Text>
+        <Text style={[banner.text, { color: "#92400e" }]}>
+          Finding you an agent - expected response within 2 days.
+        </Text>
       </View>
     );
   }
