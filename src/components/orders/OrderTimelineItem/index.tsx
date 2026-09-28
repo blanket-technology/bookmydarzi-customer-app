@@ -34,10 +34,18 @@ const OrderTimelineItem = memo(({ stage, isLast = false }: OrderTimelineItemProp
           style={[
             styles.dot,
             stage.completed && styles.dotCompleted,
-            stage.current && styles.dotCurrent,
+            // Bug fix: a reached stage that also happens to be the most
+            // recent one (completed && current - e.g. "Out For Delivery"
+            // with its own timestamp already recorded) used to skip both
+            // the filled dot and the checkmark, styled identically to a
+            // stage that hasn't actually happened yet. The hollow "current"
+            // ring is only correct for a stage that's in progress but NOT
+            // yet completed (no timestamp) - once a stage is completed it
+            // should look completed, whether or not it's also the latest.
+            !stage.completed && stage.current && styles.dotCurrent,
           ]}
         >
-          {stage.completed && !stage.current && (
+          {stage.completed && (
             <Ionicons name="checkmark" size={11} color={COLORS.white} />
           )}
         </View>
