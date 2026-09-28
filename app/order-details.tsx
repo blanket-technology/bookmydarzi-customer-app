@@ -109,22 +109,37 @@ function InfoRow({ label, value }: { label: string; value: string }) {
  * badge instead of a "+" character, slightly indented to read as nested
  * under the service rather than a peer row) - the same "included extra"
  * treatment a polished checkout/receipt UI gives optional line items. */
-function AddonRow({ name, price }: { name: string; price: string }) {
+function AddonRow({
+  name,
+  price,
+  note,
+}: {
+  name: string;
+  price: string;
+  note?: string | null;
+}) {
   return (
     <View
       style={styles.addonRow}
       accessible
-      accessibilityLabel={`Add-on: ${name}, ${price}`}
+      accessibilityLabel={`Add-on: ${name}, ${price}${note ? `, note: ${note}` : ""}`}
     >
-      <View style={styles.addonLabelGroup}>
-        <View style={styles.addonBadge}>
-          <Ionicons name="add" size={11} color={COLORS.primaryDark} />
+      <View style={styles.addonRowTop}>
+        <View style={styles.addonLabelGroup}>
+          <View style={styles.addonBadge}>
+            <Ionicons name="add" size={11} color={COLORS.primaryDark} />
+          </View>
+          <Text style={styles.addonLabel} numberOfLines={2}>
+            {name}
+          </Text>
         </View>
-        <Text style={styles.addonLabel} numberOfLines={2}>
-          {name}
-        </Text>
+        <Text style={styles.addonValue}>{price}</Text>
       </View>
-      <Text style={styles.addonValue}>{price}</Text>
+      {note ? (
+        <Text style={styles.addonNote} numberOfLines={3}>
+          {note}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -1235,6 +1250,7 @@ export default function OrderDetailsScreen() {
                   <AddonRow
                     name={detailsText(addon.name)}
                     price={detailsMoney(addon.price)}
+                    note={addon.note}
                   />
                 </React.Fragment>
               ))}
@@ -1923,15 +1939,17 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   addonRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
     paddingVertical: 7,
     // Indented under the service's own rows above it (Base price, etc) -
     // reads as "part of this line item" rather than a sibling row at the
     // same visual weight as the service's core price.
     paddingLeft: 6,
+  },
+  addonRowTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
   },
   addonLabelGroup: {
     flex: 1,
@@ -1957,6 +1975,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: "#1F2937",
+  },
+  // Bug fix: the customer's own add-on note (typed on service-details.tsx's
+  // "Add extras" checklist, e.g. "Note test" under Hook & Eye Replacement)
+  // was captured, saved, and already returned by the backend
+  // (SelectedAddonSummary.note) - AddonRow just never rendered it at all.
+  addonNote: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontStyle: "italic",
+    marginTop: 3,
+    marginLeft: 26,
   },
   pickupPartnerRow: {
     flexDirection: "row",
