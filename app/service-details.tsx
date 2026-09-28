@@ -481,7 +481,16 @@ export default function ServiceDetailsScreen() {
         categoryId: catalogCategoryId,
         categoryName,
         basePrice: selectedStitching.base_price,
-        displayName: `${serviceLine?.name ?? serviceName} · ${selectedStitching.name}`,
+        // Bug fix: this used to always prefix the garment/line name
+        // ("Lehenga Alteration · Lehenga Waist Alteration"), redundant for
+        // Custom Alterations where the leaf's own name is already fully
+        // specific - same rule as the backend's order-display fix
+        // (order_display.py/customer_order_history_service.py). Regular
+        // clothing keeps the "Line · Tier" format (e.g. "Shirts · Normal
+        // Stitching"), still genuinely informative there.
+        displayName: isAlterationsCategory
+          ? selectedStitching.name
+          : `${serviceLine?.name ?? serviceName} · ${selectedStitching.name}`,
         imageUrl: displayImage,
         quantity: qty,
         stitchingPreferences: isPremiumSelected
@@ -587,7 +596,10 @@ export default function ServiceDetailsScreen() {
       categoryId: catalogCategoryId,
       categoryName,
       basePrice: selectedStitching.base_price,
-      displayName: `${serviceLine?.name ?? serviceName} · ${selectedStitching.name}`,
+      // See the identical comment on the unauthenticated-user branch above.
+      displayName: isAlterationsCategory
+        ? selectedStitching.name
+        : `${serviceLine?.name ?? serviceName} · ${selectedStitching.name}`,
       imageUrl: displayImage,
       quantity: qty,
       stitchingPreferences: isPremiumSelected

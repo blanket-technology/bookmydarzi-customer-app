@@ -545,7 +545,14 @@ export default function BuyNowReviewScreen() {
               <Text style={s.serviceName} numberOfLines={2}>
                 {pendingService.displayName}
               </Text>
-              <Text style={s.serviceCategory}>{pendingService.categoryName}</Text>
+              {/* Bug fix: "Custom Alterations" as a subtitle under an
+                  already-specific alteration name read as redundant noise -
+                  same rule as the backend's order-display fix. Regular
+                  clothing categories (e.g. "Men Clothing") stay shown,
+                  still genuinely informative there. */}
+              {pendingService.categoryName !== "Custom Alterations" ? (
+                <Text style={s.serviceCategory}>{pendingService.categoryName}</Text>
+              ) : null}
             </View>
             <View style={s.pricePill}>
               <Text style={s.priceText}>
