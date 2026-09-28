@@ -184,6 +184,11 @@ export interface OrderDetailsOrderBlock {
   pickup_partner?: PickupPartner | null;
   delivery_partner?: DeliveryPartner | null;
   return_partner?: ReturnPartner | null;
+  /** Backend-authoritative "can this pickup still be moved" flag - mirrors
+   * the reschedule endpoint's own RESCHEDULABLE_FROM check. Optional/
+   * defaults to false so older cached responses (before this field
+   * existed) don't crash a strict consumer. */
+  can_reschedule?: boolean;
 }
 
 export interface OrderDetailsServiceBlock {
