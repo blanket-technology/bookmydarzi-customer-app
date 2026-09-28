@@ -59,7 +59,12 @@ const PaymentMethodSelector = memo(
                   color={selected ? COLORS.white : COLORS.primaryDark}
                 />
               </View>
-              <Text style={[styles.title, selected && styles.titleSelected]} numberOfLines={1}>
+              <Text
+                style={[styles.title, selected && styles.titleSelected]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+              >
                 {meta.title}
               </Text>
               <View style={[styles.radio, selected && styles.radioSelected]}>
