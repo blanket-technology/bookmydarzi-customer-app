@@ -12,13 +12,11 @@ import {
     LayoutAnimation,
     Linking,
     Modal,
-    Platform,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    UIManager,
     View,
     useWindowDimensions
 } from "react-native";
@@ -81,9 +79,9 @@ import {
 import { normalizeServiceImageUrl } from "../src/utils/serviceImage";
 import { useAuthStore } from "../store/useAuthStore";
 
-if (Platform.OS === "android") {
-  UIManager.setLayoutAnimationEnabledExperimental?.(true);
-}
+// Bug fix: setLayoutAnimationEnabledExperimental is a documented no-op on
+// React Native's New Architecture (this app has newArchEnabled: true) -
+// see StyleReferencePicker.tsx's identical comment for the full reasoning.
 
 // Module-level cache: survives component unmount/remount within the app session.
 // Key format: "<orderId>:<status>" - prevents the same popup from repeating.

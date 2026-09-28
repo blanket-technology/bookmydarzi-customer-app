@@ -235,14 +235,33 @@ export default function BuyNowReviewScreen() {
           })),
         ]
       : undefined;
+    // Bug fix: "Can't perform a React state update on a component that
+    // hasn't mounted yet" - this fetch had no mount guard at all, so a
+    // customer who navigated to/away from this screen quickly enough (back
+    // button, double-tap, or this effect re-firing on a dependency change
+    // while a previous fetch was still in flight) could have setBilling/
+    // setBillingError/setBillingLoading fire after the component was
+    // unmounted or before it had finished its first commit. `active` is
+    // flipped false by the cleanup function on unmount/re-run; every setter
+    // below checks it first.
+    let active = true;
     getBillingEstimate(pendingService.bookableServiceId, 1, addonIds, items)
-      .then(setBilling)
-      .catch((err) => {
-        setBillingError(
-          err instanceof Error ? err.message : "Could not load pricing. Please try again.",
-        );
+      .then((result) => {
+        if (active) setBilling(result);
       })
-      .finally(() => setBillingLoading(false));
+      .catch((err) => {
+        if (active) {
+          setBillingError(
+            err instanceof Error ? err.message : "Could not load pricing. Please try again.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setBillingLoading(false);
+      });
+    return () => {
+      active = false;
+    };
     // Same reasoning as service-details.tsx's addon fetch effect - depend on
     // the ids themselves (joined), not the array reference, since
     // pendingService.addons/extraItems are new array identities on every
