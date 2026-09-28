@@ -182,10 +182,24 @@ function OtpBoxes({
 export default function SignupScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { register, verifyEmailOtp, resendEmailOtp, loading } = useAuthStore();
 
   const contentMaxWidth = Math.min(screenWidth, 440);
+
+  // Bug fix: the logo was a fixed 204x204 regardless of screen size/height -
+  // reused login.tsx's/welcome.tsx's own existing pattern instead of
+  // inventing a new one. logoSize tracks content width proportionally
+  // (same ~52%/clamp as login.tsx); sc() additionally shrinks it (and
+  // other sizes, if this screen adopts sc() more broadly later) on a
+  // short-height device so the hero doesn't dominate the first viewport
+  // before any scrolling on a small phone with both a tall status bar
+  // and a short screen.
+  const logoSize = Math.max(150, Math.min(220, Math.round(contentMaxWidth * 0.52)));
+  const availableHeight = screenHeight - insets.top - insets.bottom - 24;
+  const BASELINE_HEIGHT = 760;
+  const scale = Math.max(0.64, Math.min(1, availableHeight / BASELINE_HEIGHT));
+  const sc = useCallback((v: number) => Math.round(v * scale), [scale]);
 
   const [step,            setStep]            = useState<"form" | "otp">("form");
   const [firstName,       setFirstName]       = useState("");
@@ -279,7 +293,7 @@ export default function SignupScreen() {
 
             {/* ── Logo, centered at top ── */}
             <View style={{ alignItems: "center", marginTop: insets.top + 14, marginBottom: -20 }}>
-              <Image source={require("../../assets/logo.png")} style={{ width: 204, height: 204 }} resizeMode="contain" />
+              <Image source={require("../../assets/logo.png")} style={{ width: sc(logoSize), height: sc(logoSize) }} resizeMode="contain" />
             </View>
 
             {/* ── Hero ── */}

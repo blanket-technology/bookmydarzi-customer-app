@@ -23,11 +23,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useResponsiveLayout } from "../../src/hooks/useResponsiveLayout";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
 import CartItemCard from "../../src/components/cart/CartItemCard";
 import CodConfirmModal from "../../src/components/cart/CodConfirmModal";
@@ -235,13 +235,7 @@ export default function CartScreen() {
   const { t } = useAppLanguage();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { width: screenWidth } = useWindowDimensions();
-
-  // Responsive scale - same inline useWindowDimensions-derived approach used
-  // on the Home screen (no separate scaling library in this project).
-  const isTablet = screenWidth >= 768;
-  const horizontalPad = isTablet ? Math.max(SPACING.lg, screenWidth * 0.05) : SPACING.lg;
-  const contentMaxWidth = isTablet ? 720 : screenWidth;
+  const { isTablet, horizontalPad, contentMaxWidth } = useResponsiveLayout();
 
   const entries = useCartStore((s) => s.entries);
   const itemCount = useCartStore((s) => s.itemCount);

@@ -44,6 +44,7 @@ import HomeSkeleton from "../../src/components/skeletons/HomeSkeleton";
 import SkeletonBox from "../../src/components/skeletons/SkeletonBox";
 import { useAutoHideOpacity } from "../../src/hooks/useAutoHideOpacity";
 import { useHomeExitBackHandler } from "../../src/hooks/useHomeExitBackHandler";
+import { useResponsiveLayout } from "../../src/hooks/useResponsiveLayout";
 import { usePullToRefresh } from "../../src/hooks/usePullToRefresh";
 import { useAppLanguage } from "../../src/i18n/useAppLanguage";
 import {
@@ -1003,7 +1004,7 @@ function TypingGreeting({ text, style }: { text: string; style: object }) {
 // ---------------------------------------------------------------------------
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
+  const { screenWidth, isTablet, isSmallPhone } = useResponsiveLayout();
   const router = useRouter();
   const navigation = useNavigation();
   const { t } = useAppLanguage();
@@ -1347,11 +1348,24 @@ export default function HomeScreen() {
 
   // Responsive gutter/content-width: phones keep the fixed H_PAD gutter;
   // tablets/large screens get a wider gutter and the sheet content is
-  // capped so text lines and cards don't stretch edge-to-edge.
-  const isTablet = screenWidth >= 768;
-  const isSmallPhone = screenWidth < 360;
+  // capped so text lines and cards don't stretch edge-to-edge. isTablet/
+  // isSmallPhone come from the shared hook (useResponsiveLayout) now, but
+  // horizontalPad/contentMaxWidth stay derived from this screen's own
+  // H_PAD (20, not the hook's generic SPACING.lg/24) - a real, deliberate
+  // difference from Cart's padding, not something to silently collapse.
   const horizontalPad = isTablet ? Math.max(H_PAD, screenWidth * 0.06) : H_PAD;
   const contentMaxWidth = isTablet ? 720 : screenWidth;
+
+  // Bug fix: lookbookThumb/lookbookSeeAll were fixed at 120/80px width
+  // regardless of screen size - on a small phone that crowded the
+  // intended "peek" effect (more cards fit than designed, at a cramped
+  // size); on a tablet they looked tiny relative to the available width.
+  // Sized to always show ~2.7 cards peeking across the content width,
+  // same design intent as before, now actually screen-width-derived.
+  const lookbookThumbWidth = Math.round(
+    Math.min(contentMaxWidth, screenWidth) / 2.7,
+  );
+  const lookbookThumbHeight = Math.round(lookbookThumbWidth * (160 / 120));
 
   // Responsive section-gap scale: extends the same screenWidth-derived
   // approach used for horizontalPad/contentMaxWidth above to vertical
@@ -1816,7 +1830,7 @@ export default function HomeScreen() {
                     {lookbookPreview.map((item, idx) => (
                       <TouchableOpacity
                         key={item.id}
-                        style={styles.lookbookThumb}
+                        style={[styles.lookbookThumb, { width: lookbookThumbWidth, height: lookbookThumbHeight }]}
                         onPress={() => router.push("/lookbook" as any)}
                         activeOpacity={0.88}
                       >
@@ -1838,7 +1852,7 @@ export default function HomeScreen() {
                       </TouchableOpacity>
                     ))}
                     <TouchableOpacity
-                      style={styles.lookbookSeeAll}
+                      style={[styles.lookbookSeeAll, { width: lookbookThumbWidth * 0.67, height: lookbookThumbHeight }]}
                       onPress={() => router.push("/lookbook" as any)}
                       activeOpacity={0.88}
                     >
@@ -2062,8 +2076,8 @@ const styles = StyleSheet.create({
   // ── Support row ───────────────────────────────────────────────────────────
   lookbookRow: { paddingLeft: 2, paddingRight: 8, gap: 10 },
   lookbookThumb: {
-    width: 120,
-    height: 160,
+    // width/height now set inline per-render (screen-width-derived - see
+    // lookbookThumbWidth/lookbookThumbHeight in the component body).
     borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "#E5E7EB",
@@ -2081,8 +2095,7 @@ const styles = StyleSheet.create({
   },
   lookbookLabel: { fontSize: 11, fontWeight: "700", color: "#FFFFFF" },
   lookbookSeeAll: {
-    width: 80,
-    height: 160,
+    // width/height set inline per-render, same as lookbookThumb above.
     borderRadius: 16,
     overflow: "hidden",
     alignItems: "center",
