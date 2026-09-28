@@ -885,7 +885,12 @@ export default function AddressScreen() {
                       color={COLORS.primaryDark}
                     />
                   )}
-                  <Text style={styles.gpsBtnText} numberOfLines={1}>
+                  <Text
+                    style={styles.gpsBtnText}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                  >
                     {gpsLoading ? "Detecting…" : "Use my location"}
                   </Text>
                 </TouchableOpacity>
@@ -896,7 +901,14 @@ export default function AddressScreen() {
                   activeOpacity={0.8}
                 >
                   <Ionicons name="map-outline" size={18} color={COLORS.primaryDark} />
-                  <Text style={styles.gpsBtnText} numberOfLines={1}>Pick on map</Text>
+                  <Text
+                    style={styles.gpsBtnText}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                  >
+                    Pick on map
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -1075,17 +1087,13 @@ export default function AddressScreen() {
               />
 
               <View style={styles.rowGroup}>
-                <View style={styles.inputHalf}>
-                  <LocationSelectField
-                    label="City"
-                    required
-                    value={city}
-                    options={cityOptions}
-                    placeholder="Select city"
-                    onSelect={handleCitySelect}
-                    error={fieldErrors.city}
-                  />
-                </View>
+                {/* State before City (matches how an Indian postal address
+                    is conventionally written/read) - purely a display-order
+                    change. cityOptions is already derived from state either
+                    way (and handleCitySelect updates state in reverse too),
+                    so neither field's logic depends on which one renders
+                    first; the payload/API mapping below sends named
+                    city/state fields regardless of visual order. */}
                 <View style={styles.inputHalf}>
                   <LocationSelectField
                     label="State"
@@ -1095,6 +1103,17 @@ export default function AddressScreen() {
                     placeholder="Select state"
                     onSelect={handleStateSelect}
                     error={fieldErrors.state}
+                  />
+                </View>
+                <View style={styles.inputHalf}>
+                  <LocationSelectField
+                    label="City"
+                    required
+                    value={city}
+                    options={cityOptions}
+                    placeholder="Select city"
+                    onSelect={handleCitySelect}
+                    error={fieldErrors.city}
                   />
                 </View>
               </View>
