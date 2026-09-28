@@ -282,6 +282,9 @@ export interface OrderDetailsLineItem {
     design_notes?: string;
     reference_photo_url?: string;
   } | null;
+  /** Customer's plain-text note for this specific sub-service, carried over
+   * from the cart entry at checkout. */
+  notes?: string | null;
   addons: OrderDetailsLineItemAddon[];
 }
 
