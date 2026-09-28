@@ -234,22 +234,16 @@ export default function AlterationGroupScreen() {
                             <Ionicons name="cut-outline" size={24} color={COLORS.primaryDark} />
                           </View>
                         )}
-                        <View style={styles.tierText}>
-                          <Text style={styles.tierName} numberOfLines={2}>{stripQualityPrefix(tier.name)}</Text>
-                          <View style={styles.tierMetaRow}>
-                            <Ionicons name="time-outline" size={12} color={COLORS.gray} />
-                            <Text style={styles.tierMeta}>
-                              {tier.estimated_delivery_days} day{tier.estimated_delivery_days === 1 ? "" : "s"}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.tierPriceWrap}>
+
+                        <View style={styles.tierBody}>
+                          <Text style={styles.tierName}>{stripQualityPrefix(tier.name)}</Text>
+                          <Text style={styles.tierDesc}>
+                            {tier.estimated_delivery_days} day{tier.estimated_delivery_days === 1 ? "" : "s"} turnaround
+                          </Text>
                           <Text style={styles.tierPrice}>₹{tier.base_price.toLocaleString("en-IN")}</Text>
-                          <View style={styles.tierCta}>
-                            <Text style={styles.tierCtaText}>Book</Text>
-                            <Ionicons name="chevron-forward" size={13} color={COLORS.primaryDark} />
-                          </View>
                         </View>
+
+                        <Ionicons name="chevron-forward" size={20} color={COLORS.gray} />
                       </TouchableOpacity>
                     </Animated.View>
                   );})}
@@ -332,36 +326,41 @@ const styles = StyleSheet.create({
   skeleton: { height: 84, borderRadius: RADIUS.lg, backgroundColor: COLORS.grayLight },
   empty: { alignItems: "center", justifyContent: "center", paddingVertical: 48, gap: 10 },
   emptyText: { fontSize: 13, color: COLORS.gray, textAlign: "center" },
-  list: { gap: 10 },
+  // Matches stitching-type.tsx's optionCard/optionIcon/optionBody/
+  // optionTitle/optionDesc/optionPrice exactly, so the "pick a bookable
+  // tier" screen looks the same whether it got here via a Custom
+  // Alterations Repair/Resize/Restyle group or via a normal Men's/Women's/
+  // Kids service line's Normal/Designer choice - previously this screen
+  // used a visually different image-left/price-top-right/small-pill layout
+  // that read as a different, less-finished screen for no real reason.
+  list: { gap: SPACING.md },
   tierCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
+    gap: SPACING.md,
     backgroundColor: COLORS.white,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.sm + 4,
-    ...SHADOW.card,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(12, 108, 117, 0.12)",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#0c6c75",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+      },
+      android: { elevation: 3 },
+    }),
   },
-  tierImage: { width: 64, height: 64, borderRadius: RADIUS.md, backgroundColor: COLORS.grayLight },
+  tierImage: { width: 52, height: 52, borderRadius: RADIUS.lg, backgroundColor: COLORS.grayLight },
   tierImageFallback: {
-    width: 64, height: 64, borderRadius: RADIUS.md,
+    width: 52, height: 52, borderRadius: RADIUS.lg,
     backgroundColor: COLORS.primaryLight,
     alignItems: "center", justifyContent: "center",
   },
-  tierText: { flex: 1, gap: 4 },
-  tierName: { fontSize: 14.5, fontWeight: "700", color: COLORS.black, lineHeight: 19 },
-  tierMetaRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  tierMeta: { fontSize: 11.5, color: COLORS.gray },
-  tierPriceWrap: { alignItems: "flex-end", gap: 6 },
-  tierPrice: { fontSize: 16, fontWeight: "800", color: COLORS.black },
-  tierCta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADIUS.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  tierCtaText: { fontSize: 11, fontWeight: "700", color: COLORS.primaryDark },
+  tierBody: { flex: 1, minWidth: 0 },
+  tierName: { fontSize: 16, fontWeight: "800", color: COLORS.black, marginBottom: 4 },
+  tierDesc: { fontSize: 12, color: COLORS.gray, lineHeight: 16, marginBottom: 8 },
+  tierPrice: { fontSize: 15, fontWeight: "800", color: COLORS.primaryDark },
 });
