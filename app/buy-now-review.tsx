@@ -461,6 +461,23 @@ export default function BuyNowReviewScreen() {
           },
           { text: "OK", style: "cancel" },
         ]);
+      } else if (/precise location/i.test(message) && selectedAddressId) {
+        // Legacy address saved before serviceability was checked at
+        // save-time (see address_service.py's create_address/
+        // update_address) - new/edited addresses now resolve or reject
+        // this at save time, so this is a fallback for pre-existing data.
+        Alert.alert("Address needs a precise location", "We couldn't pin this address's exact location. Please update it using GPS or the map picker before placing your order.", [
+          {
+            text: "Update address",
+            onPress: () => {
+              router.push({
+                pathname: "/address",
+                params: { mode: "form", addressId: String(selectedAddressId) },
+              } as never);
+            },
+          },
+          { text: "Cancel", style: "cancel" },
+        ]);
       } else {
         Alert.alert("Could not place order", message);
       }
