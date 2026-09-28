@@ -1,11 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
-import { ActivityIndicator, Image, LayoutAnimation, Platform, StyleSheet, Text, TouchableOpacity, UIManager, View } from "react-native";
+import { ActivityIndicator, Image, LayoutAnimation, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { COLORS, RADIUS } from "../../../constants/theme";
 
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// Bug fix: setLayoutAnimationEnabledExperimental is a documented no-op on
+// React Native's New Architecture (this app has newArchEnabled: true in
+// app.config.js) - it's a legacy-bridge-only Android opt-in, unneeded here
+// since LayoutAnimation.configureNext below works on New Architecture
+// without it. Calling it anyway just produced a console warning on every
+// mount of this component.
 
 export interface StyleReferencePickerProps {
   /** Local preview uri (shown immediately after picking, before upload

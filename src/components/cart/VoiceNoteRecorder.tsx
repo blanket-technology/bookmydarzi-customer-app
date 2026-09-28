@@ -9,13 +9,13 @@ import {
   useAudioRecorderState,
 } from "expo-audio";
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, LayoutAnimation, Platform, StyleSheet, Text, TouchableOpacity, UIManager, View } from "react-native";
+import { ActivityIndicator, Alert, LayoutAnimation, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { COLORS, RADIUS } from "../../../constants/theme";
 import { uploadOrderVoiceNote } from "../../services/apiOrderService";
 
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// Bug fix: setLayoutAnimationEnabledExperimental is a documented no-op on
+// React Native's New Architecture (this app has newArchEnabled: true) -
+// see StyleReferencePicker.tsx's identical comment for the full reasoning.
 
 // A short voice note (~60s cap) is generously covered by LOW_QUALITY (.m4a,
 // 64kbps) - keeps the recorded file small while staying well within the
