@@ -910,7 +910,7 @@ export default function AddressScreen() {
                       : styles.svcBadgeFail,
                   ]}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+                  <View style={styles.svcBadgeRow}>
                     <Ionicons
                       name={
                         serviceability.serviceable
@@ -919,7 +919,7 @@ export default function AddressScreen() {
                       }
                       size={16}
                       color={serviceability.serviceable ? COLORS.success : COLORS.error}
-                      style={{ marginTop: 1 }}
+                      style={styles.svcBadgeIcon}
                     />
                     <Text
                       style={[
@@ -938,19 +938,13 @@ export default function AddressScreen() {
                     <TouchableOpacity
                       onPress={handleRegisterInterest}
                       disabled={interestState === "submitting" || interestState === "done"}
-                      style={{
-                        marginTop: 8,
-                        alignSelf: "flex-start",
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        borderRadius: 999,
-                        borderWidth: 1,
-                        borderColor: COLORS.error,
-                        opacity: interestState === "submitting" ? 0.6 : 1,
-                      }}
+                      style={[
+                        styles.svcInterestBtn,
+                        interestState === "submitting" && styles.svcInterestBtnSubmitting,
+                      ]}
                       activeOpacity={0.8}
                     >
-                      <Text style={{ fontSize: 12, fontWeight: "700", color: COLORS.error }}>
+                      <Text style={styles.svcInterestBtnText}>
                         {interestState === "done"
                           ? "Thanks! We'll notify you 🎉"
                           : interestState === "submitting"
@@ -1777,6 +1771,19 @@ const styles = StyleSheet.create({
   },
   svcBadgeTextOk: { color: COLORS.success },
   svcBadgeTextFail: { color: COLORS.error },
+  svcBadgeRow: { flexDirection: "row", alignItems: "flex-start" },
+  svcBadgeIcon: { marginTop: 1 },
+  svcInterestBtn: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.error,
+  },
+  svcInterestBtnSubmitting: { opacity: 0.6 },
+  svcInterestBtnText: { fontSize: 12, fontWeight: "700", color: COLORS.error },
   coordsHint: {
     flexDirection: "row",
     alignItems: "center",
