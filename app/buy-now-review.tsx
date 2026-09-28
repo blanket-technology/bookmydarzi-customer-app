@@ -46,7 +46,8 @@ import { useAddressStore } from "../src/store/useAddressStore";
 import { useCartStore } from "../src/store/useCartStore";
 import { useCheckoutPreferencesStore } from "../src/store/useCheckoutPreferencesStore";
 import { useCustomerOrdersStore } from "../src/store/useCustomerOrdersStore";
-import { useHomeStore } from "../src/store/useHomeStore";
+import { listOffers } from "../src/services/offerService";
+import type { ApiSpecialOffer } from "../src/types/homeApi";
 import { useOrderStore } from "../src/store/useOrderStore";
 import type { ApiAddress } from "../src/types/api";
 import { PAYMENT_ACTION_LABELS, type PaymentMethodOption } from "../src/types/payment";
@@ -120,10 +121,30 @@ export default function BuyNowReviewScreen() {
   // Own local state, deliberately independent of useCartStore's applied-
   // offer fields - Book Now bypasses the cart entirely (direct_order_service.py
   // never touches CART/CART_ENTRIES), so it has no business reading or
-  // writing cart-domain state. specialOffers is the same homepage-payload
-  // list the cart screen already browses (useHomeStore, populated by
-  // GET /home) - no separate fetch needed here.
-  const specialOffers = useHomeStore((s) => s.specialOffers);
+  // writing cart-domain state.
+  //
+  // Bug fix: this used to read useHomeStore's specialOffers (GET /home) -
+  // a globally Redis-cached, unauthenticated homepage payload with no
+  // per-user filtering. An already-used coupon kept showing as "Available"
+  // here even after GET /offers itself was fixed to exclude it, because
+  // this screen was never actually calling that endpoint. Now fetches
+  // GET /offers directly (offerService.listOffers), which IS scoped to
+  // the logged-in customer.
+  const [specialOffers, setSpecialOffers] = useState<ApiSpecialOffer[]>([]);
+  useEffect(() => {
+    let active = true;
+    listOffers()
+      .then((offers) => {
+        if (active) setSpecialOffers(offers);
+      })
+      .catch(() => {
+        // Best-effort - the coupon-code entry box still works even if the
+        // browsable list fails to load.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   const [appliedOffer, setAppliedOffer] = useState<AppliedOffer | null>(null);
 
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);

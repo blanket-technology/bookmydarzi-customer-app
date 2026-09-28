@@ -1,6 +1,36 @@
 import { request } from "../../services/api";
 import type { ApiSpecialOffer } from "../types/homeApi";
 
+function mapOffer(raw: Record<string, unknown>): ApiSpecialOffer {
+  return {
+    Id: Number(raw.offer_id),
+    Title: String(raw.title ?? ""),
+    Description: String(raw.description ?? ""),
+    DiscountType: raw.discount_type === "flat" ? "flat" : "percentage",
+    DiscountPercent: Number(raw.discount_percent ?? 0),
+    DiscountAmount: raw.discount_amount != null ? Number(raw.discount_amount) : null,
+    MinOrderValue: raw.min_order_value != null ? Number(raw.min_order_value) : 0,
+    MaxDiscountAmount:
+      raw.max_discount_amount != null ? Number(raw.max_discount_amount) : null,
+    ImageUrl: raw.image_url != null ? String(raw.image_url) : null,
+    ValidFrom: raw.valid_from != null ? String(raw.valid_from) : null,
+    ValidUntil: raw.valid_until != null ? String(raw.valid_until) : "",
+  };
+}
+
+// Cart/Book Now's "Available Offers" list - GET /offers (services.py),
+// scoped to the logged-in customer (already-used coupons excluded server-
+// side). Distinct from useHomeStore's special_offers, which comes from the
+// homepage's GET /home and is a globally Redis-cached, unauthenticated
+// payload with no per-user filtering at all - reusing it here was why an
+// already-used coupon kept showing as "Available" on Cart/Book Now even
+// after the /offers endpoint itself was fixed to exclude it.
+export async function listOffers(): Promise<ApiSpecialOffer[]> {
+  const raw = await request<{ offers?: unknown }>("/offers");
+  const list = Array.isArray(raw?.offers) ? raw.offers : [];
+  return list.map((o) => mapOffer(o as Record<string, unknown>));
+}
+
 // Manual coupon-code entry (cart/checkout "Apply" box), the counterpart to
 // browsing the pre-listed offers already shown on Cart/Book Now (both
 // backed by useHomeStore's special_offers). Backend: GET /offers/validate

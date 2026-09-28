@@ -42,7 +42,7 @@ import { uploadOrderStyleReference } from "../../src/services/apiOrderService";
 import { useAddressStore } from "../../src/store/useAddressStore";
 import { useCartStore } from "../../src/store/useCartStore";
 import { useCheckoutPreferencesStore } from "../../src/store/useCheckoutPreferencesStore";
-import { useHomeStore } from "../../src/store/useHomeStore";
+import { listOffers } from "../../src/services/offerService";
 import type { ApiAddress } from "../../src/types/api";
 import type { CartServiceEntry } from "../../src/types/cart";
 import type { ApiSpecialOffer } from "../../src/types/homeApi";
@@ -271,8 +271,17 @@ export default function CartScreen() {
 
   const { addresses, fetchAddresses } = useAddressStore();
 
-  const specialOffers = useHomeStore((s) => s.specialOffers);
-  const loadHomeData = useHomeStore((s) => s.loadHomeData);
+  // Bug fix: this used to read useHomeStore's specialOffers (GET /home) -
+  // a globally Redis-cached, unauthenticated homepage payload with no
+  // per-user filtering, so an already-used coupon kept showing as
+  // "Available" here even after GET /offers itself was fixed to exclude
+  // it. Now fetches GET /offers directly (offerService.listOffers), which
+  // IS scoped to the logged-in customer.
+  const [specialOffers, setSpecialOffers] = useState<ApiSpecialOffer[]>([]);
+  const loadHomeData = useCallback(async () => {
+    const offers = await listOffers();
+    setSpecialOffers(offers);
+  }, []);
   const appliedOfferId = useCartStore((s) => s.appliedOfferId);
   const appliedOfferDiscountType = useCartStore((s) => s.appliedOfferDiscountType);
   const appliedOfferDiscountValue = useCartStore((s) => s.appliedOfferDiscountValue);

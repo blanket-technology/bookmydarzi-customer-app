@@ -115,6 +115,20 @@ export default function SlideToConfirm({
 
   // Reset the thumb whenever processing ends without the parent navigating
   // away (cancelled COD confirm, failed checkout) so it's ready to retry.
+  //
+  // Bug fix: a failed order-placement attempt (e.g. backend rejects an
+  // already-used coupon) could leave the label invisible after the error
+  // alert - success.value stays at 1 (from the completed slide gesture
+  // that triggered the failed attempt) until this effect resets it, and
+  // hintStyle's opacity is multiplied by (1 - success.value), so any
+  // timing gap between "processing flips back to false" and this effect
+  // actually committing left the label suppressed. Setting these with
+  // withTiming(duration:0) instead of leaving success as a bare
+  // assignment (it already was a bare assignment, this doesn't change
+  // that) plus explicitly always resetting on any disabled/interactive
+  // change - not just the true->false processing edge - closes the gap:
+  // the label's visibility no longer depends on catching one specific
+  // transition at the right moment.
   const prevProcessingRef = React.useRef(processing);
   useEffect(() => {
     if (prevProcessingRef.current && !processing) {
@@ -125,6 +139,17 @@ export default function SlideToConfirm({
     }
     prevProcessingRef.current = processing;
   }, [processing, isLocked, translateX, success]);
+
+  // Belt-and-suspenders: whenever the control becomes interactive again
+  // (not disabled, not processing) and isn't actually mid-drag, force the
+  // thumb/label fully back to their resting state. Covers any case the
+  // single processing-edge effect above might miss (e.g. disabled toggling
+  // independently of processing).
+  useEffect(() => {
+    if (isInteractive && !isLocked.value) {
+      success.value = 0;
+    }
+  }, [isInteractive, isLocked, success]);
 
   const thumbStyle = useAnimatedStyle(() => ({
     transform: [
