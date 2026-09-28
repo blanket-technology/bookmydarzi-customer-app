@@ -39,7 +39,6 @@ import ProgressGallery from "../src/components/orders/ProgressGallery";
 import {
     CUSTOMER_CANCELLABLE_STATUSES,
     PHOTO_VISIBLE_STAGES,
-    RESCHEDULABLE_STATUSES,
     normalizeOrderStatus,
     type OrderStatus,
 } from "../src/constants/orderStatus";
@@ -974,12 +973,15 @@ export default function OrderDetailsScreen() {
   const canCancelOrder = CUSTOMER_CANCELLABLE_STATUSES.has(
     normalizeOrderStatus(orderStatusRaw),
   );
-  // Only reschedulable AFTER a pickup has already been scheduled once (see
-  // RESCHEDULABLE_STATUSES's own comment) - the backend independently
-  // re-validates this, this is just the display gate.
-  const canRescheduleOrder = RESCHEDULABLE_STATUSES.has(
-    normalizeOrderStatus(orderStatusRaw),
-  );
+  // Bug fix: this used to be its own hand-maintained RESCHEDULABLE_STATUSES
+  // set, kept in sync with the backend's RESCHEDULABLE_FROM only by
+  // developer discipline - no shared source of truth, and the two could
+  // drift. The backend now exposes can_reschedule directly on this same
+  // /customer/orders/{id}/details response (mirroring the can_report_issue
+  // pattern already used elsewhere), so read that instead. The reschedule
+  // endpoint still independently re-validates server-side either way - this
+  // is a display gate, not the last word.
+  const canRescheduleOrder = payload?.order.can_reschedule ?? false;
 
   const handleSubmitRating = async () => {
     if (orderId === null || ratingValue < 1 || ratingBusy) return;

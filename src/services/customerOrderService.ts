@@ -538,6 +538,7 @@ function mapDetailsOrderBlock(raw: Record<string, unknown>): OrderDetailsOrderBl
     pickup_partner: mapBridgePartner(order, "pickup_partner", "pickupPartner"),
     delivery_partner: mapBridgePartner(order, "delivery_partner", "deliveryPartner"),
     return_partner: mapBridgePartner(order, "return_partner", "returnPartner"),
+    can_reschedule: Boolean(order.can_reschedule ?? order.canReschedule),
   };
 }
 
