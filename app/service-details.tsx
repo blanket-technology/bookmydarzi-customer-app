@@ -710,7 +710,10 @@ export default function ServiceDetailsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: insets.top, paddingBottom: insets.bottom + 32 },
+          // Bottom padding now also clears the fixed CTA footer below
+          // (roughly its own height + safe-area inset) so the last scroll
+          // content ("You might also like") never ends up hidden behind it.
+          { paddingTop: insets.top, paddingBottom: insets.bottom + 140 },
         ]}
       >
         <ScreenHeader title={filterBaseName ?? serviceLine?.name ?? serviceName} />
@@ -1198,46 +1201,6 @@ export default function ServiceDetailsScreen() {
               </View>
             ) : null}
 
-            <View style={styles.ctaRow}>
-              <TouchableOpacity
-                style={[styles.addToCartBtn, (!canContinue || addingToCart) && styles.continueBtnDisabled]}
-                onPress={handleContinue}
-                disabled={!canContinue || addingToCart}
-                activeOpacity={0.9}
-              >
-                {addingToCart ? (
-                  <ActivityIndicator size="small" color={COLORS.primaryDark} />
-                ) : (
-                  <>
-                    <Ionicons name="cart-outline" size={18} color={COLORS.primaryDark} />
-                    <Text style={styles.addToCartBtnText}>
-                      {checkedTierIds.size > 0
-                        ? `${t("service.addToCart")} (${checkedTierIds.size + 1})`
-                        : t("service.addToCart")}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.bookNowBtn, !canContinue && styles.continueBtnDisabled]}
-                onPress={handleBookNow}
-                disabled={!canContinue}
-                activeOpacity={0.9}
-              >
-                <Ionicons name="flash-outline" size={18} color={COLORS.white} />
-                <Text style={styles.bookNowBtnText}>
-                  {checkedTierIds.size > 0
-                    ? `${t("service.bookNow")} (${checkedTierIds.size + 1})`
-                    : t("service.bookNow")}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {checkedTierIds.size > 0 ? (
-              <Text style={styles.multiAddHint}>
-                All {checkedTierIds.size + 1} items will be booked together in one order.
-              </Text>
-            ) : null}
-
             {relatedLines.length > 0 ? (
               <View style={styles.relatedSection}>
                 <Text style={styles.sectionTitle}>You might also like</Text>
@@ -1274,6 +1237,60 @@ export default function ServiceDetailsScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Bug fix: Book Now/Add to Cart used to sit inline in the scroll
+          content (right above "You might also like"), so scrolling past
+          them made the CTA inaccessible without scrolling back up - exactly
+          the "must remain accessible while scrolling" issue flagged in the
+          production-safety review. Moved outside the ScrollView as a fixed
+          bottom bar, same buttons/styles/handlers, padded for the bottom
+          safe-area inset (home indicator / Android nav bar) instead of a
+          hardcoded height. Guarded by the same loading/error/empty check
+          the CTA's old position was implicitly inside, so it never renders
+          floating over a loading spinner or an empty-state message. */}
+      {!loading && !loadError && stitchingTypes.length > 0 ? (
+        <View style={[styles.ctaFooter, { paddingBottom: insets.bottom + SPACING.sm }]}>
+          {checkedTierIds.size > 0 ? (
+            <Text style={styles.multiAddHint}>
+              All {checkedTierIds.size + 1} items will be booked together in one order.
+            </Text>
+          ) : null}
+          <View style={styles.ctaRow}>
+            <TouchableOpacity
+              style={[styles.addToCartBtn, (!canContinue || addingToCart) && styles.continueBtnDisabled]}
+              onPress={handleContinue}
+              disabled={!canContinue || addingToCart}
+              activeOpacity={0.9}
+            >
+              {addingToCart ? (
+                <ActivityIndicator size="small" color={COLORS.primaryDark} />
+              ) : (
+                <>
+                  <Ionicons name="cart-outline" size={18} color={COLORS.primaryDark} />
+                  <Text style={styles.addToCartBtnText}>
+                    {checkedTierIds.size > 0
+                      ? `${t("service.addToCart")} (${checkedTierIds.size + 1})`
+                      : t("service.addToCart")}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.bookNowBtn, !canContinue && styles.continueBtnDisabled]}
+              onPress={handleBookNow}
+              disabled={!canContinue}
+              activeOpacity={0.9}
+            >
+              <Ionicons name="flash-outline" size={18} color={COLORS.white} />
+              <Text style={styles.bookNowBtnText}>
+                {checkedTierIds.size > 0
+                  ? `${t("service.bookNow")} (${checkedTierIds.size + 1})`
+                  : t("service.bookNow")}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1796,6 +1813,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     color: COLORS.white,
+  },
+  ctaFooter: {
+    backgroundColor: COLORS.white,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.grayBorder,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: { elevation: 8 },
+    }),
   },
   loadingWrap: { alignItems: "center", gap: SPACING.sm, paddingVertical: SPACING.xl },
   loadingText: { fontSize: 14, color: COLORS.gray },
