@@ -1234,8 +1234,15 @@ export default function AddressScreen() {
             </>
           ) : null}
 
-          {/* Continue button - checkout / buy-now / manage (selection screen only) */}
-          {!isBookingFlow && mode === "select" ? (
+          {/* Continue button - checkout / buy-now (selection screen only).
+              Bug fix: this used to also render in the plain "Manage
+              Address" case (no active booking/checkout flow) with the
+              fallback label "Done" - forcing a customer who's just
+              managing their saved addresses to select one and tap a CTA
+              to leave, when the back button already does that. Confirm
+              Address / Continue to Checkout still show for their real
+              flows; only the irrelevant standalone "Done" case is hidden. */}
+          {!isBookingFlow && mode === "select" && (isBuyNowFlow || isCheckoutFlow) ? (
           <Animated.View
             entering={FadeInDown.delay(200).duration(400)}
             style={styles.btnWrap}
