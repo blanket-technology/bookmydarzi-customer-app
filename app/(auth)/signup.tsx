@@ -215,6 +215,21 @@ export default function SignupScreen() {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - handleRegister,
+  // handleVerifyOtp, and handleResendOtp all call setState after an await
+  // with no guard, so navigating away (back button, or afterAuth()'s
+  // navigation on successful verification) while a request was in flight
+  // fired the warning. Same isMountedRef guard pattern as
+  // OrderTimeline/index.tsx.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const btnSc = useSharedValue(1);
   const onBtnIn  = () => { btnSc.value = withTiming(0.97, { duration: 100 }); };
   const onBtnOut = () => { btnSc.value = withTiming(1.0,  { duration: 150 }); };
@@ -241,22 +256,38 @@ export default function SignupScreen() {
     if (err) return setError(err);
     try {
       await register({ first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim(), mobile: mobile.trim(), password });
+      if (!isMountedRef.current) return;
       setStep("otp"); setOtpVal(""); startCountdown();
-    } catch (e: any) { setError(e?.message ?? "Registration failed. Please try again."); }
+    } catch (e: any) {
+      if (!isMountedRef.current) return;
+      setError(e?.message ?? "Registration failed. Please try again.");
+    }
   };
 
   const handleVerifyOtp = async () => {
     setError(null);
     if (otpVal.length < 6) return setError("Please enter the 6-digit OTP.");
-    try { await verifyEmailOtp(email.trim(), otpVal.trim()); afterAuth(); }
-    catch (e: any) { setError(e?.message ?? "OTP verification failed."); }
+    try {
+      await verifyEmailOtp(email.trim(), otpVal.trim());
+      if (!isMountedRef.current) return;
+      afterAuth();
+    } catch (e: any) {
+      if (!isMountedRef.current) return;
+      setError(e?.message ?? "OTP verification failed.");
+    }
   };
 
   const handleResendOtp = async () => {
     if (countdown > 0) return;
     setError(null); setOtpVal("");
-    try { await resendEmailOtp(email.trim()); startCountdown(); }
-    catch (e: any) { setError(e?.message ?? "Failed to resend OTP."); }
+    try {
+      await resendEmailOtp(email.trim());
+      if (!isMountedRef.current) return;
+      startCountdown();
+    } catch (e: any) {
+      if (!isMountedRef.current) return;
+      setError(e?.message ?? "Failed to resend OTP.");
+    }
   };
 
   const handleBack = () => {

@@ -16,6 +16,14 @@ export function useNetworkStatus(): NetworkStatus {
   });
 
   useEffect(() => {
+    // Bug fix: "Can't perform a React state update on a component that
+    // hasn't mounted yet"/"on an unmounted component" - NetInfo.fetch()'s
+    // initial one-shot read had no mount guard, so a component using this
+    // hook that unmounted before the fetch resolved (this hook is used
+    // widely across the app) could fire setStatus after unmount. The
+    // addEventListener subscription itself was already safely torn down
+    // via unsubscribe.
+    let cancelled = false;
     const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
       setStatus({
         isConnected: state.isConnected ?? true,
@@ -25,13 +33,17 @@ export function useNetworkStatus(): NetworkStatus {
     });
     // Fetch immediately so we have state right away
     NetInfo.fetch().then((state) => {
+      if (cancelled) return;
       setStatus({
         isConnected: state.isConnected ?? true,
         isInternetReachable: state.isInternetReachable,
         isResolved: true,
       });
     });
-    return unsubscribe;
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, []);
 
   return status;

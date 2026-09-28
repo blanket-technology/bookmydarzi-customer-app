@@ -9,7 +9,7 @@
  * the standard, safe RN Animated pattern rather than a bug. */
 
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -181,17 +181,34 @@ export function MapPinPicker({ visible, initialCoords, onConfirm, onClose }: Pro
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - geocodeCenter's
+  // debounced callback and handleMyLocation both call setState after an
+  // await with no guard, so closing this modal (onClose) while a geocode
+  // or GPS lookup was still in flight fired the warning. Same
+  // isMountedRef guard pattern as OrderTimeline/index.tsx - tracks the
+  // component's actual mount lifetime, not just modal visibility.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const geocodeCenter = useCallback((latitude: number, longitude: number) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setIsGeocoding(true);
       try {
         const result = await reverseGeocodeCoords(latitude, longitude);
+        if (!isMountedRef.current) return;
         setAddressPreview(result);
       } catch {
+        if (!isMountedRef.current) return;
         setAddressPreview(null);
       } finally {
-        setIsGeocoding(false);
+        if (isMountedRef.current) setIsGeocoding(false);
       }
     }, GEOCODE_DEBOUNCE_MS);
   }, []);
@@ -231,12 +248,14 @@ export function MapPinPicker({ visible, initialCoords, onConfirm, onClose }: Pro
       setLocating(true);
       try {
         const { latitude, longitude } = await getCurrentGpsCoords();
+        if (!isMountedRef.current) return;
         const region: Region = { latitude, longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 };
         mapRef.current?.animateToRegion(region, 500);
         setCenterCoords({ latitude, longitude });
         setAddressPreview(null);
         geocodeCenter(latitude, longitude);
       } catch (err) {
+        if (!isMountedRef.current) return;
         // On auto-locate (modal just opened) stay quiet and fall back to
         // initialCoords/default region - only a manual tap on the "my
         // location" button surfaces the real reason as an alert.
@@ -252,7 +271,7 @@ export function MapPinPicker({ visible, initialCoords, onConfirm, onClose }: Pro
           setCenterCoords(initialCoords);
         }
       } finally {
-        setLocating(false);
+        if (isMountedRef.current) setLocating(false);
       }
     },
     [initialCoords, geocodeCenter],

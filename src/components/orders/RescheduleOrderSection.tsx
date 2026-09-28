@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -53,6 +53,19 @@ export function RescheduleOrderSection({ orderId, currentPickupAt, onRescheduled
   const [slotLabel, setSlotLabel] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - confirmReschedule
+  // calls setState after an await with no guard, so navigating away from
+  // order-details while the reschedule request was in flight fired the
+  // warning. Same isMountedRef guard pattern as OrderTimeline/index.tsx.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const confirmReschedule = useCallback(async () => {
     const slot = pickupTimeSlots.find((s) => s.label === slotLabel);
     if (!date || !slot) {
@@ -68,12 +81,14 @@ export function RescheduleOrderSection({ orderId, currentPickupAt, onRescheduled
     setSubmitting(true);
     try {
       await reschedulePickup(orderId, dt.toISOString(), slot.label);
+      if (!isMountedRef.current) return;
       setModalVisible(false);
       onRescheduled();
     } catch (e: any) {
+      if (!isMountedRef.current) return;
       Alert.alert("Error", e?.response?.data?.detail ?? "Could not reschedule pickup. Please try again.");
     } finally {
-      setSubmitting(false);
+      if (isMountedRef.current) setSubmitting(false);
     }
   }, [date, slotLabel, pickupTimeSlots, orderId, onRescheduled]);
 

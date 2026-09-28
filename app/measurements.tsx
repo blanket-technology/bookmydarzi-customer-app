@@ -153,6 +153,20 @@ export default function MeasurementsScreen() {
   const [notes, setNotes] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - handleSave awaits
+  // editMeasurement (a Zustand action) and then calls returnToSelect
+  // (local setState) or Alert.alert with no guard, so navigating away
+  // while the save was in flight could fire the warning. Same
+  // isMountedRef guard pattern as OrderTimeline/index.tsx.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       fetchMeasurements();
@@ -259,6 +273,7 @@ export default function MeasurementsScreen() {
     };
 
     const saved = await editMeasurement(editingId, payload);
+    if (!isMountedRef.current) return;
 
     if (saved) {
       useToastStore.getState().show("Measurement Updated");

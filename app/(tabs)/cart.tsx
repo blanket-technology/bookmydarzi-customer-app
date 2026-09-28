@@ -12,7 +12,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -304,6 +304,20 @@ export default function CartScreen() {
   const [checkingOut, setCheckingOut] = useState(false);
   const [codModalVisible, setCodModalVisible] = useState(false);
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - handlePickStyleReference
+  // and handleRefresh both call setState after an await with no guard, so
+  // navigating away from the Cart tab (or a fast tab switch) while either
+  // was in flight fired the warning. Same isMountedRef guard pattern as
+  // OrderTimeline/index.tsx.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const handlePickStyleReference = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
@@ -321,21 +335,24 @@ export default function CartScreen() {
       quality: 0.8,
     });
     if (result.canceled || !result.assets[0]?.uri) return;
+    if (!isMountedRef.current) return;
 
     const localUri = result.assets[0].uri;
     setStyleReferenceUri(localUri);
     setStyleReferenceUploading(true);
     try {
       const uploaded = await uploadOrderStyleReference(localUri);
+      if (!isMountedRef.current) return;
       setStyleReferenceUri(uploaded.url);
     } catch {
+      if (!isMountedRef.current) return;
       Alert.alert(
         "Upload failed",
         "Couldn't upload the style reference photo. Please try again.",
       );
       setStyleReferenceUri(null);
     } finally {
-      setStyleReferenceUploading(false);
+      if (isMountedRef.current) setStyleReferenceUploading(false);
     }
   };
 
@@ -369,7 +386,7 @@ export default function CartScreen() {
         fetchAddresses(),
       ]);
     } finally {
-      setRefreshing(false);
+      if (isMountedRef.current) setRefreshing(false);
     }
   };
 

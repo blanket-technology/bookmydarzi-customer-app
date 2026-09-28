@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import React, { memo, useCallback, useEffect, useState } from "react";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
@@ -48,21 +48,37 @@ const ProgressGallery = memo(({ orderId, photos, onLoaded }: ProgressGalleryProp
   const [error, setError] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - load() called
+  // setState after an await with no guard, so navigating away from the
+  // order-details screen while the photo fetch was in flight fired the
+  // warning. Same isMountedRef guard pattern as the sibling
+  // OrderTimeline/index.tsx component.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const load = useCallback(async () => {
     if (!Number.isFinite(orderId) || orderId <= 0) return;
     setLoading(true);
     setError(null);
     try {
       const res = await fetchOrderPhotos(orderId);
+      if (!isMountedRef.current) return;
       // Backend already orders by sequence then uploaded_at - trust it,
       // don't re-sort (re-sorting risks fighting a tie-break the server
       // already resolved consistently).
       setData(res.photos);
       onLoaded?.(res.photos);
     } catch (e) {
+      if (!isMountedRef.current) return;
       setError(e instanceof Error && e.message ? e.message : "Couldn't load photos.");
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   }, [orderId, onLoaded]);
 

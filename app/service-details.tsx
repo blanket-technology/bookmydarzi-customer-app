@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -170,6 +170,21 @@ export default function ServiceDetailsScreen() {
 
   const { t } = useAppLanguage();
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - loadServiceData,
+  // the ratings fetch, and the per-tier addon fetch below all call
+  // setState after an await with no guard, so navigating away from this
+  // screen while any of them was still in flight (back button, tapping a
+  // related-line card) fired the warning. Same isMountedRef guard pattern
+  // as OrderTimeline/index.tsx.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Capped at 5 (was 99) - matches the backend's own cap (cart.py schema),
   // and a doorstep-tailoring order this large per line item is almost
   // always a mistake, not a genuine home-customer order.
@@ -234,6 +249,7 @@ export default function ServiceDetailsScreen() {
       setLoadError(false);
       try {
         const tree = await fetchCatalogTree();
+        if (!isMountedRef.current) return;
         const category = resolveCatalogCategory(
           tree,
           catalogCategoryId,
@@ -336,6 +352,7 @@ export default function ServiceDetailsScreen() {
           setRelatedLines([]);
         }
       } catch {
+        if (!isMountedRef.current) return;
         setServiceLine(null);
         setDirectService(null);
         setStitchingTypes([]);
@@ -343,7 +360,7 @@ export default function ServiceDetailsScreen() {
         setRelatedLines([]);
         setLoadError(true);
       } finally {
-        setLoading(false);
+        if (isMountedRef.current) setLoading(false);
       }
     },
     [
@@ -368,7 +385,9 @@ export default function ServiceDetailsScreen() {
     const ratingServiceId =
       paramBookableId > 0 ? paramBookableId : paramServiceLineId;
     if (ratingServiceId > 0) {
-      void fetchServiceRatings(ratingServiceId).then(setServiceRatings);
+      void fetchServiceRatings(ratingServiceId).then((result) => {
+        if (isMountedRef.current) setServiceRatings(result);
+      });
     }
   }, [paramBookableId, paramServiceLineId]);
 
@@ -557,6 +576,7 @@ export default function ServiceDetailsScreen() {
           failedNames.push(stripQualityPrefix(tier.name));
         }
       }
+      if (!isMountedRef.current) return;
       setCheckedTierIds(new Set());
       setExtraTierSelectedAddons({});
       if (failedNames.length > 0) {
@@ -575,7 +595,7 @@ export default function ServiceDetailsScreen() {
       // error state / a caller-visible throw - nothing further to do here
       // beyond not leaving the button stuck in a loading state.
     } finally {
-      setAddingToCart(false);
+      if (isMountedRef.current) setAddingToCart(false);
     }
   }, [
     selectedStitching, isAuthenticated, getQuantityForStitching,
@@ -690,10 +710,13 @@ export default function ServiceDetailsScreen() {
         setExtraTierAddonsLoading((prevLoading) => ({ ...prevLoading, [serviceId]: true }));
         void fetchServiceAddons(serviceId)
           .then((result) => {
+            if (!isMountedRef.current) return;
             setExtraTierAddons((prevAddons) => ({ ...prevAddons, [serviceId]: result }));
           })
           .finally(() => {
-            setExtraTierAddonsLoading((prevLoading) => ({ ...prevLoading, [serviceId]: false }));
+            if (isMountedRef.current) {
+              setExtraTierAddonsLoading((prevLoading) => ({ ...prevLoading, [serviceId]: false }));
+            }
           });
       }
       return next;
