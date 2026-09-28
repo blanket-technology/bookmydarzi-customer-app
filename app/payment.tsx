@@ -81,6 +81,20 @@ export default function PaymentScreen() {
   const isBusy = useRef(false);
   const razorpayAvailable = isRazorpayNativeAvailable();
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - loadSession,
+  // confirmWithBackend, and openCheckout all call setState after an await
+  // with no guard, so navigating away from this screen (back button) while
+  // any of them was in flight fired the warning. Same isMountedRef guard
+  // pattern as OrderTimeline/index.tsx.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const finishSuccess = useCallback((paidAmountRupees?: number) => {
     useOrderStore.getState().invalidateCache();
     useCustomerOrdersStore.getState().invalidateCache();
@@ -125,9 +139,11 @@ export default function PaymentScreen() {
         orderId,
         payAmount,
       );
+      if (!isMountedRef.current) return;
       setSession(s);
       setState("ready");
     } catch (err) {
+      if (!isMountedRef.current) return;
       if (err instanceof PaymentAlreadyCompletedError) {
         finishSuccess();
         return;
@@ -170,9 +186,11 @@ export default function PaymentScreen() {
           );
         }
 
+        if (!isMountedRef.current) return;
         setPendingGatewayResult(null);
         finishSuccess(session_.amount / 100);
       } catch (err) {
+        if (!isMountedRef.current) return;
         // The gateway already charged the customer by this point - never
         // treat this as "nothing happened, try again from scratch". Keep
         // the result so a retry only re-verifies, never reopens Razorpay.
@@ -210,6 +228,7 @@ export default function PaymentScreen() {
 
       await confirmWithBackend(session, result);
     } catch (err) {
+      if (!isMountedRef.current) return;
       if (err instanceof DevelopmentBuildRequiredError) {
         setState("dev_build_required");
         setErrorMsg(err.message);

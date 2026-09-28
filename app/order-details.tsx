@@ -5,7 +5,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -746,11 +746,27 @@ export default function OrderDetailsScreen() {
   );
 
   const loadRequestRef = React.useRef(0);
+  // Bug fix: "Can't perform a React state update on a component that hasn't
+  // mounted yet"/"on an unmounted component" - loadRequestRef above only
+  // guards against *stale* overlapping requests (a focus refetch racing a WS
+  // push), it does nothing once the component itself has genuinely
+  // unmounted (user navigated away while load()/fetchOrderRating() was
+  // still in flight). Same isMountedRef guard pattern as
+  // OrderTimeline/index.tsx.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     if (orderId === null) {
-      setError("Invalid order reference.");
-      setLoading(false);
+      if (isMountedRef.current) {
+        setError("Invalid order reference.");
+        setLoading(false);
+      }
       return;
     }
     const requestId = ++loadRequestRef.current;
@@ -760,7 +776,7 @@ export default function OrderDetailsScreen() {
       const data = await fetchCustomerOrderDetails(orderId);
       // Overlapping calls can land out of order (focus refetch + WS push);
       // only the most recently *issued* request is allowed to apply its result.
-      if (requestId !== loadRequestRef.current) return;
+      if (requestId !== loadRequestRef.current || !isMountedRef.current) return;
       setPayload(data);
       const normalizedStatus = normalizeOrderStatus(data.order.status);
       // Fetch existing rating once the order is rateable - matches the
@@ -775,6 +791,7 @@ export default function OrderDetailsScreen() {
       if (normalizedStatus === "delivered" || normalizedStatus === "completed") {
         try {
           const ratingInfo = await fetchOrderRating(orderId);
+          if (requestId !== loadRequestRef.current || !isMountedRef.current) return;
           if (ratingInfo.already_rated) {
             setAlreadyRated(true);
             setExistingRating(ratingInfo.rating);
@@ -795,16 +812,18 @@ export default function OrderDetailsScreen() {
         !_shownPopups.has(cacheKey)
       ) {
         _shownPopups.add(cacheKey);
-        setTimeout(() => showStatusPopup(normalizedStatus, data.order.order_code), 400);
+        setTimeout(() => {
+          if (isMountedRef.current) showStatusPopup(normalizedStatus, data.order.order_code);
+        }, 400);
       }
     } catch (err) {
-      if (requestId !== loadRequestRef.current) return;
+      if (requestId !== loadRequestRef.current || !isMountedRef.current) return;
       setPayload(null);
       setError(
         err instanceof Error ? err.message : "Could not load booking details.",
       );
     } finally {
-      if (requestId === loadRequestRef.current) setLoading(false);
+      if (requestId === loadRequestRef.current && isMountedRef.current) setLoading(false);
     }
   }, [orderId, showStatusPopup]);
 
@@ -898,12 +917,13 @@ export default function OrderDetailsScreen() {
     try {
       await downloadAndShareInvoice(orderId, payload?.order.order_code ?? null);
     } catch (err) {
+      if (!isMountedRef.current) return;
       Alert.alert(
         "Invoice",
         err instanceof Error ? err.message : "Could not download the invoice.",
       );
     } finally {
-      setBusy(null);
+      if (isMountedRef.current) setBusy(null);
     }
   };
 
@@ -949,12 +969,14 @@ export default function OrderDetailsScreen() {
       });
       await confirmRazorpayPayment(session.payment_id, orderId, result);
       useCustomerOrdersStore.getState().invalidateCache();
+      if (!isMountedRef.current) return;
       Alert.alert(
         "Payment successful",
         "Your remaining balance has been paid.",
       );
       await load();
     } catch (err) {
+      if (!isMountedRef.current) return;
       if (err instanceof PaymentCancelledError) {
         setBusy(null);
         return;
@@ -962,7 +984,7 @@ export default function OrderDetailsScreen() {
       if (err instanceof PaymentAlreadyCompletedError) {
         Alert.alert("Already paid", "This order is already fully paid.");
         await load();
-        setBusy(null);
+        if (isMountedRef.current) setBusy(null);
         return;
       }
       Alert.alert(
@@ -972,7 +994,7 @@ export default function OrderDetailsScreen() {
           : "Could not complete the payment. If any amount was deducted, it will be refunded automatically - we never double-charge you. Please try again in a moment.",
       );
     } finally {
-      setBusy(null);
+      if (isMountedRef.current) setBusy(null);
     }
   };
 
@@ -1006,18 +1028,20 @@ export default function OrderDetailsScreen() {
         ratingComment.trim() || undefined,
         alreadyRated, // PATCH when editing an existing rating, POST otherwise
       );
+      if (!isMountedRef.current) return;
       setAlreadyRated(true);
       setExistingRating(ratingValue);
       setExistingComment(ratingComment.trim() || null);
       setEditingRating(false);
       Alert.alert("Thank you!", "Your rating has been submitted.");
     } catch (err) {
+      if (!isMountedRef.current) return;
       Alert.alert(
         "Error",
         err instanceof Error ? err.message : "Could not submit rating.",
       );
     } finally {
-      setRatingBusy(false);
+      if (isMountedRef.current) setRatingBusy(false);
     }
   };
 

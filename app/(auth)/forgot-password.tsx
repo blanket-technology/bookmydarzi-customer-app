@@ -43,6 +43,20 @@ export default function ForgotPasswordScreen() {
   const [countdown, setCountdown] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - every handler below
+  // calls setState after an await with no guard, so navigating away
+  // (back button, or the final safeRouterReplace to login) while a
+  // request was in flight fired the warning. Same isMountedRef guard
+  // pattern as OrderTimeline/index.tsx.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Step-aware back: inside the multi-step flow, go to the previous step;
   // from the first step, return to login. Wired to both the header button
   // and the Android hardware back button so they behave identically.
@@ -84,13 +98,15 @@ export default function ForgotPasswordScreen() {
     setLoading(true);
     try {
       await forgotPasswordRequest(email.trim());
+      if (!isMountedRef.current) return;
       setStep("verify");
       setOtp("");
       startCountdown();
     } catch (err: any) {
+      if (!isMountedRef.current) return;
       setError(err?.message ?? "Something went wrong. Please try again.");
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
@@ -102,14 +118,16 @@ export default function ForgotPasswordScreen() {
     setLoading(true);
     try {
       const res = await forgotPasswordVerifyRequest(email.trim(), otp.trim());
+      if (!isMountedRef.current) return;
       setResetToken(res.reset_token);
       setStep("reset");
       setPassword("");
       setConfirmPassword("");
     } catch (err: any) {
+      if (!isMountedRef.current) return;
       setError(err?.message ?? "OTP verification failed. Please try again.");
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
@@ -120,11 +138,13 @@ export default function ForgotPasswordScreen() {
     setLoading(true);
     try {
       await forgotPasswordRequest(email.trim());
+      if (!isMountedRef.current) return;
       startCountdown();
     } catch (err: any) {
+      if (!isMountedRef.current) return;
       setError(err?.message ?? "Failed to resend OTP.");
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
@@ -136,11 +156,13 @@ export default function ForgotPasswordScreen() {
     setLoading(true);
     try {
       await forgotPasswordResetRequest(resetToken, password);
+      if (!isMountedRef.current) return;
       setStep("done");
     } catch (err: any) {
+      if (!isMountedRef.current) return;
       setError(err?.message ?? "Failed to reset password. Please try again.");
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   };
 

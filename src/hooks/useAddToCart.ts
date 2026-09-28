@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuthStore } from "../../store/useAuthStore";
@@ -37,6 +37,20 @@ export function useAddToCart() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [addingId, setAddingId] = useState<number | null>(null);
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - addPopularToCart
+  // calls setAddingId after two awaits (resolvePopularServiceId,
+  // postPopularServiceToCart) with no guard, so navigating away from the
+  // home screen while the add-to-cart request was in flight fired the
+  // warning. Same isMountedRef guard pattern as OrderTimeline/index.tsx.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const addServiceEntry = useCartStore((s) => s.addServiceEntry);
   const setPendingService = useCartStore((s) => s.setPendingService);
   const setPendingRoute = useCartStore((s) => s.setPendingRoute);
@@ -62,6 +76,7 @@ export function useAddToCart() {
     async (row: PopularServiceRow) => {
       const rowKey = row.sub.Id;
       const serviceId = await resolvePopularServiceId(row);
+      if (!isMountedRef.current) return;
 
       if (!isAuthenticated) {
         setPendingService(buildPendingItem(serviceId || rowKey, row));
@@ -82,11 +97,12 @@ export function useAddToCart() {
       try {
         await postPopularServiceToCart(serviceId);
       } catch (err) {
+        if (!isMountedRef.current) return;
         const msg =
           err instanceof Error ? err.message : "Could not add to cart.";
         Alert.alert("Add to cart failed", msg);
       } finally {
-        setAddingId(null);
+        if (isMountedRef.current) setAddingId(null);
       }
     },
     [

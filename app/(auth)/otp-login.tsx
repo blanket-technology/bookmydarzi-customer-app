@@ -45,6 +45,21 @@ export default function OtpLoginScreen() {
   // Prevent double-submit
   const isSubmittingRef = useRef(false);
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - handleSendOtp,
+  // handleVerifyOtp, and handleResend all call setState after an await
+  // with no guard, so navigating away (back button, or the final
+  // safeRouterReplace on successful verification) while a request was in
+  // flight fired the warning. Same isMountedRef guard pattern as
+  // OrderTimeline/index.tsx.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const startCountdown = useCallback(() => {
     setCountdown(RESEND_COOLDOWN_SECONDS);
     if (timerRef.current) clearInterval(timerRef.current);
@@ -84,9 +99,11 @@ export default function OtpLoginScreen() {
     isSubmittingRef.current = true;
     try {
       await loginWithOtp(mobile.trim());
+      if (!isMountedRef.current) return;
       setStep("otp");
       startCountdown();
     } catch (err: any) {
+      if (!isMountedRef.current) return;
       setError(err?.message ?? "Failed to send OTP. Please try again.");
     } finally {
       isSubmittingRef.current = false;
@@ -104,8 +121,10 @@ export default function OtpLoginScreen() {
     isSubmittingRef.current = true;
     try {
       await verifyOtp(mobile.trim(), otp.trim());
+      if (!isMountedRef.current) return;
       safeRouterReplace(router, "/(auth)/otp-verify-success" as any);
     } catch (err: any) {
+      if (!isMountedRef.current) return;
       const msg: string = err?.message ?? "OTP verification failed.";
       // User-friendly messages for common errors
       if (msg.toLowerCase().includes("invalid") || msg.toLowerCase().includes("incorrect")) {
@@ -128,8 +147,10 @@ export default function OtpLoginScreen() {
     isSubmittingRef.current = true;
     try {
       await loginWithOtp(mobile.trim());
+      if (!isMountedRef.current) return;
       startCountdown();
     } catch (err: any) {
+      if (!isMountedRef.current) return;
       setError(err?.message ?? "Failed to resend OTP.");
     } finally {
       isSubmittingRef.current = false;

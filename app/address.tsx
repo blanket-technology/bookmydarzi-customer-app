@@ -199,6 +199,21 @@ export default function AddressScreen() {
   const fullNameRef = useRef<TextInput>(null);
   const [scrollToForm, setScrollToForm] = useState(false);
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - handleUseMyLocation,
+  // handleMapConfirm, handleSaveAddress, handleRegisterInterest, and
+  // handleDeleteAddress all call setState after an await with no guard, so
+  // navigating away from this screen (back button, completing checkout)
+  // while any of them was in flight fired the warning. Same isMountedRef
+  // guard pattern as OrderTimeline/index.tsx.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Form state
   const [fullName, setFullName] = useState(
     user ? `${user.first_name} ${user.last_name}`.trim() : "",
@@ -381,13 +396,16 @@ export default function AddressScreen() {
         onPress: async () => {
           try {
             await removeAddress(addr.id);
+            if (!isMountedRef.current) return;
             if (selectedAddressId === addr.id) {
               setSelectedAddressIdLocal(null);
             }
             await fetchAddresses();
+            if (!isMountedRef.current) return;
             useToastStore.getState().show("Address Deleted Successfully");
             scrollToTop();
           } catch (err) {
+            if (!isMountedRef.current) return;
             Alert.alert(
               "Error",
               err instanceof Error ? err.message : "Failed to delete address.",
@@ -472,11 +490,13 @@ export default function AddressScreen() {
     setServiceability(null);
     try {
       const coords = await getCurrentGpsCoords();
+      if (!isMountedRef.current) return;
       setGpsCoords(coords);
 
       // Reverse geocode - auto-fill all address fields
       try {
         const geo = await reverseGeocodeCoords(coords.latitude, coords.longitude);
+        if (!isMountedRef.current) return;
 
         // House + road → line1 (only if the user hasn't typed anything yet)
         if (geo.line1 && !line1.trim()) setLine1(geo.line1);
@@ -505,6 +525,7 @@ export default function AddressScreen() {
       // form, not after tapping Save.
       try {
         const svc = await checkServiceability(coords.latitude, coords.longitude);
+        if (!isMountedRef.current) return;
         setServiceability(svc);
         setInterestState("idle");
         if (!svc.serviceable) {
@@ -518,12 +539,13 @@ export default function AddressScreen() {
         // show yet - the backend still enforces the real rule on Save.
       }
     } catch (err) {
+      if (!isMountedRef.current) return;
       Alert.alert(
         "Location unavailable",
         err instanceof Error ? err.message : "Could not get your location.",
       );
     } finally {
-      setGpsLoading(false);
+      if (isMountedRef.current) setGpsLoading(false);
     }
   };
 
@@ -549,6 +571,7 @@ export default function AddressScreen() {
 
       try {
         const svc = await checkServiceability(picked.latitude, picked.longitude);
+        if (!isMountedRef.current) return;
         setServiceability(svc);
         setInterestState("idle");
         if (!svc.serviceable) {
@@ -620,9 +643,9 @@ export default function AddressScreen() {
         pincode: pincode || null,
         address_text: [line1, city].filter(Boolean).join(", ") || null,
       });
-      setInterestState("done");
+      if (isMountedRef.current) setInterestState("done");
     } catch {
-      setInterestState("idle");
+      if (isMountedRef.current) setInterestState("idle");
     }
   };
 
@@ -641,8 +664,10 @@ export default function AddressScreen() {
 
     const wasEditing = editingId != null;
     const saved = await performSaveAddress();
+    if (!isMountedRef.current) return null;
     if (saved) {
       await fetchAddresses();
+      if (!isMountedRef.current) return saved;
       setSelectedAddressIdLocal(saved.id);
       setEditingId(null);
       setSaveSuccess(true);
@@ -745,17 +770,19 @@ export default function AddressScreen() {
       await addServiceEntry(payload, {
         toastMessage: "Added to Cart Successfully",
       });
+      if (!isMountedRef.current) return;
       setAddressId(addressId);
       clearPendingService();
       setBookingFlowActive(false);
       safeRouterReplace(router, "/(tabs)/cart");
     } catch (err) {
+      if (!isMountedRef.current) return;
       Alert.alert(
         "Add to cart failed",
         err instanceof Error ? err.message : "Could not add to cart.",
       );
     } finally {
-      setSubmitting(false);
+      if (isMountedRef.current) setSubmitting(false);
     }
   };
 
@@ -764,7 +791,7 @@ export default function AddressScreen() {
     try {
       await handleSaveAddress();
     } finally {
-      setSubmitting(false);
+      if (isMountedRef.current) setSubmitting(false);
     }
   };
 
@@ -799,7 +826,7 @@ export default function AddressScreen() {
     try {
       finishAddressFlow(selectedAddressId);
     } finally {
-      setSubmitting(false);
+      if (isMountedRef.current) setSubmitting(false);
     }
   };
 

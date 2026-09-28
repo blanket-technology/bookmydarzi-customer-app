@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -37,6 +37,19 @@ export function CancelOrderSection({ orderId, orderStatus, onCancelled, onContac
   const [cancelling, setCancelling] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - openPreview and
+  // confirmCancel both call setState after an await with no guard, so
+  // navigating away from order-details while either was in flight fired
+  // the warning. Same isMountedRef guard pattern as OrderTimeline/index.tsx.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Cancellability is gated by the caller (order-details.tsx checks
   // CUSTOMER_CANCELLABLE_STATUSES before rendering this component at all)
   // and re-validated server-side by fetchCancellationPreview - no need to
@@ -46,6 +59,7 @@ export function CancelOrderSection({ orderId, orderStatus, onCancelled, onContac
     setLoading(true);
     try {
       const p = await fetchCancellationPreview(orderId);
+      if (!isMountedRef.current) return;
       if (p.contact_support) {
         onContactSupport();
         return;
@@ -53,9 +67,10 @@ export function CancelOrderSection({ orderId, orderStatus, onCancelled, onContac
       setPreview(p);
       setModalVisible(true);
     } catch (e: any) {
+      if (!isMountedRef.current) return;
       Alert.alert("Error", e?.response?.data?.detail ?? "Could not load cancellation details.");
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   }, [orderId, onContactSupport]);
 
@@ -64,12 +79,14 @@ export function CancelOrderSection({ orderId, orderStatus, onCancelled, onContac
     setCancelling(true);
     try {
       await cancelOrder(orderId);
+      if (!isMountedRef.current) return;
       setModalVisible(false);
       onCancelled();
     } catch (e: any) {
+      if (!isMountedRef.current) return;
       Alert.alert("Error", e?.response?.data?.detail ?? "Cancellation failed. Please try again.");
     } finally {
-      setCancelling(false);
+      if (isMountedRef.current) setCancelling(false);
     }
   }, [orderId, preview, onCancelled]);
 

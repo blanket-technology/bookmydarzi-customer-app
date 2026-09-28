@@ -9,7 +9,7 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -51,6 +51,20 @@ export default function EditProfileScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
+  // Bug fix: "Can't perform a React state update on a component that
+  // hasn't mounted yet"/"on an unmounted component" - handleSave calls
+  // setSaving(false) after two awaits (updateProfile, fetchProfile) with
+  // no guard, so navigating away (router.back() on success, or the user
+  // backing out manually mid-save) could fire the warning. Same
+  // isMountedRef guard pattern as OrderTimeline/index.tsx.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!firstName.trim()) errs.firstName = "First name is required";
@@ -89,14 +103,16 @@ export default function EditProfileScreen() {
       }
 
       await fetchProfile();
+      if (!isMountedRef.current) return;
       useToastStore.getState().show("Profile updated successfully!");
       router.back();
     } catch (err: any) {
+      if (!isMountedRef.current) return;
       useToastStore
         .getState()
         .show(err?.message ?? "Failed to update profile. Please try again.", "error");
     } finally {
-      setSaving(false);
+      if (isMountedRef.current) setSaving(false);
     }
   };
 
