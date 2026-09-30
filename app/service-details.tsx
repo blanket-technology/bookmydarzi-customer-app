@@ -300,11 +300,26 @@ export default function ServiceDetailsScreen() {
           // the "Add more work to this garment" checkbox list below, which
           // reads from allLineTiers (the full, unfiltered line) rather than
           // this narrowed list.
+          //
+          // Bug fix: the home screen's "Popular Services" card
+          // (navigateToServiceDetails/buildServiceDetailsParams) passes
+          // neither filterBaseName nor selectedStitchingId, only
+          // bookableServiceId - so a Custom Alterations popular-service tap
+          // (e.g. "Blouse Alteration") fell all the way through to
+          // `types = allTypes`, showing every alteration tier in the whole
+          // Blouse line (Sleeve Length, Stitching Repair, Neck Adjustment,
+          // Hooks/button/zip, ...) as individually selectable primary
+          // tiles instead of just the one tapped service. bookableServiceId
+          // is now a third narrowing fallback, same one-tier-only behavior
+          // as selectedStitchingId.
           let types = allTypes;
           if (filterBaseName) {
             types = allTypes.filter((t) => getServiceBaseName(t.name) === filterBaseName);
           } else if (isAlterationsCategory && paramSelectedStitchingId > 0) {
             const tapped = allTypes.find((t) => t.service_id === paramSelectedStitchingId);
+            if (tapped) types = [tapped];
+          } else if (isAlterationsCategory && paramBookableId > 0) {
+            const tapped = allTypes.find((t) => t.service_id === paramBookableId);
             if (tapped) types = [tapped];
           }
           setStitchingTypes(types);
