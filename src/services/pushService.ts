@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { registerDeviceToken, unregisterDeviceToken } from "./notificationService";
+import { captureException } from "./sentryService";
 
 /** Remote push (and most of expo-notifications) was removed from Expo Go
  * entirely as of SDK 53 - it only works in a development/production build.
@@ -65,7 +66,14 @@ export async function registerForPushNotifications(): Promise<string | null> {
     );
     token = result.data;
   } catch (err) {
+    // Bug fix: this failure was only ever logged behind __DEV__, so a real
+    // production-build failure here (e.g. Google Play Services unavailable,
+    // a transient network error talking to Expo's push token service) was
+    // completely invisible - no way to tell "push doesn't work for this
+    // user" from "push works but nobody's testing it". Sentry capture
+    // makes a real failure here actually diagnosable.
     if (__DEV__) console.warn("[Push] Failed to get push token:", err);
+    captureException(err, { stage: "getExpoPushTokenAsync" });
     return null;
   }
 
@@ -76,6 +84,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
     if (__DEV__) console.log(`[Push] Registered token with backend: platform=${platform}`);
   } catch (err) {
     if (__DEV__) console.warn("[Push] Backend device-token registration failed (non-fatal):", err);
+    captureException(err, { stage: "registerDeviceToken", platform });
   }
 
   return token;
