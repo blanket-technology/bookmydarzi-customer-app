@@ -1430,9 +1430,21 @@ export default function HomeScreen() {
 
   const handleBannerPress = useCallback(
     (banner: ApiBanner) => {
-      // Try to match a category from RedirectUrl (e.g. "/sub-services?categoryId=2" or "category/2")
-      if (banner.RedirectUrl) {
-        const match = banner.RedirectUrl.match(/(\d+)/);
+      const redirect = banner.RedirectUrl?.trim();
+      if (redirect) {
+        // Generic "see everything" banners (e.g. a site-wide discount, not
+        // tied to one category) - matches admin's Redirect URL placeholder
+        // convention (final's BannersSection.jsx: "/offers/..." or
+        // "/services"). Checked before the numeric-category match below so
+        // a path like "/offers/festive-sale" (no real "offers" screen
+        // exists in-app) still lands somewhere useful instead of silently
+        // falling through to the category-guessing default.
+        if (/\/(browse|services|offers)\b/i.test(redirect)) {
+          router.push("/browse" as any);
+          return;
+        }
+        // Try to match a category from RedirectUrl (e.g. "/sub-services?categoryId=2" or "category/2")
+        const match = redirect.match(/(\d+)/);
         if (match) {
           const categoryId = Number(match[1]);
           const cat = serviceCategories.find((c) => c.Id === categoryId);
