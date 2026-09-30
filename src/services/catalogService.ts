@@ -171,6 +171,27 @@ export async function fetchServiceAddons(serviceId: number): Promise<ServiceAddo
   }
 }
 
+export interface BillingEstimate {
+  platform_fee: number;
+  gst_rate: number;
+  gst_percent: number;
+}
+
+/** GST rate + platform fee, public and admin-configurable (GET
+ * /catalog/billing-estimate) - matches bookmydarzi-web-final's
+ * getBillingEstimate exactly (same endpoint, same shape). Lets a
+ * pre-cart price show "Total incl. GST & fees" instead of a bare base
+ * price that visibly jumps once the customer reaches checkout. Returns
+ * null on failure so a screen falls back to showing the base price
+ * alone, same non-fatal convention as fetchServiceAddons above. */
+export async function fetchBillingEstimate(): Promise<BillingEstimate | null> {
+  try {
+    return await request<BillingEstimate>(`/catalog/billing-estimate`, { skipAuth: true });
+  } catch {
+    return null;
+  }
+}
+
 /** GET /catalog/categories/{categoryId} (fallback when tree lookup is empty) */
 export async function fetchCatalogSubcategories(
   categoryId: number,
