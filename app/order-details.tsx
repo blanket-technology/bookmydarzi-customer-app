@@ -908,8 +908,17 @@ export default function OrderDetailsScreen() {
   const showOnlinePayBtn = (onlineFailed || onlinePending) && !!payload;
 
   // Backend issues invoices only once the order is placed - not while it is
-  // pending payment, payment-failed, or cancelled.
-  const invoiceAvailable = !!payload && orderStatusKey === "delivered";
+  // pending payment, payment-failed, or cancelled (app/services/invoices/
+  // invoice_service.py's _NOT_INVOICEABLE). inspection_window/in_repair/
+  // repair_completed are all part of the post-delivery loop (order has
+  // genuinely been delivered and billed, may just be mid-repair) and are
+  // explicitly allowed by that same backend check, so they must be too.
+  const invoiceAvailable =
+    !!payload &&
+    (orderStatusKey === "delivered" ||
+      orderStatusKey === "inspectionwindow" ||
+      orderStatusKey === "inrepair" ||
+      orderStatusKey === "repaircompleted");
 
   const handleDownloadInvoice = async () => {
     if (orderId === null || busy) return;
