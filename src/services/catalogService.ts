@@ -192,6 +192,31 @@ export async function fetchBillingEstimate(): Promise<BillingEstimate | null> {
   }
 }
 
+export interface CancellationPolicyStage {
+  Id: number;
+  OrderStage: string;
+  DisplayStage: string;
+  PenaltyPct: number | null;
+  CancellationAllowed: boolean;
+  PolicyDescription: string | null;
+  SortOrder: number;
+}
+
+/** Stage-by-stage cancellation/refund terms, public (GET
+ * /cancellation-policy) - matches bookmydarzi-web-final's
+ * getCancellationPolicy exactly (same endpoint, same shape). Same data the
+ * order-scoped cancel dialog reads via /orders/{id}/cancellation-preview,
+ * surfaced pre-purchase so a customer can see the terms before paying.
+ * Returns [] on failure, same non-fatal convention as fetchBillingEstimate
+ * above. */
+export async function fetchCancellationPolicy(): Promise<CancellationPolicyStage[]> {
+  try {
+    return await request<CancellationPolicyStage[]>(`/cancellation-policy`, { skipAuth: true });
+  } catch {
+    return [];
+  }
+}
+
 /** GET /catalog/categories/{categoryId} (fallback when tree lookup is empty) */
 export async function fetchCatalogSubcategories(
   categoryId: number,
