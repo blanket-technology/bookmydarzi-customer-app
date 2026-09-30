@@ -36,6 +36,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import ScreenHeader from "../src/components/common/ScreenHeader";
+import { useResponsiveLayout } from "../src/hooks/useResponsiveLayout";
 import ErrorState from "../src/components/common/ErrorState";
 import { useHardwareBackHandler } from "../src/hooks/useHardwareBackHandler";
 import type { ApiMeasurement, MeasurementGender } from "../src/services/measurementService";
@@ -129,6 +130,10 @@ function SavedMeasurementCard({
 export default function MeasurementsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  // Tablet gap fix: matches Home/Cart/Sub-services/Alteration-group's
+  // existing cap - without it, this screen's forms stretch edge-to-edge
+  // on a 768px+ tablet.
+  const { horizontalPad, contentMaxWidth } = useResponsiveLayout();
   const {
     measurements,
     formDefaults,
@@ -294,7 +299,11 @@ export default function MeasurementsScreen() {
         <ScrollView
           ref={scrollRef}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.scroll, mode === "form" && styles.scrollWithStickyFooter]}
+          contentContainerStyle={[
+            styles.scroll,
+            mode === "form" && styles.scrollWithStickyFooter,
+            { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%", paddingHorizontal: horizontalPad },
+          ]}
           keyboardShouldPersistTaps="handled"
         >
           <Animated.View entering={FadeInDown.duration(400)} style={styles.heroBanner}>

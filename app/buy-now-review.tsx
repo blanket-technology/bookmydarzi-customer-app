@@ -25,6 +25,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
+import { useResponsiveLayout } from "../src/hooks/useResponsiveLayout";
 import CodConfirmModal from "../src/components/cart/CodConfirmModal";
 import ServiceAreaModal from "../src/components/common/ServiceAreaModal";
 import { CouponSection, type AppliedOffer } from "../src/components/cart/CouponSection";
@@ -102,6 +103,10 @@ function AddressLine({ addr }: { addr: ApiAddress }) {
 export default function BuyNowReviewScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // Tablet gap fix: matches Home/Cart/Sub-services/Alteration-group's
+  // existing cap - without it, this screen's review content stretches
+  // edge-to-edge on a 768px+ tablet.
+  const { horizontalPad, contentMaxWidth } = useResponsiveLayout();
   const { addressId = "" } = useLocalSearchParams<{
     addressId?: string;
   }>();
@@ -543,7 +548,13 @@ export default function BuyNowReviewScreen() {
       {/* Header */}
       <ScreenHeader title="Bill Details" />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          s.scroll,
+          { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%", paddingHorizontal: horizontalPad },
+        ]}
+      >
         {/* ── Service card ──────────────────────────────────── */}
         <View style={s.card}>
           <LinearGradient
