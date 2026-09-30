@@ -423,7 +423,24 @@ export default function SubServicesScreen() {
   // stays at 2 (any fewer would waste the panel's width on oversized cards).
   const rightPanelWidth = screenWidth - sidebarWidth;
   const gridColumns = isTablet && rightPanelWidth > 700 ? 4 : isTablet && rightPanelWidth > 500 ? 3 : 2;
-  const gridItemWidthPct = `${100 / gridColumns - 2}%` as const;
+  // Bug fix: this used to be a percentage guess ("48%" for 2 columns,
+  // etc.) that didn't account for the grid's own gap (rp.grid's gap: 10)
+  // or the ScrollView's contentContainerStyle padding (rp.listContent's
+  // padding: SPACING.md on both sides) at all - it only "happened to
+  // fit" on wider phones by luck. Confirmed live: on a narrower phone
+  // (~320px screen width), two 48%-wide items plus the 10px gap between
+  // them summed to slightly MORE than the panel's actual available
+  // width, so flexbox wrapped the second card onto its own row instead
+  // of sitting beside the first - "services show one per row on this
+  // phone, two per row on mine". Computing an exact pixel width from the
+  // real available space (minus padding and inter-item gaps) instead of
+  // a percentage guarantees N columns always actually fit, at any
+  // screen width, with no off-by-a-few-pixels margin of error.
+  const gridGap = 10;
+  const gridAvailableWidth = rightPanelWidth - SPACING.md * 2;
+  const gridItemWidth = Math.floor(
+    (gridAvailableWidth - gridGap * (gridColumns - 1)) / gridColumns,
+  );
   const router = useRouter();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const {
@@ -731,13 +748,13 @@ export default function SubServicesScreen() {
 
             {showAlterationGroups ? (
               // Responsive tile grid (side by side, 2/3/4 columns depending
-              // on screen width - see gridItemWidthPct in the component
+              // on screen width - see gridItemWidth in the component
               // body) - restored after a mistaken list-layout change.
               <View style={rp.grid}>
                 {alterationGroups.map((group, idx) => (
                   <Animated.View
                     key={group.key}
-                    style={[rp.gridItem, { width: gridItemWidthPct }]}
+                    style={[rp.gridItem, { width: gridItemWidth }]}
                     entering={FadeInRight.delay(idx * 50).duration(180)}
                   >
                     <GroupCard
@@ -757,7 +774,7 @@ export default function SubServicesScreen() {
                 {stitchGroups.map((group, idx) => (
                   <Animated.View
                     key={group.baseName}
-                    style={[rp.gridItem, { width: gridItemWidthPct }]}
+                    style={[rp.gridItem, { width: gridItemWidth }]}
                     entering={FadeInRight.delay(idx * 50).duration(180)}
                   >
                     <TypeCard group={group} onPress={() => navigateToDetail(group)} />
@@ -1030,7 +1047,7 @@ const rp = StyleSheet.create({
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 48, gap: 8 },
   emptyText: { fontSize: 13, color: COLORS.gray, textAlign: "center" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  // width set inline per-render now (gridItemWidthPct - 2/3/4 columns
+  // width set inline per-render now (gridItemWidth - 2/3/4 columns
   // depending on the right panel's actual available width, not always 2).
   gridItem: {},
 });
