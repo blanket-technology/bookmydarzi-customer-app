@@ -202,6 +202,7 @@ export interface ApiOrder extends ApiOrderDisplayFields {
   description: string | null;
   fabric_notes: string | null;
   customization_notes: string | null;
+  voice_note_url: string | null;
   cloth_details: string | null;
   total_price: number;
   payment_status: "pending" | "paid" | "failed" | "refunded";

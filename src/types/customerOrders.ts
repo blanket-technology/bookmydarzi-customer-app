@@ -181,6 +181,8 @@ export interface OrderDetailsOrderBlock {
   image_references?: string[] | null;
   /** Free-text order notes entered at checkout. */
   customization_notes?: string | null;
+  /** Voice note the customer recorded at checkout, if any. */
+  voice_note_url?: string | null;
   pickup_partner?: PickupPartner | null;
   delivery_partner?: DeliveryPartner | null;
   return_partner?: ReturnPartner | null;

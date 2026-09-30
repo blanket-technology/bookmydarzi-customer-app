@@ -118,6 +118,7 @@ function mapOrder(raw: any): ApiOrder {
     description: raw?.Description ?? raw?.description ?? null,
     fabric_notes: raw?.FabricNotes ?? raw?.fabric_notes ?? null,
     customization_notes: raw?.CustomizationNotes ?? raw?.customization_notes ?? null,
+    voice_note_url: raw?.VoiceNoteUrl ?? raw?.voice_note_url ?? null,
     cloth_details: raw?.ClothDetails ?? raw?.cloth_details ?? null,
     total_price:
       raw?.FinalAmount ??
