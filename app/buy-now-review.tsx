@@ -37,6 +37,10 @@ import PickupDateCalendarModal from "../src/components/common/PickupDateCalendar
 import ScreenHeader from "../src/components/common/ScreenHeader";
 import PaymentMethodSelector from "../src/components/orders/PaymentMethodSelector";
 import {
+  fetchCancellationPolicy,
+  type CancellationPolicyStage,
+} from "../src/services/catalogService";
+import {
   createDirectOrder,
   getBillingEstimate,
   type BillingEstimate,
@@ -229,6 +233,17 @@ export default function BuyNowReviewScreen() {
   useEffect(() => {
     fetchAddresses().catch(() => {});
   }, [fetchAddresses]);
+
+  // Cancellation/refund terms shown pre-purchase, mirroring
+  // bookmydarzi-web-final's checkout page - same data the order-scoped
+  // cancel dialog reads later via cancellation-preview, but surfaced here
+  // so a customer can see the terms before paying. Fetched once on mount;
+  // failure just leaves the list empty and the block doesn't render.
+  const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyStage[]>([]);
+  const [policyExpanded, setPolicyExpanded] = useState(false);
+  useEffect(() => {
+    fetchCancellationPolicy().then(setCancellationPolicy).catch(() => {});
+  }, []);
 
   // Default-select an address once the async fetch resolves - genuinely
   // needs to be an effect, same "adjust state after data arrives" case
@@ -719,6 +734,51 @@ export default function BuyNowReviewScreen() {
           ) : null}
         </View>
 
+        {/* ── Cancellation & refund policy (pre-purchase trust info,
+              mirrors bookmydarzi-web-final's checkout page) ─────────── */}
+        {cancellationPolicy.length > 0 ? (
+          <View style={s.card}>
+            <TouchableOpacity
+              style={s.policyHeader}
+              onPress={() => setPolicyExpanded((v) => !v)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Cancellation and refund policy"
+            >
+              <Text style={s.sectionTitle}>Cancellation & refund policy</Text>
+              <Ionicons
+                name={policyExpanded ? "chevron-up" : "chevron-down"}
+                size={18}
+                color={COLORS.gray}
+                style={s.policyChevron}
+              />
+            </TouchableOpacity>
+            {policyExpanded ? (
+              <View style={s.policyList}>
+                {cancellationPolicy.map((stage) => (
+                  <View key={stage.Id} style={s.policyRow}>
+                    <Text style={s.policyStage}>
+                      {stage.DisplayStage}
+                      {stage.CancellationAllowed ? (
+                        stage.PenaltyPct ? (
+                          <Text style={s.policyPenalty}> — {stage.PenaltyPct}% cancellation charge</Text>
+                        ) : (
+                          <Text style={s.policyFree}> — free to cancel</Text>
+                        )
+                      ) : (
+                        <Text style={s.policyBlocked}> — cannot be cancelled</Text>
+                      )}
+                    </Text>
+                    {stage.PolicyDescription ? (
+                      <Text style={s.policyDesc}>{stage.PolicyDescription}</Text>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         {/* ── Available offers + coupon code (matches cart, previously
               missing entirely from Book Now) ───────────────────────── */}
         <CouponSection
@@ -1017,6 +1077,15 @@ const s = StyleSheet.create({
   },
   tagText: { fontSize: 13, color: COLORS.gray },
   sectionTitle: { fontSize: 15, fontWeight: "700", color: COLORS.black, padding: SPACING.md, paddingBottom: SPACING.sm },
+  policyHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  policyChevron: { marginRight: SPACING.md },
+  policyList: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md, gap: SPACING.sm },
+  policyRow: { gap: 2 },
+  policyStage: { fontSize: 13, fontWeight: "600", color: COLORS.black },
+  policyPenalty: { fontSize: 12, fontWeight: "400", color: COLORS.gray },
+  policyFree: { fontSize: 12, fontWeight: "400", color: COLORS.success },
+  policyBlocked: { fontSize: 12, fontWeight: "400", color: COLORS.error },
+  policyDesc: { fontSize: 12, color: COLORS.gray, marginTop: 1 },
   notesInput: { minHeight: 72, fontSize: 14, color: COLORS.black, padding: 0 },
   paymentMethodWrap: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md },
   payMethodHeading: {
