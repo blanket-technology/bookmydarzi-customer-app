@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import ScreenHeader from "../src/components/common/ScreenHeader";
+import { useResponsiveLayout } from "../src/hooks/useResponsiveLayout";
 import {
   confirmRazorpayPayment,
   isValidOrderId,
@@ -54,6 +55,11 @@ type ScreenState =
 export default function PaymentScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // Tablet gap fix: this screen's amountCard/action buttons previously had
+  // no maxWidth, so `width: "100%"` on amountCard stretched edge-to-edge
+  // on a 768px+ tablet instead of staying capped/centered like Home/Cart/
+  // Sub-services/Alteration-group already do via this same hook.
+  const { contentMaxWidth } = useResponsiveLayout();
   const params = useLocalSearchParams<{
     orderId?: string;
     orderCode?: string;
@@ -290,7 +296,7 @@ export default function PaymentScreen() {
         }}
       />
 
-      <View style={styles.body}>
+      <View style={[styles.body, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}>
         {state === "verification_failed" && (
           <>
             <Ionicons name="alert-circle-outline" size={48} color="#D97706" />
