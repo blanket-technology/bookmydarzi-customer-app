@@ -1355,6 +1355,11 @@ export default function HomeScreen() {
   // difference from Cart's padding, not something to silently collapse.
   const horizontalPad = isTablet ? Math.max(H_PAD, screenWidth * 0.06) : H_PAD;
   const contentMaxWidth = isTablet ? 720 : screenWidth;
+  // Exact-pixel width for the 2-col search-results grid, not a "47.5%"
+  // guess - that plus searchGrid's 10px gap left almost no margin on
+  // narrow phones (same overflow-wrap bug class fixed in sub-services.tsx).
+  const searchGridAvailWidth = Math.min(screenWidth, contentMaxWidth) - horizontalPad * 2;
+  const searchGridItemWidth = Math.floor((searchGridAvailWidth - 10) / 2);
 
   // Bug fix: lookbookThumb/lookbookSeeAll were fixed at 120/80px width
   // regardless of screen size - on a small phone that crowded the
@@ -1676,7 +1681,7 @@ export default function HomeScreen() {
                       <Animated.View
                         key={`search-${row.category.Id}-${row.sub.Id}-${i}`}
                         entering={FadeInDown.delay(Math.min(i, 8) * 40).duration(300)}
-                        style={{ width: "47.5%" }}
+                        style={{ width: searchGridItemWidth }}
                       >
                         <SearchResultCard row={row} onPress={handlePopularPress} />
                       </Animated.View>

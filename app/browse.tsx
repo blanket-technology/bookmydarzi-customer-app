@@ -118,6 +118,10 @@ export default function BrowseScreen() {
   const { width: W, height: SH } = useWindowDimensions();
 
   const heroH = Math.min(HERO_H_MAX, SH * 0.48);
+  // Exact-pixel width for the 2-col offer grid, not a "47.5%" guess - that
+  // plus offerGrid's 12px gap left ~2px of margin on narrow phones (same
+  // overflow-wrap bug class fixed in sub-services.tsx).
+  const offerCardWidth = Math.floor((W - H_PAD * 2 - 12) / 2);
   const titleFs = W < 380 ? 21 : 25;
   const subFs = W < 380 ? 12.5 : 13.5;
 
@@ -357,7 +361,7 @@ export default function BrowseScreen() {
                 <Animated.View
                   key={item.title}
                   entering={FadeInDown.delay(i * 60 + 60).duration(380)}
-                  style={s.offerCard}
+                  style={[s.offerCard, { width: offerCardWidth }]}
                 >
                   <View style={[s.offerIconWrap, { backgroundColor: item.bg }]}>
                     <Ionicons name={item.icon} size={20} color={item.accent} />
@@ -610,7 +614,8 @@ const s = StyleSheet.create({
     gap: 12,
   },
   offerCard: {
-    width: "47.5%",
+    // width set inline per-render (offerCardWidth) - exact pixel width,
+    // not a percentage guess.
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 14,

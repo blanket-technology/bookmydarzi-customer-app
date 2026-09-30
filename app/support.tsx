@@ -13,6 +13,7 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
+    useWindowDimensions,
     View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -37,6 +38,14 @@ function statusLabel(s: string): string {
 export default function SupportScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // Exact-pixel width, not a percentage guess - a "48%" width plus the
+  // grid's own 10px gap could overflow the actual available width by a
+  // hair on a narrow phone, wrapping the second card onto its own row
+  // (the exact bug found/fixed in app/sub-services.tsx's tier grid).
+  // Computed from the real available space (screen width minus the
+  // ScrollView's own SPACING.lg padding on both sides, minus the gap).
+  const { width: screenWidth } = useWindowDimensions();
+  const categoryCardWidth = Math.floor((screenWidth - SPACING.lg * 2 - SPACING.sm) / 2);
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const { tickets, loading, error, fetchTickets } = useSupportStore();
@@ -109,7 +118,7 @@ export default function SupportScreen() {
           {SUPPORT_CATEGORIES.map((cat) => (
             <TouchableOpacity
               key={cat.key}
-              style={styles.categoryCard}
+              style={[styles.categoryCard, { width: categoryCardWidth }]}
               activeOpacity={0.85}
               onPress={() => selectCategory(cat.key)}
             >
@@ -162,7 +171,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   categoryCard: {
-    width: "48%",
+    // width set inline per-render (categoryCardWidth) - exact pixel
+    // width, not a percentage guess.
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.md,
     padding: SPACING.md,
