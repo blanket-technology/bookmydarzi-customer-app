@@ -208,7 +208,20 @@ module.exports = {
           "Allow BookMyDarzi to access your photos to update your profile picture.",
         cameraPermission:
           "Allow BookMyDarzi to use your camera to capture order progress photos.",
-        microphonePermission: false,
+        // Bug fix: `microphonePermission: false` doesn't just skip adding
+        // RECORD_AUDIO - expo-image-picker's plugin treats it as "block
+        // this permission so NO installed library or plugin can ever add
+        // it" (see its withAndroidImagePickerPermissions source: an
+        // explicit tools:node="remove" merge directive, not a plain array
+        // omission). That's a build-time AndroidManifest merger rule, so
+        // it silently overrides expo-audio's own RECORD_AUDIO addition
+        // below regardless of plugin order - this is why voice-note
+        // recording's runtime permission prompt/grant never actually
+        // worked: the permission was stripped from every built APK before
+        // the app ever ran. This app genuinely needs the mic (voice notes
+        // via expo-audio), so it must not be blocked here.
+        microphonePermission:
+          "Allow BookMyDarzi to access your microphone to record a voice note for your tailor.",
       },
     ],
     [
