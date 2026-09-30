@@ -1127,7 +1127,7 @@ export default function OrderDetailsScreen() {
               expanded (collapsed by default, item 6.2). */}
           {trackingExpanded ? (
             <OrderScreenSection title="Order tracking">
-              {orderId !== null ? <OrderTimeline orderId={orderId} /> : null}
+              {orderId !== null ? <OrderTimeline orderId={orderId} onReported={load} /> : null}
             </OrderScreenSection>
           ) : null}
 
@@ -1585,6 +1585,29 @@ export default function OrderDetailsScreen() {
             </AccordionSection>
           ) : null}
 
+          {payload.order.latest_repair_request ? (
+            <AccordionSection
+              title={
+                payload.order.latest_repair_request.resolved_at
+                  ? "Issue reported (repair completed)"
+                  : "Issue reported"
+              }
+            >
+              <Text style={styles.orderNotesText}>
+                {payload.order.latest_repair_request.issue_description}
+              </Text>
+              <Text style={styles.repairReportedAt}>
+                Reported{" "}
+                {new Date(payload.order.latest_repair_request.reported_at).toLocaleString("en-IN", {
+                  day: "numeric",
+                  month: "short",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </Text>
+            </AccordionSection>
+          ) : null}
+
           <AccordionSection title="Delivery address">
             <InfoRow
               label="Name"
@@ -1792,6 +1815,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   voiceNoteSpacer: { marginTop: 10 },
+  repairReportedAt: { fontSize: 12, color: "#9CA3AF", marginTop: 6 },
   // Single source of truth for vertical rhythm between sections - each section
   // no longer sets its own marginBottom, so the spacing is uniform everywhere.
   scroll: { padding: SPACING.md, paddingTop: SPACING.sm, gap: SPACING.md },
