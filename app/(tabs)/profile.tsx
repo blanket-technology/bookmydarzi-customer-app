@@ -8,8 +8,10 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
+    Share,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from "react-native";
@@ -19,8 +21,11 @@ import { COLORS, RADIUS, SHADOW, SPACING } from "../../constants/theme";
 import { UserAvatar } from "../../src/components/common/UserAvatar";
 import { useAppLanguage } from "../../src/i18n/useAppLanguage";
 import {
+    applyReferralCode,
     deleteAccount,
+    getMyReferralCode,
     uploadProfileAvatar,
+    type ReferralCode,
 } from "../../src/services/profileService";
 import { useAddressStore } from "../../src/store/useAddressStore";
 import { useMeasurementStore } from "../../src/store/useMeasurementStore";
@@ -71,6 +76,10 @@ export default function ProfileScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [avatarPreviewUri, setAvatarPreviewUri] = useState<string | null>(null);
+  const [referral, setReferral] = useState<ReferralCode | null>(null);
+  const [applyCodeInput, setApplyCodeInput] = useState("");
+  const [applyingCode, setApplyingCode] = useState(false);
+  const [applyCodeSuccess, setApplyCodeSuccess] = useState(false);
   const normalizeGender = (g?: string | null) =>
     g ? g.charAt(0).toUpperCase() + g.slice(1) : "";
 
@@ -87,8 +96,36 @@ export default function ProfileScreen() {
         fetchAddresses(),
         fetchMeasurements(),
       ]).finally(() => setProfileLoading(false));
+      getMyReferralCode()
+        .then(setReferral)
+        .catch(() => {});
     }, [isAuthenticated, fetchProfile, fetchAddresses, fetchMeasurements]),
   );
+
+  const handleShareReferral = async () => {
+    if (!referral) return;
+    try {
+      await Share.share({
+        message: `Book professional tailoring on BookMyDarzi and get ₹100 off your first order! Use my code ${referral.code} at signup. https://bookmydarzi.com/signup?ref=${referral.code}`,
+      });
+    } catch {
+      // Share sheet dismissed/failed - not an error worth surfacing.
+    }
+  };
+
+  const handleApplyReferralCode = async () => {
+    if (!applyCodeInput.trim()) return;
+    setApplyingCode(true);
+    try {
+      await applyReferralCode(applyCodeInput.trim());
+      setApplyCodeSuccess(true);
+      setApplyCodeInput("");
+    } catch (err: any) {
+      Alert.alert("Couldn't apply code", err?.message || "Please check the code and try again.");
+    } finally {
+      setApplyingCode(false);
+    }
+  };
 
   const handlePickProfilePhoto = async () => {
     try {
@@ -439,6 +476,77 @@ export default function ProfileScreen() {
           )}
         </Animated.View>
 
+        {/* Refer & Earn */}
+        <Animated.View
+          entering={FadeInDown.delay(142).duration(400)}
+          style={styles.card}
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={styles.cardTitle}>Refer & Earn</Text>
+          </View>
+          <Text style={styles.emptyHint}>
+            Give ₹100, get ₹100. Share your code - when a friend completes their first order, you
+            both get ₹100 off.
+          </Text>
+          {referral ? (
+            <>
+              <View style={referralStyles.codeRow}>
+                <Text style={referralStyles.codeText}>{referral.code}</Text>
+                <TouchableOpacity
+                  style={referralStyles.shareBtn}
+                  onPress={handleShareReferral}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share referral code"
+                >
+                  <Ionicons name="share-social-outline" size={15} color={COLORS.white} />
+                  <Text style={referralStyles.shareBtnText}>Share</Text>
+                </TouchableOpacity>
+              </View>
+              {referral.status === "pending" && (
+                <Text style={referralStyles.statusPending}>
+                  A friend used your code - you&apos;ll both get ₹100 off once they complete their
+                  first order.
+                </Text>
+              )}
+              {referral.status === "rewarded" && (
+                <Text style={referralStyles.statusRewarded}>
+                  Rewarded! Check your offers at checkout.
+                </Text>
+              )}
+              {referral.status === "unused" && !applyCodeSuccess && (
+                <View style={referralStyles.applyRow}>
+                  <TextInput
+                    style={referralStyles.applyInput}
+                    placeholder="Have a friend's code?"
+                    placeholderTextColor={COLORS.gray}
+                    autoCapitalize="characters"
+                    value={applyCodeInput}
+                    onChangeText={(v) => setApplyCodeInput(v.toUpperCase())}
+                  />
+                  <TouchableOpacity
+                    style={[referralStyles.applyBtn, applyingCode && { opacity: 0.6 }]}
+                    onPress={handleApplyReferralCode}
+                    disabled={applyingCode || !applyCodeInput.trim()}
+                  >
+                    {applyingCode ? (
+                      <ActivityIndicator size="small" color={COLORS.white} />
+                    ) : (
+                      <Text style={referralStyles.applyBtnText}>Apply</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+              {applyCodeSuccess && (
+                <Text style={referralStyles.statusRewarded}>
+                  Code applied! Complete your first order to get ₹100 off.
+                </Text>
+              )}
+            </>
+          ) : (
+            <ActivityIndicator size="small" color={COLORS.primary} style={{ marginVertical: 8 }} />
+          )}
+        </Animated.View>
+
         {/* Menu items */}
         <Animated.View
           entering={FadeInDown.delay(150).duration(400)}
@@ -757,4 +865,76 @@ const styles = StyleSheet.create({
     borderColor: COLORS.grayBorder,
   },
   readonlyFieldText: { fontSize: 14, color: COLORS.gray },
+});
+
+const referralStyles = StyleSheet.create({
+  codeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  codeText: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: 3,
+    color: COLORS.black,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: COLORS.grayBorder,
+    borderRadius: RADIUS.md,
+    paddingVertical: 10,
+    paddingHorizontal: SPACING.md,
+    textAlign: "center",
+    backgroundColor: COLORS.grayLight,
+  },
+  shareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: COLORS.primaryDark,
+    borderRadius: RADIUS.md,
+    paddingVertical: 12,
+    paddingHorizontal: SPACING.md,
+  },
+  shareBtnText: { fontSize: 13, fontWeight: "700", color: COLORS.white },
+  statusPending: {
+    marginTop: SPACING.sm,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#B45309",
+  },
+  statusRewarded: {
+    marginTop: SPACING.sm,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#16a34a",
+  },
+  applyRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  applyInput: {
+    flex: 1,
+    height: 42,
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+    fontSize: 13,
+    color: COLORS.black,
+    textTransform: "uppercase",
+  },
+  applyBtn: {
+    height: 42,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primaryDark,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  applyBtnText: { fontSize: 13, fontWeight: "700", color: COLORS.white },
 });

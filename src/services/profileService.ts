@@ -47,6 +47,29 @@ export async function deleteAccount(): Promise<void> {
   await request<unknown>("/users/me", { method: "DELETE" });
 }
 
+export interface ReferralCode {
+  code: string;
+  referred_count: number;
+  status: "unused" | "pending" | "rewarded";
+}
+
+/** The current user's own referral code - created lazily server-side on
+ * first request (see get_or_create_referral_code in
+ * app/services/referrals/referral_service.py). */
+export async function getMyReferralCode(): Promise<ReferralCode> {
+  return request<ReferralCode>("/users/me/referral-code");
+}
+
+/** Redeems a friend's referral code, once per account ever. Both sides'
+ * Rs.100-off reward fires automatically once THIS user's first order
+ * completes - nothing further to claim here. */
+export async function applyReferralCode(code: string): Promise<{ message: string }> {
+  return request<{ message: string }>("/users/me/apply-referral-code", {
+    method: "POST",
+    body: { code: code.trim().toUpperCase() },
+  });
+}
+
 export async function updateMeasurements(
   _userId: string,
   measurements: Measurements,
