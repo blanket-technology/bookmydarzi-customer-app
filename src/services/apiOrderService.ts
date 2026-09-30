@@ -36,7 +36,20 @@ const BASE = "/orders";
 function toSimplifiedStatus(raw: string): ApiOrder["status"] {
   const meta = getOrderStatusMeta(raw);
   if (meta.status === "cancelled" || meta.status === "order_rejected") return "cancelled";
-  if (meta.status === "completed" || meta.status === "delivered") return "delivered";
+  // inspection_window/in_repair/repair_completed are all part of the
+  // post-delivery loop (same progress value as delivered) - without this
+  // they'd fall through to the progress-based checks below and mislabel a
+  // delivered-but-in-repair order as "in_progress" (implying stitching is
+  // still happening), which is actively wrong.
+  if (
+    meta.status === "completed" ||
+    meta.status === "delivered" ||
+    meta.status === "inspection_window" ||
+    meta.status === "in_repair" ||
+    meta.status === "repair_completed"
+  ) {
+    return "delivered";
+  }
   if (meta.status === "out_for_delivery" || meta.status === "ready_for_dispatch") return "ready";
   if (meta.progress >= getOrderStatusMeta("searching_tailor").progress) return "in_progress";
   if (meta.progress >= getOrderStatusMeta("order_accepted").progress) return "confirmed";

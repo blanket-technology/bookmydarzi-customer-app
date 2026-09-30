@@ -47,6 +47,9 @@ export type OrderStatus =
   | "ready_for_dispatch"
   | "out_for_delivery"
   | "delivered"
+  | "inspection_window"
+  | "in_repair"
+  | "repair_completed"
   | "completed"
   | "cancelled"
   | "return_pending"
@@ -364,6 +367,61 @@ export const ORDER_STATUS_META: Record<OrderStatus, OrderStatusMeta> = {
     tailorLabel: "Delivered",
     terminal: false,
   },
+  // The 3 statuses below form the post-delivery inspection/repair loop
+  // (DELIVERED -> INSPECTION_WINDOW -> [COMPLETED | IN_REPAIR] ->
+  // REPAIR_COMPLETED -> INSPECTION_WINDOW -> ...). Matches the backend's
+  // own customer-label choice (app/constants/order_status.py
+  // CUSTOMER_STATUS_MAP): inspection_window/repair_completed both still
+  // read as "Delivered" to the customer - there's no new visible timeline
+  // milestone for them, the 2-hour report-an-issue window is surfaced as a
+  // time-boxed action button (can_report_issue/inspection_window_expires_at
+  // on the tracking payload) rather than a new named stage. Only in_repair
+  // gets its own label, since that's the one state where something is
+  // visibly different (garment went back to the tailor). Excluded from
+  // ORDER_STATUS_SEQUENCE for the same reason return_* is - not a position
+  // on the main forward line.
+  inspection_window: {
+    status: "inspection_window",
+    title: "Delivered",
+    description: "Your order has been delivered. We hope it fits perfectly.",
+    nextStep: "You can report an issue within the inspection window, or it'll be marked complete automatically.",
+    tone: "success",
+    icon: "checkmark-circle",
+    progress: 14,
+    customerFacing: true,
+    customerLabel: "Delivered",
+    employeeLabel: "Inspection Window",
+    tailorLabel: "Delivered",
+    terminal: false,
+  },
+  in_repair: {
+    status: "in_repair",
+    title: "Repair in progress",
+    description: "You reported an issue with this order. Your tailor is fixing it now.",
+    nextStep: "We'll notify you once the repair is complete.",
+    tone: "warning",
+    icon: "build-outline",
+    progress: 14,
+    customerFacing: true,
+    customerLabel: "Repair In Progress",
+    employeeLabel: "In Repair",
+    tailorLabel: "In Repair",
+    terminal: false,
+  },
+  repair_completed: {
+    status: "repair_completed",
+    title: "Delivered",
+    description: "Your repair is complete. Your order has been delivered.",
+    nextStep: "You can report another issue within the inspection window, or it'll be marked complete automatically.",
+    tone: "success",
+    icon: "checkmark-circle",
+    progress: 14,
+    customerFacing: true,
+    customerLabel: "Delivered",
+    employeeLabel: "Repair Completed",
+    tailorLabel: "Delivered",
+    terminal: false,
+  },
   completed: {
     status: "completed",
     title: "Order completed",
@@ -456,11 +514,40 @@ export const ORDER_STATUS_META: Record<OrderStatus, OrderStatusMeta> = {
 
 const ALL_STATUSES = new Set<string>(Object.keys(ORDER_STATUS_META));
 
+// Shown only when the backend returns a status string this file's
+// OrderStatus union doesn't recognize yet (e.g. a new state added to
+// app/constants/order_status.py before this file is updated to match).
+// Matches bookmydarzi-web-final/lib/orderStatus.ts's identical
+// UNKNOWN_STATUS_META - both clients must degrade the same way. Previously
+// getOrderStatusMeta fell through to "order_placed" for an unrecognized
+// status, which would show a customer's order as freshly placed (step 1)
+// even if it were actually much further along, or even cancelled - a
+// misleading, wrong-looking state rather than an honest "we can't show you
+// the details right now" one.
+const UNKNOWN_STATUS_META: OrderStatusMeta = {
+  status: "order_placed",
+  title: "Status update",
+  description: "We're syncing this order's latest status. Please check back shortly.",
+  nextStep: null,
+  tone: "neutral",
+  icon: "sync-outline",
+  progress: 0,
+  customerFacing: true,
+  customerLabel: "Updating",
+  employeeLabel: "Updating",
+  tailorLabel: "Updating",
+  terminal: false,
+};
+
 /**
  * Normalize any raw backend status string into a known OrderStatus.
  * Falls back to "order_placed" for unrecognized values (never throws) so a
  * single unexpected string can never crash a screen - logs a warning in dev
  * so the gap gets noticed and fixed rather than silently swallowed forever.
+ * NOTE: this fallback is for internal bookkeeping (e.g. set-membership
+ * checks below) only - anything user-visible must go through
+ * getOrderStatusMeta, which shows an honest "Updating" state instead of
+ * silently claiming the order is freshly placed.
  */
 export function normalizeOrderStatus(raw: string | null | undefined): OrderStatus {
   const s = (raw ?? "").trim().toLowerCase().replace(/\s+/g, "_");
@@ -473,7 +560,9 @@ export function normalizeOrderStatus(raw: string | null | undefined): OrderStatu
 }
 
 export function getOrderStatusMeta(raw: string | null | undefined): OrderStatusMeta {
-  return ORDER_STATUS_META[normalizeOrderStatus(raw)];
+  const s = (raw ?? "").trim().toLowerCase().replace(/\s+/g, "_");
+  if (ALL_STATUSES.has(s)) return ORDER_STATUS_META[s as OrderStatus];
+  return UNKNOWN_STATUS_META;
 }
 
 /** True when the order has left the "in flight" flow (any of the 4 terminal outcomes). */

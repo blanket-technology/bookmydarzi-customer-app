@@ -53,7 +53,12 @@ export type BookingCompactCardProps = {
  *   green  - delivered / completed
  */
 const RED_STATUSES = new Set(["pending_payment", "payment_failed", "cancelled", "order_rejected"]);
-const GREEN_STATUSES = new Set(["delivered", "completed"]);
+// inspection_window/repair_completed still read as "Delivered" to the
+// customer (see orderStatus.ts) so they're green too. in_repair is
+// deliberately left out - it's the one loop state where something is
+// visibly different (garment went back to the tailor), so it stays orange/
+// active rather than reading as fully done.
+const GREEN_STATUSES = new Set(["delivered", "completed", "inspection_window", "repair_completed"]);
 
 function getStripeColor(status: string): string {
   if (RED_STATUSES.has(status)) return "#DC2626";
