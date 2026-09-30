@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import {
   AudioModule,
-  RecordingPresets,
+  type RecordingOptions,
   setAudioModeAsync,
   useAudioPlayer,
   useAudioPlayerStatus,
@@ -17,10 +17,44 @@ import { uploadOrderVoiceNote } from "../../services/apiOrderService";
 // React Native's New Architecture (this app has newArchEnabled: true) -
 // see StyleReferencePicker.tsx's identical comment for the full reasoning.
 
-// A short voice note (~60s cap) is generously covered by LOW_QUALITY (.m4a,
-// 64kbps) - keeps the recorded file small while staying well within the
-// backend's 5MB cap (_MAX_VOICE_NOTE_BYTES).
+// A short voice note (~60s cap) is generously covered at this low bitrate -
+// keeps the recorded file small while staying well within the backend's
+// 5MB cap (_MAX_VOICE_NOTE_BYTES).
 const MAX_DURATION_SECONDS = 60;
+
+// Bug fix: expo-audio's own RecordingPresets.LOW_QUALITY sets Android's
+// output to outputFormat: '3gp' / audioEncoder: 'amr_nb' - AMR-NB inside a
+// 3GP container. That's not just a mislabeling issue (the backend sniffer
+// was ALSO wrong, separately fixed in file_validation.py), it's a genuine
+// codec gap: no desktop browser's <audio> element can decode AMR-NB at
+// all, so an Android-recorded voice note could never be played back on
+// the website or admin panel no matter how correctly the file was
+// labeled. iOS's own low-quality output was always AAC/M4A (universally
+// playable) - only Android's preset default was the problem. This custom
+// options object keeps the same low-bitrate/small-file goal as
+// LOW_QUALITY but forces AAC/M4A on Android too, matching iOS.
+const VOICE_NOTE_RECORDING_OPTIONS: RecordingOptions = {
+  extension: ".m4a",
+  sampleRate: 44100,
+  numberOfChannels: 1,
+  bitRate: 64000,
+  android: {
+    extension: ".m4a",
+    outputFormat: "mpeg4",
+    audioEncoder: "aac",
+  },
+  ios: {
+    audioQuality: 0x20, // AudioQuality.MIN - matches LOW_QUALITY's own value
+    outputFormat: "aac ",
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  web: {
+    mimeType: "audio/webm",
+    bitsPerSecond: 128000,
+  },
+};
 
 export interface VoiceNoteRecorderProps {
   url: string | null;
@@ -46,7 +80,7 @@ export default function VoiceNoteRecorder({ url, onUploaded, onRemove }: VoiceNo
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const recorder = useAudioRecorder(RecordingPresets.LOW_QUALITY);
+  const recorder = useAudioRecorder(VOICE_NOTE_RECORDING_OPTIONS);
   const recorderState = useAudioRecorderState(recorder, 200);
 
   const player = useAudioPlayer(url ? { uri: url } : null);
