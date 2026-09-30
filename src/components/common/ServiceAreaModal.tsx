@@ -11,6 +11,12 @@ type Props = {
   onDismiss: () => void;
   onExploreServices?: () => void;
   notifyState?: "idle" | "submitting" | "done";
+  /** Label for the secondary/dismiss button. Defaults to "OK" (a plain
+   * acknowledgement fits the mid-flow callers - address save, checkout -
+   * where the customer is dismissing an error to go back to what they were
+   * doing). The launch-time ServiceAreaCheck popup passes something more
+   * specific ("Maybe later") since there's no prior action to return to. */
+  dismissLabel?: string;
 };
 
 /**
@@ -29,6 +35,7 @@ export default function ServiceAreaModal({
   onDismiss,
   onExploreServices,
   notifyState = "idle",
+  dismissLabel = "OK",
 }: Props) {
   const isDone = notifyState === "done";
   return (
@@ -69,7 +76,7 @@ export default function ServiceAreaModal({
           ) : null}
 
           <TouchableOpacity style={styles.secondaryBtn} onPress={onDismiss}>
-            <Text style={styles.secondaryBtnText}>{isDone ? "Close" : "OK"}</Text>
+            <Text style={styles.secondaryBtnText}>{isDone ? "Close" : dismissLabel}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -82,7 +89,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.overlay,
+    // Deliberately darker than the shared COLORS.overlay token (0.45) -
+    // this dialog needs to read as fully blocking the home screen behind
+    // it until the customer makes a choice, not as a light dim.
+    backgroundColor: "rgba(0,0,0,0.72)",
     paddingHorizontal: SPACING.lg,
   },
   card: {

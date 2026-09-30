@@ -113,6 +113,7 @@ export default function ServiceAreaCheck() {
       onNotifyMe={handleNotifyMe}
       onDismiss={handleDismiss}
       notifyState={notifyState}
+      dismissLabel="Maybe later"
     />
   );
 }
