@@ -359,9 +359,13 @@ const styles = StyleSheet.create({
       android: { elevation: 3 },
     }),
   },
-  tierCardImage: { width: "100%", height: 90, borderRadius: RADIUS.md, backgroundColor: COLORS.grayLight },
+  // aspectRatio, not a fixed height - a fixed px height with a fluid
+  // width crops a different amount/part of the photo per device width;
+  // aspectRatio keeps the box ratio fixed everywhere (matches the
+  // website's aspect-[4/3] fix on the equivalent tier card image).
+  tierCardImage: { width: "100%", aspectRatio: 4 / 3, borderRadius: RADIUS.md, backgroundColor: COLORS.grayLight },
   tierCardImageFallback: {
-    width: "100%", height: 90, borderRadius: RADIUS.md,
+    width: "100%", aspectRatio: 4 / 3, borderRadius: RADIUS.md,
     backgroundColor: COLORS.primaryLight,
     alignItems: "center", justifyContent: "center",
   },
