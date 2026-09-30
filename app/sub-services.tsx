@@ -945,7 +945,7 @@ const tc = StyleSheet.create({
   },
   iconBox: { width: 48, height: 48, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center" },
   // aspectRatio, not a fixed height - see rp.heroImage above for why.
-  image: { width: "100%", aspectRatio: 4 / 3, borderRadius: RADIUS.md },
+  image: { width: "100%", aspectRatio: 1, borderRadius: RADIUS.md },
   textBlock: { gap: 4, width: "100%" },
   name: { fontSize: 13, fontWeight: "700", color: COLORS.black, lineHeight: 18 },
   desc: { fontSize: 11, color: COLORS.gray, lineHeight: 15 },
@@ -1010,14 +1010,14 @@ const dp = StyleSheet.create({
 const rp = StyleSheet.create({
   listContent: { padding: SPACING.md, paddingBottom: 48, gap: 10 },
   heroImage: {
-    // aspectRatio, not a fixed height - a fixed px height with a fluid
-    // width means the box's actual on-screen ratio changes across device
-    // widths, so contentFit="cover" crops a different amount (and a
-    // different part of the photo) per device. aspectRatio keeps the box's
-    // ratio fixed regardless of width, matching the website's identical
-    // fix (aspect-[4/3] on AlterationGroupPicker.tsx's tier card image).
+    // aspectRatio: 1 (square) - the real uploaded catalog photos are all
+    // 1254x1254 (true 1:1), not 4:3 as first assumed. A fixed px height
+    // (or a 4:3 box) crops a different part of these square photos
+    // depending on device width / box ratio; square matches the source
+    // exactly. Matches the website's identical fix (aspect-square on
+    // AlterationGroupPicker.tsx's tier card image).
     width: "100%",
-    aspectRatio: 4 / 3,
+    aspectRatio: 1,
     borderRadius: RADIUS.lg,
     backgroundColor: COLORS.grayLight,
     marginBottom: 4,
