@@ -32,6 +32,7 @@ import OrderStatusModal, {
 import OrderTimeline from "../src/components/orders/OrderTimeline";
 import ProgressGallery from "../src/components/orders/ProgressGallery";
 import { RescheduleOrderSection } from "../src/components/orders/RescheduleOrderSection";
+import VoiceNotePlayer from "../src/components/orders/VoiceNotePlayer";
 import OrderDetailsSkeleton from "../src/components/skeletons/OrderDetailsSkeleton";
 import { API_BASE_URL } from "../src/config/api";
 import {
@@ -1568,9 +1569,19 @@ export default function OrderDetailsScreen() {
             ) : null}
           </AccordionSection>
 
-          {payload.order.customization_notes ? (
+          {payload.order.customization_notes || payload.order.voice_note_url ? (
             <AccordionSection title="Order notes">
-              <Text style={styles.orderNotesText}>{payload.order.customization_notes}</Text>
+              {payload.order.customization_notes ? (
+                <Text style={styles.orderNotesText}>{payload.order.customization_notes}</Text>
+              ) : null}
+              {payload.order.voice_note_url ? (
+                <View style={payload.order.customization_notes ? styles.voiceNoteSpacer : undefined}>
+                  <VoiceNotePlayer
+                    url={payload.order.voice_note_url}
+                    label="Play your voice note"
+                  />
+                </View>
+              ) : null}
             </AccordionSection>
           ) : null}
 
@@ -1780,6 +1791,7 @@ const styles = StyleSheet.create({
     color: "#374151",
     lineHeight: 20,
   },
+  voiceNoteSpacer: { marginTop: 10 },
   // Single source of truth for vertical rhythm between sections - each section
   // no longer sets its own marginBottom, so the spacing is uniform everywhere.
   scroll: { padding: SPACING.md, paddingTop: SPACING.sm, gap: SPACING.md },
