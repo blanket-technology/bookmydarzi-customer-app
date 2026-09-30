@@ -557,9 +557,11 @@ export async function checkServiceabilityByAddress(fields: {
  * a "Notify me" action wherever a serviceability check fails (see
  * app/address.tsx's serviceability badge, app/buy-now-review.tsx's place-
  * order error). Coordinates are optional - the backend best-effort forward-
- * geocodes city/pincode server-side when omitted. Requires the customer to
- * be logged in (uses the authenticated `request()` wrapper), which is
- * already true everywhere this is called from.
+ * geocodes city/pincode server-side when omitted. Works for a logged-out
+ * user too (the backend endpoint no longer requires auth - a guest's
+ * submission is stored with a null customer id) - request()'s Authorization
+ * header is only attached when a real token exists, so this call already
+ * degrades correctly with no code change needed here.
  */
 export async function registerServiceAreaInterest(payload: {
   latitude?: number | null;

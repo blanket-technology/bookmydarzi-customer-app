@@ -24,6 +24,7 @@ configureReanimatedLogger({
 import { Ionicons } from "@expo/vector-icons";
 import AppToast from "../src/components/common/AppToast";
 import { ErrorBoundary } from "../src/components/common/ErrorBoundary";
+import ServiceAreaCheck from "../src/components/common/ServiceAreaCheck";
 import SessionExpiredModal from "../src/components/common/SessionExpiredModal";
 import { initSentry } from "../src/services/sentryService";
 import { initMixpanel } from "../src/services/mixpanelService";
@@ -385,6 +386,7 @@ export default function RootLayout() {
         <CartBootstrap />
         <AppToast />
         <SessionExpiredModal />
+        <ServiceAreaCheck />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index"         options={{ animation: "fade" }} />
           <Stack.Screen name="onboarding"    options={{ animation: "fade", gestureEnabled: false }} />
