@@ -183,6 +183,15 @@ export interface OrderDetailsOrderBlock {
   customization_notes?: string | null;
   /** Voice note the customer recorded at checkout, if any. */
   voice_note_url?: string | null;
+  /** The most recent post-delivery inspection-window issue report on this
+   * order, if any - shown so a customer can see their own report was
+   * received, not just that the status changed to "Repair In Progress". */
+  latest_repair_request?: {
+    issue_description: string;
+    issue_photo_urls?: string[] | null;
+    reported_at: string;
+    resolved_at?: string | null;
+  } | null;
   pickup_partner?: PickupPartner | null;
   delivery_partner?: DeliveryPartner | null;
   return_partner?: ReturnPartner | null;

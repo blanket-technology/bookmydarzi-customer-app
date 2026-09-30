@@ -46,9 +46,19 @@ export interface OrderTimelineProps {
   payload?: OrderTrackingPayload | null;
   /** Called whenever this component's own fetch succeeds, so a parent can cache it. */
   onLoaded?: (payload: OrderTrackingPayload) => void;
+  /** Called after a successful report-issue submission, on top of this
+   * component's own reload. Reporting an issue changes the order's
+   * top-level status (INSPECTION_WINDOW -> IN_REPAIR), which the parent
+   * screen's own order payload drives (header badge, order notes, etc.),
+   * not just this timeline's own tracking data. Without this, the
+   * caller (order-details.tsx) was never told to refetch its own data,
+   * so only this sub-component visibly updated; the rest of the screen
+   * stayed stale until an unrelated WS event arrived or the screen was
+   * reopened. */
+  onReported?: () => void;
 }
 
-const OrderTimeline = memo(({ orderId, payload, onLoaded }: OrderTimelineProps) => {
+const OrderTimeline = memo(({ orderId, payload, onLoaded, onReported }: OrderTimelineProps) => {
   const [data, setData] = useState<OrderTrackingPayload | null>(payload ?? null);
   const [loading, setLoading] = useState(!payload);
   const [error, setError] = useState<string | null>(null);
@@ -182,7 +192,10 @@ const OrderTimeline = memo(({ orderId, payload, onLoaded }: OrderTimelineProps) 
         visible={reportSheetVisible}
         orderId={orderId}
         onClose={() => setReportSheetVisible(false)}
-        onReported={load}
+        onReported={() => {
+          load();
+          onReported?.();
+        }}
       />
     </View>
   );
