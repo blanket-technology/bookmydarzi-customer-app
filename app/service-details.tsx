@@ -29,6 +29,7 @@ import ErrorState from "../src/components/common/ErrorState";
 import ScreenHeader from "../src/components/common/ScreenHeader";
 import { useAppLanguage } from "../src/i18n/useAppLanguage";
 import {
+    fetchBillingEstimate,
     fetchCatalogTree,
     fetchServiceAddons,
     fetchServiceRatings,
@@ -36,6 +37,7 @@ import {
     findServiceLine,
     findServiceLineByName,
     resolveCatalogCategory,
+    type BillingEstimate,
     type ServiceRatings,
 } from "../src/services/catalogService";
 import { useCartStore } from "../src/store/useCartStore";
@@ -156,6 +158,8 @@ export default function ServiceDetailsScreen() {
     Record<number, number>
   >({});
   const [serviceRatings, setServiceRatings] = useState<ServiceRatings | null>(null);
+  const [billingEstimate, setBillingEstimate] = useState<BillingEstimate | null>(null);
+  const [showBillingBreakdown, setShowBillingBreakdown] = useState(false);
   const [addons, setAddons] = useState<ServiceAddon[]>([]);
   const [selectedAddons, setSelectedAddons] = useState<SelectedAddon[]>([]);
   // Per-extra-tier add-on catalog/selection, keyed by that tier's own
@@ -391,6 +395,14 @@ export default function ServiceDetailsScreen() {
     }
   }, [paramBookableId, paramServiceLineId]);
 
+  // GST rate/platform fee - not per-service, fetched once for the whole
+  // screen. Matches bookmydarzi-web-final's useBillingEstimate hook.
+  useEffect(() => {
+    void fetchBillingEstimate().then((result) => {
+      if (isMountedRef.current) setBillingEstimate(result);
+    });
+  }, []);
+
   // Syncs quantitiesByStitching from URL params (e.g. deep-linking back
   // into this screen with a pre-set quantity) - reacts to a prop-derived
   // param, not something computable purely during render.
@@ -437,6 +449,23 @@ export default function ServiceDetailsScreen() {
     () => selectedAddons.reduce((sum, a) => sum + a.price, 0),
     [selectedAddons],
   );
+
+  // Mirrors bookmydarzi-web-final's identical liveTotal computation
+  // (AlterationGroupPicker.tsx), which mirrors backend's compute_billing
+  // (app/services/orders/billing_breakdown.py) - rounds subtotal, GST,
+  // and platform fee independently and sums the already-rounded pieces,
+  // not just the final total once, since BookMyDarzi never bills in
+  // paise anywhere and backend rounds at every intermediate step too.
+  const billingSubtotal = useMemo(
+    () => (selectedStitching ? Math.round(selectedStitching.base_price + addonsTotal) : 0),
+    [selectedStitching, addonsTotal],
+  );
+  const billingGst = useMemo(
+    () => (billingEstimate ? Math.round(billingSubtotal * billingEstimate.gst_rate) : 0),
+    [billingEstimate, billingSubtotal],
+  );
+  const billingFee = billingEstimate ? Math.round(billingEstimate.platform_fee) : 0;
+  const liveTotal = billingSubtotal + billingGst + billingFee;
 
   // Selected variant's own photo (e.g. Designer Kurti's actual photo) wins
   // over the shared line image, so the hero updates when the customer
@@ -1295,6 +1324,44 @@ export default function ServiceDetailsScreen() {
               All {checkedTierIds.size + 1} items will be booked together in one order.
             </Text>
           ) : null}
+          {selectedStitching && checkedTierIds.size === 0 ? (
+            <TouchableOpacity
+              onPress={() => setShowBillingBreakdown((v) => !v)}
+              activeOpacity={0.7}
+              style={styles.billingTotalRow}
+            >
+              <View>
+                <View style={styles.billingTotalLabelRow}>
+                  <Text style={styles.billingTotalLabel}>Total (incl. GST & fees)</Text>
+                  <Ionicons name="information-circle-outline" size={13} color={COLORS.gray} />
+                </View>
+                <Text style={styles.billingTotalValue}>{formatMoney(liveTotal)}</Text>
+              </View>
+              <Ionicons
+                name={showBillingBreakdown ? "chevron-down" : "chevron-up"}
+                size={16}
+                color={COLORS.gray}
+              />
+            </TouchableOpacity>
+          ) : null}
+          {showBillingBreakdown && selectedStitching && checkedTierIds.size === 0 ? (
+            <View style={styles.billingBreakdownBox}>
+              <View style={styles.billingBreakdownRow}>
+                <Text style={styles.billingBreakdownLabel}>Subtotal</Text>
+                <Text style={styles.billingBreakdownValue}>{formatMoney(billingSubtotal)}</Text>
+              </View>
+              <View style={styles.billingBreakdownRow}>
+                <Text style={styles.billingBreakdownLabel}>
+                  GST{billingEstimate ? ` (${billingEstimate.gst_percent}%)` : ""}
+                </Text>
+                <Text style={styles.billingBreakdownValue}>{formatMoney(billingGst)}</Text>
+              </View>
+              <View style={styles.billingBreakdownRow}>
+                <Text style={styles.billingBreakdownLabel}>Platform fee</Text>
+                <Text style={styles.billingBreakdownValue}>{formatMoney(billingFee)}</Text>
+              </View>
+            </View>
+          ) : null}
           <View style={styles.ctaRow}>
             <TouchableOpacity
               style={[styles.addToCartBtn, (!canContinue || addingToCart) && styles.continueBtnDisabled]}
@@ -1489,6 +1556,50 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     marginTop: SPACING.xs,
     lineHeight: 16,
+  },
+  billingTotalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: SPACING.xs,
+  },
+  billingTotalLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  billingTotalLabel: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+    color: COLORS.gray,
+  },
+  billingTotalValue: {
+    fontSize: 19,
+    fontWeight: "800",
+    color: COLORS.black,
+    marginTop: 2,
+  },
+  billingBreakdownBox: {
+    backgroundColor: COLORS.grayLight,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    marginBottom: SPACING.xs,
+    gap: 4,
+  },
+  billingBreakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  billingBreakdownLabel: {
+    fontSize: 12,
+    color: COLORS.gray,
+  },
+  billingBreakdownValue: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.black,
   },
   relatedSection: {
     marginTop: SPACING.lg,
