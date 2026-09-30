@@ -944,7 +944,8 @@ const tc = StyleSheet.create({
     }),
   },
   iconBox: { width: 48, height: 48, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center" },
-  image: { width: "100%", height: 90, borderRadius: RADIUS.md },
+  // aspectRatio, not a fixed height - see rp.heroImage above for why.
+  image: { width: "100%", aspectRatio: 4 / 3, borderRadius: RADIUS.md },
   textBlock: { gap: 4, width: "100%" },
   name: { fontSize: 13, fontWeight: "700", color: COLORS.black, lineHeight: 18 },
   desc: { fontSize: 11, color: COLORS.gray, lineHeight: 15 },
@@ -1009,8 +1010,14 @@ const dp = StyleSheet.create({
 const rp = StyleSheet.create({
   listContent: { padding: SPACING.md, paddingBottom: 48, gap: 10 },
   heroImage: {
+    // aspectRatio, not a fixed height - a fixed px height with a fluid
+    // width means the box's actual on-screen ratio changes across device
+    // widths, so contentFit="cover" crops a different amount (and a
+    // different part of the photo) per device. aspectRatio keeps the box's
+    // ratio fixed regardless of width, matching the website's identical
+    // fix (aspect-[4/3] on AlterationGroupPicker.tsx's tier card image).
     width: "100%",
-    height: 160,
+    aspectRatio: 4 / 3,
     borderRadius: RADIUS.lg,
     backgroundColor: COLORS.grayLight,
     marginBottom: 4,
