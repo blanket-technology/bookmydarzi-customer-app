@@ -1,7 +1,7 @@
 import React, { memo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS, SPACING, TYPOGRAPHY } from "../../../../constants/theme";
+import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from "../../../../constants/theme";
 import { orderDisplayValue } from "../../../types/api";
 import type { OrderTimelineStage } from "../../../types/api";
 
@@ -69,6 +69,32 @@ const OrderTimelineItem = memo(({ stage, isLast = false }: OrderTimelineItemProp
           <Text style={styles.note} numberOfLines={4}>
             {stage.note}
           </Text>
+        ) : null}
+        {/* Who was assigned - only present on "Pickup/Delivery Partner
+            Assigned" pseudo-stages. Previously this entry carried only a
+            bare title/timestamp with no identity, reading as an
+            unexplained duplicate of the next real stage (e.g. "Pickup
+            Completed") right after it. */}
+        {stage.partner ? (
+          <View style={styles.partnerRow}>
+            {stage.partner.photo_url ? (
+              <Image source={{ uri: stage.partner.photo_url }} style={styles.partnerAvatar} />
+            ) : (
+              <View style={styles.partnerAvatarFallback}>
+                <Text style={styles.partnerAvatarInitial}>
+                  {stage.partner.name.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <View style={styles.partnerInfo}>
+              <Text style={styles.partnerName} numberOfLines={1}>
+                {stage.partner.name}
+              </Text>
+              {stage.partner.mobile ? (
+                <Text style={styles.partnerMobile}>{stage.partner.mobile}</Text>
+              ) : null}
+            </View>
+          </View>
         ) : null}
       </View>
     </View>
@@ -146,5 +172,45 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body.sm,
     color: COLORS.error,
     marginTop: 4,
+  },
+  partnerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+    backgroundColor: COLORS.offWhite,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+  },
+  partnerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  partnerAvatarFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  partnerAvatarInitial: {
+    ...TYPOGRAPHY.label.md,
+    color: COLORS.primaryDark,
+  },
+  partnerInfo: {
+    flex: 1,
+  },
+  partnerName: {
+    ...TYPOGRAPHY.body.sm,
+    fontWeight: "700",
+    color: COLORS.black,
+  },
+  partnerMobile: {
+    ...TYPOGRAPHY.label.sm,
+    color: COLORS.gray,
+    textTransform: "none",
+    letterSpacing: 0,
   },
 });
