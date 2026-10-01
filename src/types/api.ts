@@ -280,6 +280,14 @@ export interface OrderTimelineStage {
   /** Extra context for this step - currently only set on the "cancelled"
    * step, carrying the real cancellation reason. */
   note?: string | null;
+  /** Who was assigned - only set on the "pickup_partner_assigned"/
+   * "delivery_partner_assigned" pseudo-stages, when a Bridge employee was
+   * actually assigned at that point in the timeline. */
+  partner?: {
+    name: string;
+    photo_url: string | null;
+    mobile: string | null;
+  } | null;
 }
 
 export interface OrderCurrentStage {
