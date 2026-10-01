@@ -167,6 +167,16 @@ export type DeliveryPartner = PickupPartner;
  * person as pickup_partner/delivery_partner. */
 export type ReturnPartner = PickupPartner;
 
+/** Repair-pickup-leg equivalent of PickupPartner - who's collecting the
+ * garment from the customer after an issue is reported, to take it back
+ * to the tailor. Never assumed to be the same person as any other leg. */
+export type RepairPickupPartner = PickupPartner;
+
+/** Repair-delivery-leg equivalent of PickupPartner - who's bringing the
+ * repaired garment back to the customer. Never assumed to be the same
+ * person as any other leg. */
+export type RepairDeliveryPartner = PickupPartner;
+
 /** GET /customer/orders/{id}/details - nested API payload */
 export interface OrderDetailsOrderBlock {
   order_code: string | null;
@@ -195,6 +205,8 @@ export interface OrderDetailsOrderBlock {
   pickup_partner?: PickupPartner | null;
   delivery_partner?: DeliveryPartner | null;
   return_partner?: ReturnPartner | null;
+  repair_pickup_partner?: RepairPickupPartner | null;
+  repair_delivery_partner?: RepairDeliveryPartner | null;
   /** Backend-authoritative "can this pickup still be moved" flag - mirrors
    * the reschedule endpoint's own RESCHEDULABLE_FROM check. Optional/
    * defaults to false so older cached responses (before this field

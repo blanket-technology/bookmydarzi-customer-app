@@ -910,16 +910,23 @@ export default function OrderDetailsScreen() {
 
   // Backend issues invoices only once the order is placed - not while it is
   // pending payment, payment-failed, or cancelled (app/services/invoices/
-  // invoice_service.py's _NOT_INVOICEABLE). inspection_window/in_repair/
-  // repair_completed are all part of the post-delivery loop (order has
-  // genuinely been delivered and billed, may just be mid-repair) and are
-  // explicitly allowed by that same backend check, so they must be too.
+  // invoice_service.py's _NOT_INVOICEABLE, a deny-list). Every repair-loop
+  // status (order has genuinely been delivered and billed at least once,
+  // may just be mid-repair/in-transit) is allowed by that same backend
+  // check by default, so they must all be too.
   const invoiceAvailable =
     !!payload &&
     (orderStatusKey === "delivered" ||
       orderStatusKey === "inspectionwindow" ||
       orderStatusKey === "inrepair" ||
-      orderStatusKey === "repaircompleted");
+      orderStatusKey === "repairpickuppending" ||
+      orderStatusKey === "repairpickupscheduled" ||
+      orderStatusKey === "repairpickupintransit" ||
+      orderStatusKey === "attailorforrepair" ||
+      orderStatusKey === "repaircompleted" ||
+      orderStatusKey === "repairdeliverypending" ||
+      orderStatusKey === "repairdeliveryscheduled" ||
+      orderStatusKey === "repairdeliveryintransit");
 
   const handleDownloadInvoice = async () => {
     if (orderId === null || busy) return;
@@ -1165,6 +1172,26 @@ export default function OrderDetailsScreen() {
               title="Your return partner"
               subtitle="Bringing your garment back to your doorstep"
               partner={payload.order.return_partner}
+            />
+          ) : null}
+
+          {/* Repair-pickup-leg equivalent - collecting the garment after
+              an issue is reported, to take it back to the tailor. */}
+          {payload.order.repair_pickup_partner ? (
+            <BridgePartnerCard
+              title="Your repair pickup partner"
+              subtitle="Collecting your order for repair"
+              partner={payload.order.repair_pickup_partner}
+            />
+          ) : null}
+
+          {/* Repair-delivery-leg equivalent - bringing the repaired
+              garment back. */}
+          {payload.order.repair_delivery_partner ? (
+            <BridgePartnerCard
+              title="Your repair delivery partner"
+              subtitle="Bringing your repaired order to your doorstep"
+              partner={payload.order.repair_delivery_partner}
             />
           ) : null}
 

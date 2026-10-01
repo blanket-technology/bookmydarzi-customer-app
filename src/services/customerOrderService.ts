@@ -535,9 +535,31 @@ function mapDetailsOrderBlock(raw: Record<string, unknown>): OrderDetailsOrderBl
       ? ((order.image_references ?? order.ImageReferences) as unknown[]).map(String)
       : null,
     customization_notes: nullableStr(order.customization_notes ?? order.CustomizationNotes),
+    // Bug fix: these two fields were added to OrderDetailsOrderBlock's type
+    // and rendered in order-details.tsx, but never actually mapped here -
+    // payload.order.voice_note_url/latest_repair_request were silently
+    // undefined at runtime despite the backend genuinely sending them, so
+    // neither the voice-note player nor the "Issue reported" section ever
+    // showed anything.
+    voice_note_url: nullableStr(order.voice_note_url ?? order.VoiceNoteUrl),
+    latest_repair_request: (() => {
+      const repair = block(order, "latest_repair_request", "LatestRepairRequest");
+      const description = nullableStr(repair.issue_description ?? repair.IssueDescription);
+      if (!description) return null;
+      return {
+        issue_description: description,
+        issue_photo_urls: Array.isArray(repair.issue_photo_urls ?? repair.IssuePhotoUrls)
+          ? ((repair.issue_photo_urls ?? repair.IssuePhotoUrls) as unknown[]).map(String)
+          : null,
+        reported_at: nullableStr(repair.reported_at ?? repair.ReportedAt) ?? "",
+        resolved_at: nullableStr(repair.resolved_at ?? repair.ResolvedAt),
+      };
+    })(),
     pickup_partner: mapBridgePartner(order, "pickup_partner", "pickupPartner"),
     delivery_partner: mapBridgePartner(order, "delivery_partner", "deliveryPartner"),
     return_partner: mapBridgePartner(order, "return_partner", "returnPartner"),
+    repair_pickup_partner: mapBridgePartner(order, "repair_pickup_partner", "repairPickupPartner"),
+    repair_delivery_partner: mapBridgePartner(order, "repair_delivery_partner", "repairDeliveryPartner"),
     can_reschedule: Boolean(order.can_reschedule ?? order.canReschedule),
   };
 }

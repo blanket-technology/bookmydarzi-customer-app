@@ -36,17 +36,26 @@ const BASE = "/orders";
 function toSimplifiedStatus(raw: string): ApiOrder["status"] {
   const meta = getOrderStatusMeta(raw);
   if (meta.status === "cancelled" || meta.status === "order_rejected") return "cancelled";
-  // inspection_window/in_repair/repair_completed are all part of the
-  // post-delivery loop (same progress value as delivered) - without this
-  // they'd fall through to the progress-based checks below and mislabel a
-  // delivered-but-in-repair order as "in_progress" (implying stitching is
-  // still happening), which is actively wrong.
+  // inspection_window and every repair-loop status (in_repair, the 3
+  // repair-pickup legs, repair_completed, the 3 repair-delivery legs) are
+  // all part of the post-delivery loop (same progress value as delivered,
+  // and the garment has genuinely reached the customer at least once) -
+  // without this they'd fall through to the progress-based checks below
+  // and mislabel a delivered-but-in-repair order as "in_progress"
+  // (implying stitching is still happening), which is actively wrong.
   if (
     meta.status === "completed" ||
     meta.status === "delivered" ||
     meta.status === "inspection_window" ||
     meta.status === "in_repair" ||
-    meta.status === "repair_completed"
+    meta.status === "repair_pickup_pending" ||
+    meta.status === "repair_pickup_scheduled" ||
+    meta.status === "repair_pickup_in_transit" ||
+    meta.status === "at_tailor_for_repair" ||
+    meta.status === "repair_completed" ||
+    meta.status === "repair_delivery_pending" ||
+    meta.status === "repair_delivery_scheduled" ||
+    meta.status === "repair_delivery_in_transit"
   ) {
     return "delivered";
   }
