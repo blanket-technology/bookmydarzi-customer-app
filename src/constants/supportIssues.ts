@@ -73,7 +73,14 @@ const DELIVERED_STATUSES = new Set([
   "completed",
   "inspection_window",
   "in_repair",
+  "repair_pickup_pending",
+  "repair_pickup_scheduled",
+  "repair_pickup_in_transit",
+  "at_tailor_for_repair",
   "repair_completed",
+  "repair_delivery_pending",
+  "repair_delivery_scheduled",
+  "repair_delivery_in_transit",
 ]);
 const CLOSED_STATUSES = new Set(["cancelled", "order_rejected"]);
 
