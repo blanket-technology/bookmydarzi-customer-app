@@ -26,9 +26,12 @@ interface Props {
    * their message bubbles instead of the generic "Support Agent" label
    * once known, matching what the header/typing indicator already show. */
   agentName?: string | null;
+  /** Called with a chip's `value` when the customer taps a quick-reply chip
+   * under this message - the caller sends it exactly like a typed message. */
+  onQuickReply?: (value: string) => void;
 }
 
-export function MessageBubble({ message, isOwn, onRetry, showSenderMeta = true, isRead = false, agentName }: Props) {
+export function MessageBubble({ message, isOwn, onRetry, showSenderMeta = true, isRead = false, agentName, onQuickReply }: Props) {
   const isSystem = message.sender_type === "system";
   const isAI = message.sender_type === "ai";
   const isPending = isOwn && message.deliveryStatus === "pending";
@@ -119,6 +122,20 @@ export function MessageBubble({ message, isOwn, onRetry, showSenderMeta = true, 
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         )}
+        {!isOwn && isAI && onQuickReply && Array.isArray(message.metadata?.quick_replies) && (
+          <View style={styles.quickReplyRow}>
+            {message.metadata.quick_replies.map((chip: { label: string; value: string }, i: number) => (
+              <TouchableOpacity
+                key={i}
+                style={styles.quickReplyChip}
+                onPress={() => onQuickReply(chip.value)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.quickReplyText}>{chip.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -175,4 +192,13 @@ const styles = StyleSheet.create({
   retryText: { fontSize: 11, fontWeight: "700", color: "#dc2626" },
   systemContainer: { alignItems: "center", marginVertical: 8, paddingHorizontal: 24 },
   systemText: { fontSize: 12, color: "#999", fontStyle: "italic", textAlign: "center" },
+  quickReplyRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
+  quickReplyChip: {
+    borderWidth: 1.5,
+    borderColor: "#0a8c8c",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  quickReplyText: { fontSize: 12.5, fontWeight: "700", color: "#0a8c8c" },
 });
