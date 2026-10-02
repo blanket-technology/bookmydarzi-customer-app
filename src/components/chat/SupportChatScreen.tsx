@@ -22,6 +22,7 @@ import { CsatModal } from "./CsatModal";
 import { DateSeparator, formatDateSeparator } from "./DateSeparator";
 import { MessageBubble } from "./MessageBubble";
 import { PinnedOrderCard } from "./PinnedOrderCard";
+import { StarterChips } from "./StarterChips";
 import { MessageInput } from "./MessageInput";
 import { TypingIndicator } from "./TypingIndicator";
 const genId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -477,6 +478,7 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
               Ask me anything about your order, payment, or our services.
               {"\n"}I&apos;m here to help instantly.
             </Text>
+            <StarterChips hasOrderContext={!!orderId} onSelect={handleSend} />
           </View>
         }
         ListFooterComponent={
