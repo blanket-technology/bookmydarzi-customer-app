@@ -453,6 +453,7 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
               isRead={item.message.sender_type === "customer" && item.message.seq <= peerReadUpToSeq}
               onRetry={item.message.deliveryStatus === "failed" ? () => handleRetry(item.message) : undefined}
               agentName={agentName}
+              onQuickReply={handleSend}
             />
           )
         }
