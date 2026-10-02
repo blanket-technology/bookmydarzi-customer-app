@@ -399,22 +399,40 @@ export const useCartStore = create<CartState>()(
         set({ mutating: true, error: null });
         try {
           const result = await checkoutCartApi(payload);
-          set({
-            ...applyCartToState(EMPTY_CART),
-            mutating: false,
-            pendingService: null,
-            checkoutFlow: false,
-            selectedAddressId: null,
-            appliedOfferId: null,
-            appliedOfferDiscountType: "percentage",
-            appliedOfferDiscountValue: 0,
-            appliedOfferTitle: "",
-            appliedOfferMaxDiscountAmount: null,
-            appliedOfferMinOrderValue: 0,
-          });
-          void get()
-            .refreshCart({ silent: true, allowCreate: true })
-            .catch(() => {});
+
+          // Bug fix: for "online", the backend order is created in
+          // PENDING_PAYMENT here - nothing has actually been paid yet, the
+          // Razorpay screen opens next. Wiping the cart to empty right now
+          // meant that if the online payment then failed/was cancelled, the
+          // customer came back to an empty cart with no items left to pay
+          // for - including no way to retry via COD, which read to them as
+          // "COD is unavailable" even though nothing was actually blocking
+          // it. Only COD is genuinely placed/final at this point (the
+          // backend's own void_unpaid_order path - checkout_service.py -
+          // already handles a stale PENDING_PAYMENT order if the customer
+          // re-checks-out later, so skipping the wipe here doesn't orphan
+          // anything new). For "online", the cart is left untouched until
+          // payment.tsx's finishSuccess() refreshes it on confirmed success.
+          if (payload.payment_method === "cod") {
+            set({
+              ...applyCartToState(EMPTY_CART),
+              mutating: false,
+              pendingService: null,
+              checkoutFlow: false,
+              selectedAddressId: null,
+              appliedOfferId: null,
+              appliedOfferDiscountType: "percentage",
+              appliedOfferDiscountValue: 0,
+              appliedOfferTitle: "",
+              appliedOfferMaxDiscountAmount: null,
+              appliedOfferMinOrderValue: 0,
+            });
+            void get()
+              .refreshCart({ silent: true, allowCreate: true })
+              .catch(() => {});
+          } else {
+            set({ mutating: false });
+          }
           return result;
         } catch (err) {
           const message =

@@ -219,11 +219,17 @@ function BookingCompactCard({
               <Text style={styles.serviceLine} numberOfLines={1}>{categoryName}</Text>
             ) : null}
             <View style={styles.metaRow}>
-              <Text style={styles.metaText} numberOfLines={1}>{bookingIdLabel}</Text>
+              <Text style={[styles.metaText, styles.metaTextShrink]} numberOfLines={1}>{bookingIdLabel}</Text>
               {scheduled ? (
                 <>
                   <Text style={styles.metaDot}>·</Text>
-                  <Text style={styles.metaText} numberOfLines={1}>{scheduled}</Text>
+                  {/* Bug fix: the date previously shared the row with an
+                      unbounded Order ID label and got its own numberOfLines=1
+                      clipped when the two together overflowed - the date is
+                      short/fixed-format, so it must never be the one that
+                      shrinks; the Order ID (styles.metaTextShrink, above)
+                      gives way instead. */}
+                  <Text style={[styles.metaText, styles.metaTextFixed]} numberOfLines={1}>{scheduled}</Text>
                 </>
               ) : null}
             </View>
@@ -367,6 +373,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#9CA3AF",
     fontWeight: "500",
+  },
+  metaTextShrink: {
+    flexShrink: 1,
+  },
+  metaTextFixed: {
+    flexShrink: 0,
   },
   metaDot: { fontSize: 11, color: "#C4CACA" },
   etaRow: {
