@@ -519,10 +519,16 @@ function PopularServiceCardComponent({
         onPress={handlePress}
         onLongPress={handleLongPress}
         delayLongPress={350}
+        // react-hooks/immutability doesn't yet recognize
+        // react-native-reanimated's SharedValue.value as a mutable escape
+        // hatch outside React's render model - this is the library's own
+        // documented usage pattern, not a bug.
         onPressIn={() => {
+          // eslint-disable-next-line react-hooks/immutability
           scale.value = withSpring(0.97, { damping: 22, stiffness: 360 });
         }}
         onPressOut={() => {
+          // eslint-disable-next-line react-hooks/immutability
           scale.value = withSpring(1, { damping: 18, stiffness: 300 });
         }}
         accessibilityRole="button"

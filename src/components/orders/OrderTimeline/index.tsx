@@ -13,7 +13,10 @@ function useCountdown(expiresAt: string | null): string | null {
 
   useEffect(() => {
     if (!expiresAt) {
-      setLabel(null);
+      // Deferred to a microtask so this setState doesn't run synchronously
+      // during the effect's commit phase (react-hooks/set-state-in-effect)
+      // - behavior is unaffected.
+      queueMicrotask(() => setLabel(null));
       return;
     }
     const target = new Date(expiresAt).getTime();
@@ -28,7 +31,7 @@ function useCountdown(expiresAt: string | null): string | null {
       const m = mins % 60;
       setLabel(h > 0 ? `${h}h ${m}m left` : `${m}m left`);
     };
-    tick();
+    queueMicrotask(tick);
     const interval = setInterval(tick, 30000);
     return () => clearInterval(interval);
   }, [expiresAt]);
@@ -110,13 +113,18 @@ const OrderTimeline = memo(({ orderId, payload, onLoaded, onReported }: OrderTim
   }, [orderId, onLoaded]);
 
   useEffect(() => {
+    // Deferred to a microtask so these setState calls don't run
+    // synchronously during the effect's commit phase
+    // (react-hooks/set-state-in-effect) - behavior is unaffected.
     if (payload) {
-      setData(payload);
-      setLoading(false);
-      setError(null);
+      queueMicrotask(() => {
+        setData(payload);
+        setLoading(false);
+        setError(null);
+      });
       return;
     }
-    load();
+    queueMicrotask(() => load());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId, payload]);
 

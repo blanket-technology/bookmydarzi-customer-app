@@ -147,6 +147,11 @@ export default function SlideToConfirm({
   // independently of processing).
   useEffect(() => {
     if (isInteractive && !isLocked.value) {
+      // react-hooks/immutability doesn't yet recognize
+      // react-native-reanimated's SharedValue.value as a mutable escape
+      // hatch outside React's render model - this is the library's own
+      // documented usage pattern, not a bug.
+      // eslint-disable-next-line react-hooks/immutability
       success.value = 0;
     }
   }, [isInteractive, isLocked, success]);
