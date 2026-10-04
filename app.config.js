@@ -141,6 +141,11 @@ module.exports = {
       },
     ],
     "expo-router",
+    // Required peer dependency of expo-audio (used for voice notes) -
+    // without it the app can crash outside of Expo Go, since this native
+    // module must be linked directly rather than resolved at runtime.
+    "expo-asset",
+    "expo-sharing",
     [
       "expo-splash-screen",
       {
