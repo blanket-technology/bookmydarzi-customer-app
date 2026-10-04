@@ -86,9 +86,39 @@ export default function VoiceNoteRecorder({ url, onUploaded, onRemove }: VoiceNo
   const player = useAudioPlayer(url ? { uri: url } : null);
   const playerStatus = useAudioPlayerStatus(player);
 
+  // Moved above the effect that calls it (was previously defined via
+  // useCallback further down, after the effect referencing it) -
+  // react-hooks/immutability flagged this as "accessed before declared".
+  // Worked at runtime regardless (closures capture by reference, not
+  // execution order), but the React Compiler can't safely reason about a
+  // forward reference like that for its own memoization, so declaration
+  // order now matches actual use order.
+  const stopAndUpload = useCallback(async () => {
+    if (!recorder.isRecording) return;
+    await recorder.stop();
+    const uri = recorder.uri;
+    if (!uri) {
+      setError("Recording failed. Please try again.");
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      const result = await uploadOrderVoiceNote(uri);
+      onUploaded(result.url);
+    } catch (e: any) {
+      setError(e?.message || "Couldn't upload voice note. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  }, [recorder, onUploaded]);
+
   useEffect(() => {
     if (recorderState.isRecording && recorderState.durationMillis / 1000 >= MAX_DURATION_SECONDS) {
-      void stopAndUpload();
+      // Deferred to a microtask so stopAndUpload's own setState calls
+      // don't run synchronously during the effect's commit phase
+      // (react-hooks/set-state-in-effect) - behavior is unaffected.
+      queueMicrotask(() => void stopAndUpload());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recorderState.isRecording, recorderState.durationMillis]);
@@ -112,26 +142,6 @@ export default function VoiceNoteRecorder({ url, onUploaded, onRemove }: VoiceNo
     await recorder.prepareToRecordAsync();
     recorder.record();
   }, [recorder]);
-
-  const stopAndUpload = useCallback(async () => {
-    if (!recorder.isRecording) return;
-    await recorder.stop();
-    const uri = recorder.uri;
-    if (!uri) {
-      setError("Recording failed. Please try again.");
-      return;
-    }
-    setUploading(true);
-    setError(null);
-    try {
-      const result = await uploadOrderVoiceNote(uri);
-      onUploaded(result.url);
-    } catch (e: any) {
-      setError(e?.message || "Couldn't upload voice note. Please try again.");
-    } finally {
-      setUploading(false);
-    }
-  }, [recorder, onUploaded]);
 
   const togglePlayback = useCallback(() => {
     if (playerStatus.playing) {

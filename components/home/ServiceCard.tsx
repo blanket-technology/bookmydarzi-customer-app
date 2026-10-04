@@ -26,7 +26,12 @@ export default function ServiceCard({ item, onPress }: Props) {
   return (
     <AnimatedTouchable
       style={[styles.card, animStyle]}
+      // react-hooks/immutability doesn't yet recognize react-native-reanimated's
+      // SharedValue.value as a mutable escape hatch outside React's render
+      // model - this is the library's own documented usage pattern, not a bug.
+      // eslint-disable-next-line react-hooks/immutability
       onPressIn={() => { scale.value = withSpring(0.94); }}
+      // eslint-disable-next-line react-hooks/immutability
       onPressOut={() => { scale.value = withSpring(1); }}
       onPress={onPress}
       activeOpacity={1}
