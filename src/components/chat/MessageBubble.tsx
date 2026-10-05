@@ -29,9 +29,14 @@ interface Props {
   /** Called with a chip's `value` when the customer taps a quick-reply chip
    * under this message - the caller sends it exactly like a typed message. */
   onQuickReply?: (value: string) => void;
+  /** Called when the customer taps thumbs up/down on an AI or agent reply.
+   * Omitted (no feedback UI rendered) for the customer's own messages and
+   * system messages - only present when the caller has a session to submit
+   * against. */
+  onFeedback?: (isHelpful: boolean) => void;
 }
 
-export function MessageBubble({ message, isOwn, onRetry, showSenderMeta = true, isRead = false, agentName, onQuickReply }: Props) {
+export function MessageBubble({ message, isOwn, onRetry, showSenderMeta = true, isRead = false, agentName, onQuickReply, onFeedback }: Props) {
   const isSystem = message.sender_type === "system";
   const isAI = message.sender_type === "ai";
   const isPending = isOwn && message.deliveryStatus === "pending";
@@ -122,6 +127,34 @@ export function MessageBubble({ message, isOwn, onRetry, showSenderMeta = true, 
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         )}
+        {!isOwn && (isAI || message.sender_type === "agent") && onFeedback && !isPending && !isFailed && (
+          <View style={styles.feedbackRow}>
+            <TouchableOpacity
+              onPress={() => onFeedback(true)}
+              style={styles.feedbackBtn}
+              hitSlop={8}
+              accessibilityLabel="Mark this reply as helpful"
+            >
+              <Ionicons
+                name={message.my_feedback === true ? "thumbs-up" : "thumbs-up-outline"}
+                size={14}
+                color={message.my_feedback === true ? "#0a8c8c" : "#999"}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => onFeedback(false)}
+              style={styles.feedbackBtn}
+              hitSlop={8}
+              accessibilityLabel="Mark this reply as not helpful"
+            >
+              <Ionicons
+                name={message.my_feedback === false ? "thumbs-down" : "thumbs-down-outline"}
+                size={14}
+                color={message.my_feedback === false ? "#dc2626" : "#999"}
+              />
+            </TouchableOpacity>
+          </View>
+        )}
         {!isOwn && isAI && onQuickReply && Array.isArray(message.metadata?.quick_replies) && (
           <View style={styles.quickReplyRow}>
             {message.metadata.quick_replies.map((chip: { label: string; value: string }, i: number) => (
@@ -201,4 +234,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   quickReplyText: { fontSize: 12.5, fontWeight: "700", color: "#0a8c8c" },
+  feedbackRow: { flexDirection: "row", gap: 10, marginTop: 4, paddingLeft: 2 },
+  feedbackBtn: { padding: 2 },
 });
