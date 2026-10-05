@@ -26,6 +26,9 @@ export interface ChatMessage {
   client_id: string | null;
   metadata: Record<string, any> | null;
   created_at: string;
+  // Only meaningful for ai/agent messages - true/false if this user already
+  // voted on this message, null if they haven't.
+  my_feedback?: boolean | null;
 }
 
 export async function getOrCreateSession(
@@ -61,6 +64,17 @@ export async function markRead(sessionUuid: string, lastSeq: number): Promise<vo
 
 export async function rateSession(sessionUuid: string, score: number): Promise<void> {
   await request(`${BASE}/sessions/${sessionUuid}/rate?score=${score}`, { method: "POST" });
+}
+
+export async function rateMessage(
+  sessionUuid: string,
+  messageId: number,
+  isHelpful: boolean,
+): Promise<{ status: string; message_id: number; is_helpful: boolean }> {
+  return request(
+    `${BASE}/sessions/${sessionUuid}/messages/${messageId}/feedback?is_helpful=${isHelpful}`,
+    { method: "POST" },
+  );
 }
 
 export async function requestHuman(sessionUuid: string): Promise<{ status: string; session_status: string }> {

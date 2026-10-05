@@ -187,6 +187,7 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
     setWsStatus,
     setCsatPrompt,
     submitCsat,
+    submitMessageFeedback,
     requestHuman,
     loadHistory,
   } = useSupportChatStore();
@@ -455,6 +456,7 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
               onRetry={item.message.deliveryStatus === "failed" ? () => handleRetry(item.message) : undefined}
               agentName={agentName}
               onQuickReply={handleSend}
+              onFeedback={(isHelpful) => submitMessageFeedback(item.message.id, isHelpful)}
             />
           )
         }
