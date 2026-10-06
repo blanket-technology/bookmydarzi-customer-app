@@ -75,12 +75,22 @@ function SavedAddressCard({
   onSelect,
   onEdit,
   onDelete,
+  onSetDefault,
+  settingDefault,
 }: {
   address: ApiAddress;
   selected: boolean;
   onSelect: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  // Bug fix (BUG-113): setting an address as default previously required
+  // opening the full edit form and finding the "Set as default" toggle
+  // buried inside it - the capability existed end-to-end (backend +
+  // store) but nothing surfaced it as a direct action on the address
+  // list itself. Optional so this component doesn't break wherever it's
+  // used without this prop (e.g. a future read-only listing).
+  onSetDefault?: () => void;
+  settingDefault?: boolean;
 }) {
   return (
     <View style={[styles.savedCard, selected && styles.savedCardSelected]}>
@@ -112,11 +122,24 @@ function SavedAddressCard({
             <Text style={styles.savedCardName} numberOfLines={1}>
               {address.full_name}
             </Text>
-            {address.is_default && (
+            {address.is_default ? (
               <View style={styles.defaultBadge}>
                 <Text style={styles.defaultBadgeText}>Default</Text>
               </View>
-            )}
+            ) : onSetDefault ? (
+              <TouchableOpacity
+                onPress={onSetDefault}
+                disabled={settingDefault}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={styles.setDefaultBadge}
+                accessibilityRole="button"
+                accessibilityLabel="Set as default address"
+              >
+                <Text style={styles.setDefaultBadgeText}>
+                  {settingDefault ? "Setting…" : "Set as default"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
           <Text style={styles.savedCardAddr} numberOfLines={2}>
             {address.address_line_1}
@@ -195,6 +218,7 @@ export default function AddressScreen() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedAddressId, setSelectedAddressIdLocal] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [settingDefaultId, setSettingDefaultId] = useState<number | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const fullNameRef = useRef<TextInput>(null);
   const [scrollToForm, setScrollToForm] = useState(false);
@@ -414,6 +438,27 @@ export default function AddressScreen() {
         },
       },
     ]);
+  };
+
+  // BUG-113: direct "Set as default" action on the address list itself,
+  // instead of requiring the customer to open the full edit form to find
+  // the toggle buried inside it. Reuses editAddress's existing PATCH path -
+  // the backend/store capability already existed, this just surfaces it.
+  const handleSetDefault = async (addr: ApiAddress) => {
+    setSettingDefaultId(addr.id);
+    try {
+      await editAddress(addr.id, { is_default: true });
+      if (!isMountedRef.current) return;
+      useToastStore.getState().show("Default address updated");
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      Alert.alert(
+        "Error",
+        err instanceof Error ? err.message : "Failed to set default address.",
+      );
+    } finally {
+      if (isMountedRef.current) setSettingDefaultId(null);
+    }
   };
 
   // Auto-select default address (selection screen only) - same
@@ -1235,6 +1280,8 @@ export default function AddressScreen() {
                   }}
                   onEdit={() => loadAddressIntoForm(addr)}
                   onDelete={() => handleDeleteAddress(addr)}
+                  onSetDefault={() => handleSetDefault(addr)}
+                  settingDefault={settingDefaultId === addr.id}
                 />
               ))}
               <TouchableOpacity
@@ -1603,6 +1650,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "600",
     color: COLORS.primaryDark,
+  },
+  setDefaultBadge: {
+    flexShrink: 0,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.grayBorder,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  setDefaultBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: COLORS.gray,
   },
   savedCardAddr: { fontSize: 12, color: COLORS.gray, lineHeight: 17 },
   savedCardCity: { fontSize: 12, color: COLORS.gray },
