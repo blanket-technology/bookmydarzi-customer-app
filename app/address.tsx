@@ -1021,6 +1021,10 @@ export default function AddressScreen() {
                       color={serviceability.serviceable ? COLORS.success : COLORS.error}
                       style={styles.svcBadgeIcon}
                     />
+                    {/* flexShrink on the Text itself (not just its flex:1
+                        parent View) - without it, long messages on a narrow
+                        device (~320px) can force this row wider than the
+                        screen instead of wrapping to a second line. */}
                     <Text
                       style={[
                         styles.svcBadgeText,
@@ -1044,7 +1048,12 @@ export default function AddressScreen() {
                       ]}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.svcInterestBtnText}>
+                      <Text
+                        style={styles.svcInterestBtnText}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.85}
+                      >
                         {interestState === "done"
                           ? "Thanks! We'll notify you 🎉"
                           : interestState === "submitting"
@@ -1903,8 +1912,14 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   svcBadge: {
-    flexDirection: "row",
-    alignItems: "center",
+    // column, not row: this wraps BOTH the icon+message row (svcBadgeRow)
+    // AND the "I'm interested" button as siblings. As a row container,
+    // the button was laid out horizontally next to the message instead
+    // of stacking below it, pushing it off the right edge of the screen
+    // on longer unserviceable-area messages (svcInterestBtn's own
+    // marginTop/alignSelf: "flex-start" only make sense in a column).
+    flexDirection: "column",
+    alignItems: "stretch",
     gap: 6,
     borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
@@ -1922,17 +1937,28 @@ const styles = StyleSheet.create({
   },
   svcBadgeText: {
     flex: 1,
+    // flex:1 alone only grows/positions within the row - without
+    // flexShrink:1 too, a long unserviceable-area message (server-set,
+    // length not controlled here) could overflow its row's width on a
+    // narrow device instead of wrapping.
+    flexShrink: 1,
     fontSize: 13,
     fontWeight: "600",
     lineHeight: 18,
   },
   svcBadgeTextOk: { color: COLORS.success },
   svcBadgeTextFail: { color: COLORS.error },
-  svcBadgeRow: { flexDirection: "row", alignItems: "flex-start" },
+  svcBadgeRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
   svcBadgeIcon: { marginTop: 1 },
   svcInterestBtn: {
-    marginTop: 8,
+    // spacing from svcBadgeRow above now comes from svcBadge's own gap.
+    // alignSelf: "flex-start" sizes the pill to its own text (intrinsic
+    // width) rather than stretching full-width, which is the desired look
+    // on normal screens - maxWidth is the safety net for the smallest
+    // devices (~320px), paired with the Text's own numberOfLines/
+    // adjustsFontSizeToFit above so the label shrinks instead of clipping.
     alignSelf: "flex-start",
+    maxWidth: "100%",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
