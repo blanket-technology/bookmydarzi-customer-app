@@ -70,6 +70,12 @@ interface SupportChatState {
   setAgentName: (name: string) => void;
   setPeerReadUpToSeq: (seq: number) => void;
   requestHuman: () => Promise<void>;
+  /** Customer-initiated close (BUG-111) - ends the conversation from the
+   * customer's side instead of only an agent being able to resolve it.
+   * The session's new "resolved" status and the CSAT prompt both arrive
+   * back via the session_resolved WS event (same path the agent-resolve
+   * flow already uses), not from this call's return value. */
+  closeSession: () => Promise<void>;
   submitCsat: (score: number) => Promise<void>;
   /** Thumbs up/down on an individual AI/agent message - optimistic local
    * update, reverted if the request fails. */
@@ -218,6 +224,16 @@ export const useSupportChatStore = create<SupportChatState>((set, get) => ({
       // Status update will arrive via WS session_status_changed event
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Could not connect to agent" });
+    }
+  },
+
+  closeSession: async () => {
+    const { session } = get();
+    if (!session) return;
+    try {
+      await chatService.closeSession(session.uuid);
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Could not close this conversation" });
     }
   },
 

@@ -81,6 +81,14 @@ export async function requestHuman(sessionUuid: string): Promise<{ status: strin
   return request(`${BASE}/sessions/${sessionUuid}/request-agent`, { method: "POST" });
 }
 
+// Customer-initiated close (BUG-111) - lets the customer end a
+// conversation themselves instead of only an agent being able to resolve
+// it. Idempotent server-side; triggers the same session_resolved/
+// csat_prompt WS event the agent-resolve path already sends.
+export async function closeSession(sessionUuid: string): Promise<{ status: string; session_status: string }> {
+  return request(`${BASE}/sessions/${sessionUuid}/close`, { method: "POST" });
+}
+
 export interface ChatUploadResult {
   url: string;
   file_id: string;
