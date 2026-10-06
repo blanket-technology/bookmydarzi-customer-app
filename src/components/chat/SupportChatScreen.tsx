@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
     FlatList,
     KeyboardAvoidingView, Platform,
     StyleSheet,
@@ -189,6 +190,7 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
     submitCsat,
     submitMessageFeedback,
     requestHuman,
+    closeSession,
     loadHistory,
   } = useSupportChatStore();
   const { isConnected, isResolved } = useNetworkStatus();
@@ -359,6 +361,21 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
   const hasAiReplied = messages.some((m) => m.sender_type === "ai");
   const isClosed = sessionStatus === "resolved" || sessionStatus === "closed";
   const showAgentBar = isAIHandling && hasAiReplied;
+
+  // BUG-111: previously only an agent could end a conversation - the
+  // customer had no way to close one themselves even after their issue
+  // was fully resolved by the AI. Confirm first since this is one-way
+  // (closeSession/resolve_session has no "reopen").
+  const handleCloseChat = useCallback(() => {
+    Alert.alert(
+      "End this conversation?",
+      "You can always start a new chat later if you need more help.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "End chat", style: "destructive", onPress: () => closeSession() },
+      ],
+    );
+  }, [closeSession]);
   const displayItems = useMemo(() => buildDisplayItems(messages), [messages]);
 
   if (loading) {
@@ -426,6 +443,11 @@ export function SupportChatScreen({ orderId, issueCategory, sessionUuid: initial
             </Text>
           </View>
         </View>
+        {!isClosed && (
+          <TouchableOpacity onPress={handleCloseChat} style={styles.endChatBtn} hitSlop={8}>
+            <Text style={styles.endChatText}>End chat</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {orderId && (
@@ -546,6 +568,13 @@ const styles = StyleSheet.create({
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   headerTitle: { fontSize: 14, fontWeight: "800", color: "#1a1a1a" },
   headerSub: { fontSize: 11, fontWeight: "600", marginTop: 1 },
+  endChatBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: "#f5f5f5",
+  },
+  endChatText: { fontSize: 12, fontWeight: "700", color: "#6b7280" },
 
   listContent: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4, flexGrow: 1 },
   historyLoadingWrap: { paddingVertical: 12, alignItems: "center" },
