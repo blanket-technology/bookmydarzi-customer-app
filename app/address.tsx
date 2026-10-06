@@ -1340,8 +1340,17 @@ export default function AddressScreen() {
               managing their saved addresses to select one and tap a CTA
               to leave, when the back button already does that. Confirm
               Address / Continue to Checkout still show for their real
-              flows; only the irrelevant standalone "Done" case is hidden. */}
-          {!isBookingFlow && mode === "select" && (isBuyNowFlow || isCheckoutFlow) ? (
+              flows; only the irrelevant standalone "Done" case is hidden.
+
+              Bug fix (BUG-112): also requires addresses.length > 0 now -
+              previously this rendered (and was tappable) even with zero
+              saved addresses, surfacing only a reactive "please select or
+              add a delivery address" alert on tap. With nothing saved yet
+              the add-address form is already the only thing on screen (see
+              the addresses.length > 0 branch above), so a dead CTA on top
+              of it just confused the empty state instead of prompting the
+              one real next step (filling in that form). */}
+          {!isBookingFlow && mode === "select" && (isBuyNowFlow || isCheckoutFlow) && addresses.length > 0 ? (
           <Animated.View
             entering={FadeInDown.delay(200).duration(400)}
             style={styles.btnWrap}
