@@ -99,7 +99,12 @@ function StatusBanner({ status, agentName }: { status: string; agentName: string
       <View style={[banner.root, { backgroundColor: "#fffbeb", borderColor: "#fde68a" }]}>
         <ActivityIndicator size="small" color="#d97706" style={{ marginRight: 8 }} />
         <Text style={[banner.text, { color: "#92400e" }]}>
-          Finding you an agent - expected response within 2 days.
+          {/* No real SLA/response-time guarantee exists anywhere in the
+              backend - this used to hardcode "within 2 days" with nothing
+              behind it (BUG-119), setting an expectation the system never
+              actually tracked or committed to. Say what's true instead:
+              we're finding an agent, no promised timeframe. */}
+          Finding you an agent - we&apos;ll connect you as soon as one is available.
         </Text>
       </View>
     );
