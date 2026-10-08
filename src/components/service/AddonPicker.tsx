@@ -107,9 +107,6 @@ export default function AddonPicker({
                 </View>
                 <View style={styles.addonBody}>
                   <Text style={styles.addonName}>{addon.name}</Text>
-                  {addon.description ? (
-                    <Text style={styles.addonDesc}>{addon.description}</Text>
-                  ) : null}
                 </View>
                 <View style={[styles.pricePill, checked && styles.pricePillSelected]}>
                   <Text style={[styles.pricePillText, checked && styles.pricePillTextSelected]}>
