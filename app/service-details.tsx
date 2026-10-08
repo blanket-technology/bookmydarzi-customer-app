@@ -859,17 +859,6 @@ export default function ServiceDetailsScreen() {
           ))}
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(60).duration(400)} style={styles.section}>
-          <Text style={styles.sectionTitle}>{t("service.aboutService")}</Text>
-          {displayDescription ? (
-            <Text style={styles.description}>{displayDescription}</Text>
-          ) : loading ? (
-            <Text style={styles.description}>Loading...</Text>
-          ) : (
-            <Text style={styles.description}>Service details unavailable</Text>
-          )}
-        </Animated.View>
-
         {serviceRatings != null && serviceRatings.total_reviews > 0 ? (
           <Animated.View
             entering={FadeInDown.delay(40).duration(400)}
