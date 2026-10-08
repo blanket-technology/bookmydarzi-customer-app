@@ -47,6 +47,7 @@ export type OrderStatus =
   | "ready_for_dispatch"
   | "out_for_delivery"
   | "delivered"
+  | "delivery_refused"
   | "inspection_window"
   | "in_repair"
   | "repair_pickup_pending"
@@ -373,6 +374,25 @@ export const ORDER_STATUS_META: Record<OrderStatus, OrderStatusMeta> = {
     employeeLabel: "Delivered",
     tailorLabel: "Delivered",
     terminal: false,
+  },
+  delivery_refused: {
+    status: "delivery_refused",
+    title: "Delivery refused",
+    description: "Delivery of this order was marked as refused. We're arranging its return.",
+    nextStep: "If a payment was made, it will be refunded per our cancellation policy.",
+    tone: "error",
+    icon: "close-circle-outline",
+    progress: 0,
+    customerFacing: true,
+    customerLabel: "Delivery Refused",
+    employeeLabel: "Delivery Refused",
+    tailorLabel: "Delivery Refused",
+    // Same pattern as cancelled above: always continues into
+    // return_scheduled (never return_pending - the delivery employee
+    // already has the garment in hand, no broadcast needed - see
+    // cancellation_service.py's refuse_delivery), but "refused, nothing
+    // more to see at this exact status" is still accurate here.
+    terminal: true,
   },
   // The 3 statuses below form the post-delivery inspection/repair loop
   // (DELIVERED -> INSPECTION_WINDOW -> [COMPLETED | IN_REPAIR] ->
