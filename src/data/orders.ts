@@ -1,6 +1,5 @@
 import type { Order } from "../types";
 import { TAILORS_DATA } from "./tailors";
-import { SERVICES_DATA } from "./services";
 
 export const ORDERS_DATA: Order[] = [
   {

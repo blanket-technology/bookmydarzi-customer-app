@@ -75,7 +75,7 @@ export function stageLabel(stage: string): string {
 }
 
 /** Stages a tailor may currently upload a new photo for - mirrors backend's _PHOTO_UPLOAD_STAGES. */
-export const PHOTO_UPLOAD_STAGE_OPTIONS: Array<{ value: "stitching_started" | "in_progress" | "final_check"; label: string }> = [
+export const PHOTO_UPLOAD_STAGE_OPTIONS: { value: "stitching_started" | "in_progress" | "final_check"; label: string }[] = [
   { value: "stitching_started", label: "Stitching Started" },
   { value: "in_progress", label: "In Progress" },
   { value: "final_check", label: "Final Check" },

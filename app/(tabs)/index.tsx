@@ -7,7 +7,6 @@ import {
   FlatList,
   Image,
   ImageBackground,
-  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -30,7 +29,6 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
-  withSpring,
   type SharedValue,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -184,7 +182,7 @@ function BannerCarousel({
   }, [banners.length]);
 
   const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
+    ({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
       const index = viewableItems[0]?.index;
       if (index != null) {
         setActiveIndex(index);

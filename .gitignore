@@ -47,3 +47,7 @@ app-example
 
 # backup archives - not source
 *.zip
+
+# database dumps / backups - never commit (contain user data and credentials)
+*.dump
+*.sql.gz
