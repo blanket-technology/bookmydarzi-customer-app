@@ -293,7 +293,7 @@ export default function BuyNowReviewScreen() {
     // flipped false by the cleanup function on unmount/re-run; every setter
     // below checks it first.
     let active = true;
-    getBillingEstimate(pendingService.bookableServiceId, 1, addonIds, items)
+    getBillingEstimate(pendingService.bookableServiceId, pendingService.quantity ?? 1, addonIds, items)
       .then((result) => {
         if (active) setBilling(result);
       })
