@@ -16,6 +16,14 @@ export const isPushAvailable =
 
 let handlerConfigured = false;
 
+/** The Expo push token this device last registered with the backend, kept at
+ * module level so logout can unregister it WHILE the user is still
+ * authenticated. Previously the unregister ran from a React effect after
+ * logout had already cleared the auth tokens, so the DELETE went out
+ * unauthenticated, failed silently, and the device stayed linked to the
+ * previous account (shared phones kept receiving that user's pushes). */
+let registeredPushToken: string | null = null;
+
 /** Lazily loads expo-notifications and configures its notification handler
  * exactly once - shared by registerForPushNotifications below and
  * app/_layout.tsx's listener setup, so both paths funnel through the same
@@ -81,6 +89,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
   try {
     await registerDeviceToken(token, platform);
+    registeredPushToken = token;
     if (__DEV__) console.log(`[Push] Registered token with backend: platform=${platform}`);
   } catch (err) {
     if (__DEV__) console.warn("[Push] Backend device-token registration failed (non-fatal):", err);
@@ -93,7 +102,20 @@ export async function registerForPushNotifications(): Promise<string | null> {
 export async function unregisterFromPushNotifications(token: string): Promise<void> {
   try {
     await unregisterDeviceToken(token);
+    if (registeredPushToken === token) registeredPushToken = null;
   } catch (err) {
     if (__DEV__) console.warn("[Push] Unregister failed (non-fatal):", err);
   }
+}
+
+/** Unregisters whatever push token this device registered, if any. Must be
+ * called BEFORE the auth tokens are cleared. Never throws and never waits
+ * longer than `maxWaitMs`, so it can't hold up a logout. */
+export async function unregisterCurrentPushToken(maxWaitMs = 3000): Promise<void> {
+  const token = registeredPushToken;
+  if (!token) return;
+  await Promise.race([
+    unregisterFromPushNotifications(token),
+    new Promise<void>((resolve) => setTimeout(resolve, maxWaitMs)),
+  ]);
 }

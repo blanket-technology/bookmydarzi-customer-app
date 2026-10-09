@@ -737,6 +737,8 @@ export default function CartScreen() {
       scheduledSlot,
       pickupTimeSlots,
       orderNotes,
+      billing.totalAmount,
+      styleReferenceUploading,
     ],
   );
 

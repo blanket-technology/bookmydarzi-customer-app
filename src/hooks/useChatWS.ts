@@ -16,6 +16,7 @@ export function useChatWS(sessionUuid: string | null) {
   const reconnectDelay = useRef(1000);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(true);
+  const consecutiveFailures = useRef(0);
   // connect() calls itself (via socket.onclose's reconnect timer) before
   // its own useCallback has finished being assigned on the first render -
   // react-hooks/immutability (React Compiler) flags this as "accessed
@@ -188,6 +189,20 @@ export function useChatWS(sessionUuid: string | null) {
   const connect = useCallback(() => {
     if (!sessionUuid || !mounted.current) return;
 
+    // Never leave a previous socket alive when opening a new one - the old
+    // one would keep delivering frames (duplicate messages) with nothing
+    // holding a reference to close it. Its onclose is ignored below because
+    // ws.current no longer points at it.
+    const previous = ws.current;
+    if (previous) {
+      ws.current = null;
+      try {
+        previous.close();
+      } catch {
+        // already closed
+      }
+    }
+
     // Read token from the auth store's in-memory state - always current,
     // no async SecureStore read needed.
     const token = useAuthStore.getState().accessToken;
@@ -210,6 +225,7 @@ export function useChatWS(sessionUuid: string | null) {
       if (!mounted.current) return;
       try { socket.send(JSON.stringify({ type: "auth", token })); } catch {}
       reconnectDelay.current = 1000;
+      consecutiveFailures.current = 0;
       setWsStatus("connected");
       const hb = setInterval(() => {
         if (socket.readyState === WebSocket.OPEN) {
@@ -241,10 +257,29 @@ export function useChatWS(sessionUuid: string | null) {
     socket.onclose = (e) => {
       if (__DEV__) console.log("[ChatWS] onclose", { code: e.code, reason: e.reason });
       clearInterval((socket as any)._heartbeat);
+      // A socket that was replaced (session switch / re-connect) or torn
+      // down on unmount must not schedule a reconnect of its own - doing so
+      // opened a second live socket next to the current one.
+      if (ws.current !== socket) return;
       if (!mounted.current) return;
       setWsStatus("disconnected");
+      consecutiveFailures.current += 1;
       reconnectTimer.current = setTimeout(() => {
         reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30000);
+        // After repeated failures the access token may simply have expired
+        // (it is only refreshed when some HTTP call 401s). Make one cheap
+        // authenticated call first so the refresh flow runs and connect()
+        // picks up the fresh token from the auth store.
+        if (consecutiveFailures.current >= 2) {
+          useAuthStore
+            .getState()
+            .fetchProfile()
+            .catch(() => {})
+            .finally(() => {
+              if (mounted.current) connectRef.current();
+            });
+          return;
+        }
         connectRef.current();
       }, reconnectDelay.current);
     };
@@ -265,7 +300,13 @@ export function useChatWS(sessionUuid: string | null) {
     return () => {
       mounted.current = false;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      ws.current?.close();
+      if (aiTypingTimer.current) {
+        clearTimeout(aiTypingTimer.current);
+        aiTypingTimer.current = null;
+      }
+      const current = ws.current;
+      ws.current = null;
+      current?.close();
     };
   }, [sessionUuid, connect]);
 

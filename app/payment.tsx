@@ -71,7 +71,10 @@ export default function PaymentScreen() {
 
   const orderId = parsePositiveId(params.orderId);
   const orderCode = params.orderCode?.trim() || undefined;
-  const amountRupee = Number(params.amount ?? 0);
+  const amountRupee =
+    params.amount != null && String(params.amount).trim() !== ""
+      ? Number(params.amount)
+      : Number.NaN;
   const customerName = params.customerName?.trim() || undefined;
   const email = params.email?.trim() || undefined;
   const phone = params.phone?.trim() || undefined;
@@ -124,6 +127,17 @@ export default function PaymentScreen() {
     }
     if (!isValidOrderId(orderId)) {
       setErrorMsg("Invalid order. Cannot start payment.");
+      setState("error");
+      return;
+    }
+
+    // A missing / non-numeric amount param (e.g. "NaN" from a bad deep link or
+    // a navigation bug) must never be mistaken for "nothing to charge" and
+    // shown as a successful order - only an explicit numeric 0 is.
+    if (!Number.isFinite(amountRupee)) {
+      setErrorMsg(
+        "Invalid payment amount. Please open this order from My Orders to pay.",
+      );
       setState("error");
       return;
     }

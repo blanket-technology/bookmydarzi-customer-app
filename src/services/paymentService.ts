@@ -7,7 +7,7 @@
 
  */
 
-import { formatApiV1Path, request } from "../../services/api";
+import { formatApiV1Path, getApiErrorStatus, request } from "../../services/api";
 
 import { RAZORPAY_KEY_ID } from "../../constants/razorpay";
 
@@ -60,16 +60,6 @@ function logPaymentRoute(method: string, routePath: string, extra?: unknown): vo
   else console.log(line);
 }
 
-function isNotFoundError(err: unknown): boolean {
-
-  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
-
-  return msg.includes("404") || msg.includes("not found");
-
-}
-
-
-
 function isActivePaymentExistsError(err: unknown): boolean {
 
   const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
@@ -87,6 +77,10 @@ function isActivePaymentExistsError(err: unknown): boolean {
 
 
 function isVerifyEndpointUnavailable(err: unknown): boolean {
+
+  const status = getApiErrorStatus(err);
+
+  if (status === 404 || status === 405) return true;
 
   const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
 
@@ -107,6 +101,8 @@ function isVerifyEndpointUnavailable(err: unknown): boolean {
 
 
 function isForbiddenError(err: unknown): boolean {
+
+  if (getApiErrorStatus(err) === 403) return true;
 
   const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
 

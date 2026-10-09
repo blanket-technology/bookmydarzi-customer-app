@@ -99,5 +99,8 @@ export async function unregisterDeviceToken(token: string): Promise<void> {
   await request(`${BASE}/device-tokens`, {
     method: "DELETE",
     body: { token: token.trim() },
+    // Best-effort and often called during logout - fail fast rather than
+    // holding the logout behind the full retry backoff.
+    skipRetry: true,
   });
 }

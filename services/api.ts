@@ -210,6 +210,25 @@ async function forceLogout(): Promise<void> {
 // Types
 // ---------------------------------------------------------------------------
 
+/**
+ * Error thrown for any non-2xx response. `message` is unchanged from before
+ * (so every existing `err.message` consumer keeps working); `status` lets
+ * callers branch on the HTTP status instead of string-matching the message.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+/** HTTP status of an error thrown by `request()`, if it came from a response. */
+export function getApiErrorStatus(err: unknown): number | null {
+  return err instanceof ApiError ? err.status : null;
+}
+
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /**
@@ -484,12 +503,22 @@ function fetchWithTimeout(
   options: RequestInit,
 ): Promise<Response> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error("Request timed out. Please try again.")),
-      TIMEOUT_MS,
-    );
+    // Abort the underlying request on timeout - previously only the promise
+    // was rejected, so the request kept running and could still complete
+    // server-side after the caller had been told it timed out (and been
+    // retried).
+    const controller =
+      typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = setTimeout(() => {
+      reject(new Error("Request timed out. Please try again."));
+      try {
+        controller?.abort();
+      } catch {
+        // best-effort
+      }
+    }, TIMEOUT_MS);
 
-    fetch(url, options)
+    fetch(url, controller ? { ...options, signal: controller.signal } : options)
       .then((res) => {
         clearTimeout(timer);
         resolve(res);
@@ -610,7 +639,13 @@ async function _fetch<T = unknown>(
       raw.includes("Network request failed") ||
       raw.includes("Network Error") ||
       raw.includes("Cannot reach");
-    const isRetryable = isTimeout || isNetworkFail;
+    // A timeout on a state-changing request (POST/PUT/PATCH/DELETE) without
+    // an idempotency key is NOT retried: the server may well have processed
+    // it, and a blind retry could create a duplicate. A fast "Network request
+    // failed" (request never reached the server - e.g. a sleeping Railway
+    // container) is still retried for every method, as before.
+    const isSafeToRetryTimeout = method === "GET" || Boolean(idempotencyKey);
+    const isRetryable = isNetworkFail || (isTimeout && isSafeToRetryTimeout);
     const effectiveMaxRetries = retryOverride ? retryOverride.maxRetries : MAX_RETRIES;
     // A retryable failure with attempts remaining is expected transient
     // noise (the retry below usually succeeds) - only log it as a real
@@ -768,7 +803,7 @@ async function _fetch<T = unknown>(
           ? ` Please try again in ${retryAfter} second${retryAfter === 1 ? "" : "s"}.`
           : " Please wait a moment and try again.";
       console.warn(`[API] 429 Rate limited: ${method} ${apiPath}`);
-      throw new Error(`You're doing that a bit too fast.${waitHint}`);
+      throw new ApiError(`You're doing that a bit too fast.${waitHint}`, 429);
     }
 
     // Log specific status codes with full response body
@@ -783,11 +818,11 @@ async function _fetch<T = unknown>(
     } else if (response.status >= 500) {
       console.error(
         `[API] Server error ${response.status}: ${method} ${apiPath}`,
-        JSON.stringify(data),
+        __DEV__ ? JSON.stringify(data) : "",
       );
     }
 
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
 
   return data as T;
