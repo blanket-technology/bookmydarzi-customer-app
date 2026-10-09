@@ -38,6 +38,7 @@ import { useMeasurementStore } from "../src/store/useMeasurementStore";
 import { useOrderStore } from "../src/store/useOrderStore";
 import { useCustomerOrdersStore } from "../src/store/useCustomerOrdersStore";
 import { useCartStore } from "../src/store/useCartStore";
+import { unregisterCurrentPushToken } from "../src/services/pushService";
 
 /**
  * Bug fix: every one of these stores is a plain in-memory (or, for cart,
@@ -265,6 +266,8 @@ export const useAuthStore = create<AuthState>()(
         setLoggingOut(true);
         set({ loading: true });
         try {
+          // Must run while the access token still exists (see pushService).
+          await unregisterCurrentPushToken().catch(() => {});
           try {
             await logoutRequest();
           } catch {
