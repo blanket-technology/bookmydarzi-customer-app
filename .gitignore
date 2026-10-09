@@ -51,3 +51,8 @@ app-example
 # database dumps / backups - never commit (contain user data and credentials)
 *.dump
 *.sql.gz
+
+# Database dumps contain real user data - never commit
+*.dump
+*.sql
+*.bak
