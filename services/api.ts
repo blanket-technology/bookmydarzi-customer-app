@@ -822,6 +822,18 @@ async function _fetch<T = unknown>(
       );
     }
 
+    // A bare 5xx ("Internal Server Error", "Request failed (500)", gateway
+    // errors) tells the customer nothing - show a calm, actionable message
+    // instead. Any specific message the backend sent is kept as-is.
+    if (
+      response.status >= 500 &&
+      /^(internal server error|request failed \(\d+\)|bad gateway|service unavailable|gateway timeout)\.?$/i.test(
+        message.trim(),
+      )
+    ) {
+      message = "Our server ran into a problem. Please try again in a few minutes.";
+    }
+
     throw new ApiError(message, response.status);
   }
 
