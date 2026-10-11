@@ -52,6 +52,24 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
   const Notifications = await loadNotifications();
 
+  // Android: the "default" notification channel must exist BEFORE asking for permission.
+  // On Android 13+ the system notification prompt is only shown once the app has created a
+  // channel, so without this the user was never asked and push never worked. Pushes sent by
+  // the backend (Expo Push, no channelId) are delivered through this channel.
+  if (Platform.OS === "android") {
+    try {
+      await Notifications.setNotificationChannelAsync("default", {
+        name: "Order updates",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#0c6c75",
+        sound: "default",
+      });
+    } catch (err) {
+      captureException(err, { stage: "setNotificationChannelAsync" });
+    }
+  }
+
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 
@@ -62,6 +80,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
   if (finalStatus !== "granted") {
     if (__DEV__) console.log("[Push] Permission not granted - skipping registration");
+    captureException(new Error("Push permission not granted"), { stage: "permission", status: finalStatus });
     return null;
   }
 

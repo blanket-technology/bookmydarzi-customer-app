@@ -57,6 +57,15 @@ module.exports = {
   },
   android: {
     package: "com.darziapp.mobile",
+    // Firebase config for Android push (FCM). Required in release builds: without it
+    // expo-notifications cannot obtain a push token ("Default FirebaseApp is not
+    // initialized"). On EAS, add google-services.json as a FILE environment variable
+    // named GOOGLE_SERVICES_JSON; locally, drop the file at ./google-services.json.
+    ...(process.env.GOOGLE_SERVICES_JSON
+      ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
+      : require("fs").existsSync("./google-services.json")
+        ? { googleServicesFile: "./google-services.json" }
+        : {}),
     versionCode: 1,
     // Must be nested under config.googleMaps.apiKey - Expo's prebuild plugin
     // only injects the com.google.android.geo.API_KEY manifest meta-data
