@@ -32,7 +32,10 @@ module.exports = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: "com.darziapp.mobile",
-    buildNumber: "1",
+    // No buildNumber here - EAS's "appVersionSource": "remote" (eas.json)
+    // manages and auto-increments it remotely; a local value here is
+    // ignored for the actual build but was triggering a confusing EAS
+    // warning on every run.
     infoPlist: {
       NSPhotoLibraryUsageDescription:
         "Allow BookMyDarzi to access your photos to update your profile picture.",
@@ -46,6 +49,12 @@ module.exports = {
       // a restricted API (microphone) with no usage-description string.
       NSMicrophoneUsageDescription:
         "Allow BookMyDarzi to access your microphone to record a voice note for your tailor.",
+      // The app only uses standard/exempt encryption (HTTPS/TLS via
+      // standard platform APIs) - no custom cryptography. Without this,
+      // EAS prompts "iOS app only uses standard/exempt encryption?" on
+      // every single build, and App Store Connect requires manual
+      // confirmation before the build can be tested if it's left unset.
+      ITSAppUsesNonExemptEncryption: false,
     },
     // Lets Razorpay/UPI apps (GPay, PhonePe, Paytm) return to this app via a
     // verified https link instead of only the bare darziapp:// custom scheme,
