@@ -22,6 +22,7 @@ import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { COLORS, RADIUS } from "../constants/theme";
+import { useResponsiveLayout } from "../src/hooks/useResponsiveLayout";
 import {
   fetchCatalogTree,
   resolveServiceNavParams,
@@ -274,7 +275,13 @@ export default function LookbookScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
-  const itemWidth = (screenWidth - GRID_PAD * 2 - ITEM_GAP) / COLS;
+  const { contentMaxWidth } = useResponsiveLayout();
+  // Capped to contentMaxWidth, not the raw screen width - this screen had
+  // no tablet cap at all, so on iPad the 2-col grid previously stretched
+  // each item to the full uncapped half-width instead of the same 720px
+  // column every other screen uses.
+  const gridWidth = Math.min(screenWidth, contentMaxWidth);
+  const itemWidth = (gridWidth - GRID_PAD * 2 - ITEM_GAP) / COLS;
   const [activeCategory, setActiveCategory] = useState("all");
   const [items, setItems] = useState<LookbookItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -399,7 +406,7 @@ export default function LookbookScreen() {
           numColumns={COLS}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderItem}
-          contentContainerStyle={styles.grid}
+          contentContainerStyle={[styles.grid, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}
           columnWrapperStyle={styles.gridRow}
           showsVerticalScrollIndicator={false}
           initialNumToRender={8}

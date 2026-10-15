@@ -19,6 +19,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 import ScreenHeader from "../src/components/common/ScreenHeader";
+import { useResponsiveLayout } from "../src/hooks/useResponsiveLayout";
 import { SUPPORT_CATEGORIES, type SupportCategoryKey } from "../src/constants/supportIssues";
 import { useSupportStore } from "../src/store/useSupportStore";
 import type { SupportTicketListItem } from "../src/types/engagement";
@@ -45,7 +46,13 @@ export default function SupportScreen() {
   // Computed from the real available space (screen width minus the
   // ScrollView's own SPACING.lg padding on both sides, minus the gap).
   const { width: screenWidth } = useWindowDimensions();
-  const categoryCardWidth = Math.floor((screenWidth - SPACING.lg * 2 - SPACING.sm) / 2);
+  const { contentMaxWidth } = useResponsiveLayout();
+  // Capped to contentMaxWidth, not the raw screen width - this screen had
+  // no tablet cap at all, so on iPad the 2-col category grid previously
+  // stretched each card to the full uncapped half-width instead of the
+  // same 720px column every other screen uses.
+  const categoryGridWidth = Math.min(screenWidth, contentMaxWidth);
+  const categoryCardWidth = Math.floor((categoryGridWidth - SPACING.lg * 2 - SPACING.sm) / 2);
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const { tickets, loading, error, fetchTickets } = useSupportStore();
@@ -114,7 +121,7 @@ export default function SupportScreen() {
       >
         {/* ── What do you need help with? ── */}
         <Text style={styles.promptTitle}>What do you need help with?</Text>
-        <View style={styles.categoryGrid}>
+        <View style={[styles.categoryGrid, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}>
           {SUPPORT_CATEGORIES.map((cat) => (
             <TouchableOpacity
               key={cat.key}

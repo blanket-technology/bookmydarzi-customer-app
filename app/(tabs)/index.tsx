@@ -152,16 +152,26 @@ function BannerCarousel({
   banners,
   onPress,
   style,
+  containerWidth,
 }: {
   banners: ApiBanner[];
   onPress: (banner: ApiBanner) => void;
   style?: StyleProp<ViewStyle>;
+  /** Width of the content column this carousel sits inside - defaults to
+   * the raw screen width (phones, where the content column already fills
+   * the screen). On tablet, the rest of the Home screen caps itself to
+   * contentMaxWidth (see useResponsiveLayout) - without this prop the
+   * carousel sized its cards off the full, uncapped screen width instead,
+   * so on an iPad the banner rendered far wider than every other section
+   * and visibly overflowed past the content column. */
+  containerWidth?: number;
 }) {
   const { width: screenWidth } = useWindowDimensions();
+  const effectiveWidth = containerWidth ?? screenWidth;
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
 
-  const bannerCardWidth = screenWidth - (H_PAD + BANNER_SIDE_INSET) * 2;
+  const bannerCardWidth = effectiveWidth - (H_PAD + BANNER_SIDE_INSET) * 2;
   const bannerStride = bannerCardWidth + BANNER_GAP;
 
   const snapOffsets = useMemo(
@@ -1755,7 +1765,7 @@ export default function HomeScreen() {
                     </Animated.View>
                   ) : null}
                   {banners.length > 0 ? (
-                    <BannerCarousel banners={banners} onPress={handleBannerPress} style={{ marginTop: sectionGap }} />
+                    <BannerCarousel banners={banners} onPress={handleBannerPress} style={{ marginTop: sectionGap }} containerWidth={contentMaxWidth} />
                   ) : null}
                   {popularList.length > 0 ? (
                     <Animated.View entering={FadeInDown.delay(100).duration(350)} style={[styles.popularBlock, { marginTop: sectionGap }]}>
@@ -1798,7 +1808,7 @@ export default function HomeScreen() {
 
               {/* 7. Banner carousel - shown above for logged-in users */}
               {!isAuthenticated && banners.length > 0 ? (
-                <BannerCarousel banners={banners} onPress={handleBannerPress} style={{ marginTop: sectionGap }} />
+                <BannerCarousel banners={banners} onPress={handleBannerPress} style={{ marginTop: sectionGap }} containerWidth={contentMaxWidth} />
               ) : null}
 
               {/* 8. Popular services - shown above for logged-in users */}

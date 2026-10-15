@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS } from "../constants/theme";
 import ErrorState from "../src/components/common/ErrorState";
 import EmptyState from "../src/components/common/EmptyState";
+import { useResponsiveLayout } from "../src/hooks/useResponsiveLayout";
 import { useHomeStore } from "../src/store/useHomeStore";
 import type { ApiServiceCategory } from "../src/types/homeApi";
 import { resolveCatalogCategoryId } from "../src/utils/catalogCategoryMap";
@@ -94,10 +95,16 @@ export default function AllServicesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: W } = useWindowDimensions();
+  const { contentMaxWidth } = useResponsiveLayout();
   const { serviceCategories, loading, error, loadHomeData } = useHomeStore();
 
   const gridGap = 12;
-  const catCardW = (W - H_PAD * 2 - gridGap * 2) / 3;
+  // Cap the grid math to contentMaxWidth, not the raw screen width - on an
+  // iPad this previously stretched every card to a third of the full
+  // uncapped width (no tablet cap anywhere in this screen at all), unlike
+  // every other screen that routes through useResponsiveLayout.
+  const gridWidth = Math.min(W, contentMaxWidth);
+  const catCardW = (gridWidth - H_PAD * 2 - gridGap * 2) / 3;
   const catCardH = catCardW * 1.15;
 
   const sortedCats = useMemo(
@@ -178,7 +185,7 @@ export default function AllServicesScreen() {
               </Text>
             </Animated.View>
 
-            <View style={s.catGrid}>
+            <View style={[s.catGrid, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}>
               {sortedCats.map((cat, i) => {
                 const gradient = getCatGradient(cat.Name);
                 const imgUrl = resolveImage(cat.ImageUrl);

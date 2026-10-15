@@ -22,6 +22,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS } from "../constants/theme";
+import { useResponsiveLayout } from "../src/hooks/useResponsiveLayout";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -116,12 +117,17 @@ export default function BrowseScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: W, height: SH } = useWindowDimensions();
+  const { contentMaxWidth } = useResponsiveLayout();
 
   const heroH = Math.min(HERO_H_MAX, SH * 0.48);
   // Exact-pixel width for the 2-col offer grid, not a "47.5%" guess - that
   // plus offerGrid's 12px gap left ~2px of margin on narrow phones (same
-  // overflow-wrap bug class fixed in sub-services.tsx).
-  const offerCardWidth = Math.floor((W - H_PAD * 2 - 12) / 2);
+  // overflow-wrap bug class fixed in sub-services.tsx). Capped to
+  // contentMaxWidth, not the raw screen width - this screen had no tablet
+  // cap at all, so on iPad the grid previously stretched to the full
+  // uncapped width instead of the same 720px column every other screen uses.
+  const offerGridWidth = Math.min(W, contentMaxWidth);
+  const offerCardWidth = Math.floor((offerGridWidth - H_PAD * 2 - 12) / 2);
   const titleFs = W < 380 ? 21 : 25;
   const subFs = W < 380 ? 12.5 : 13.5;
 
@@ -356,7 +362,7 @@ export default function BrowseScreen() {
               </Text>
             </Animated.View>
 
-            <View style={s.offerGrid}>
+            <View style={[s.offerGrid, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}>
               {OFFERINGS.map((item, i) => (
                 <Animated.View
                   key={item.title}

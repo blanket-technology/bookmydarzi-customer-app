@@ -902,24 +902,32 @@ export default function BuyNowReviewScreen() {
 
       {/* ── Footer CTA - slide to confirm, same pattern as cart ─────────── */}
       <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, SPACING.sm) }]}>
-        <View style={s.footerInfo}>
-          <Text style={s.footerLabel}>Total</Text>
-          <Text style={s.footerAmt}>
-            {billing ? (estimatedDiscount > 0 ? displayTotalText : billing.total_amount_display) : "-"}
-          </Text>
-        </View>
-        <View style={s.slideWrap}>
-          <SlideToConfirm
-            label={
-              paymentMethod === "cod"
-                ? PAYMENT_ACTION_LABELS.placeOrder
-                : PAYMENT_ACTION_LABELS.proceedToPayment
-            }
-            disabled={!canProceed}
-            processing={placing}
-            onConfirm={handlePlaceOrder}
-            icon={paymentMethod === "cod" ? "cash-outline" : "arrow-forward"}
-          />
+        {/* Footer bar itself stays full-bleed (background spans edge to
+            edge), but its content is capped/centered to contentMaxWidth so
+            it lines up with the rest of the page's column on tablet -
+            SlideToConfirm self-caps at 520px internally, but without this
+            wrapper it was centered on the full screen width instead of the
+            page's actual content column. */}
+        <View style={{ maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }}>
+          <View style={s.footerInfo}>
+            <Text style={s.footerLabel}>Total</Text>
+            <Text style={s.footerAmt}>
+              {billing ? (estimatedDiscount > 0 ? displayTotalText : billing.total_amount_display) : "-"}
+            </Text>
+          </View>
+          <View style={s.slideWrap}>
+            <SlideToConfirm
+              label={
+                paymentMethod === "cod"
+                  ? PAYMENT_ACTION_LABELS.placeOrder
+                  : PAYMENT_ACTION_LABELS.proceedToPayment
+              }
+              disabled={!canProceed}
+              processing={placing}
+              onConfirm={handlePlaceOrder}
+              icon={paymentMethod === "cod" ? "cash-outline" : "arrow-forward"}
+            />
+          </View>
         </View>
       </View>
 
