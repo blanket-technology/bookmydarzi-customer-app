@@ -359,13 +359,12 @@ const styles = StyleSheet.create({
       android: { elevation: 3 },
     }),
   },
-  // aspectRatio: 1 (square) - the real uploaded catalog photos are all
-  // 1254x1254 (true 1:1), not 4:3 as first assumed; square matches the
-  // website's identical fix (aspect-square on the equivalent tier card
-  // image).
-  tierCardImage: { width: "100%", aspectRatio: 1, borderRadius: RADIUS.md, backgroundColor: COLORS.grayLight },
+  // aspectRatio 3/2 - real catalog photos are 3:2, not the 1:1 originally
+  // assumed; matches the website's identical fix (aspect-[3/2] on the
+  // equivalent tier card image).
+  tierCardImage: { width: "100%", aspectRatio: 3 / 2, borderRadius: RADIUS.md, backgroundColor: COLORS.grayLight },
   tierCardImageFallback: {
-    width: "100%", aspectRatio: 1, borderRadius: RADIUS.md,
+    width: "100%", aspectRatio: 3 / 2, borderRadius: RADIUS.md,
     backgroundColor: COLORS.primaryLight,
     alignItems: "center", justifyContent: "center",
   },
