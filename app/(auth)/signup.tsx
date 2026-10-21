@@ -71,6 +71,11 @@ function validateForm(
 ): string | null {
   if (!firstName.trim())   return "First name is required.";
   if (!lastName.trim())    return "Last name is required.";
+  // Mirrors backend's _NAME_RE validator (app/schemas/user.py) - was
+  // previously only enforced server-side, so a special character (., *,
+  // &, $, @, etc.) passed this form and only failed as a 422 at signup.
+  if (!/^[A-Za-z ]*$/.test(firstName)) return "First name can only contain letters and spaces.";
+  if (!/^[A-Za-z ]*$/.test(lastName)) return "Last name can only contain letters and spaces.";
   if (!email.trim())       return "Email is required.";
   if (!EMAIL_REGEX.test(email.trim())) return "Enter a valid email address.";
   if (!mobile.trim())      return "Mobile number is required.";

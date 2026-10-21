@@ -84,6 +84,9 @@ function mapOrder(raw: any): ApiOrder {
     // Pre-payment
     pending: "pending",
     pending_payment: "pending",
+    // payment_pending is the current name (BUG-118 rename); advance_pending
+    // is kept for historical orders created before the rename.
+    payment_pending: "pending",
     advance_pending: "pending",
     processing: "pending",
     payment_failed: "failed",

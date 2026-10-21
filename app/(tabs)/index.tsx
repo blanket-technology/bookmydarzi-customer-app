@@ -1991,7 +1991,12 @@ const styles = StyleSheet.create({
   signInSubtitle: { fontSize: 12, fontWeight: "500", color: "#6B7280" },
   signInCta: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#E6F7F7", paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADIUS.full, flexShrink: 0 },
   signInCtaText: { fontSize: 13, fontWeight: "700", color: HEADER_TEAL },
-  locationTextWrap: {},
+  // Bug fix (BUG-126): missing flex/minWidth let a long address's
+  // intrinsic text width push this wider than the space headerRow's flex
+  // layout actually gives it, overlapping headerActions' search icon
+  // instead of wrapping/truncating via locationValue's numberOfLines={2}.
+  // Mirrors the already-correct signInTextWrap above.
+  locationTextWrap: { flex: 1, minWidth: 0 },
   locationLabel: { fontSize: 11, fontWeight: "500", color: "rgba(255,255,255,0.75)", marginBottom: 2 },
   locationValue: { fontSize: 14, fontWeight: "700", color: "#FFFFFF", lineHeight: 18, letterSpacing: -0.2 },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },

@@ -65,10 +65,18 @@ export default function EditProfileScreen() {
     };
   }, []);
 
+  // Bug fix (BUG-120): mirrors the backend's existing _NAME_RE validator
+  // (app/schemas/user.py) so a special character is caught here instead
+  // of only surfacing as a failed-save API error after the user has
+  // already filled in the rest of the form.
+  const NAME_PATTERN = /^[A-Za-z ]*$/;
+
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!firstName.trim()) errs.firstName = "First name is required";
+    else if (!NAME_PATTERN.test(firstName)) errs.firstName = "Name can only contain letters and spaces";
     if (!lastName.trim()) errs.lastName = "Last name is required";
+    else if (!NAME_PATTERN.test(lastName)) errs.lastName = "Name can only contain letters and spaces";
     const emailTrimmed = email.trim();
     if (emailTrimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
       errs.email = "Enter a valid email address";

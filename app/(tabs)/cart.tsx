@@ -932,8 +932,24 @@ export default function CartScreen() {
                     </View>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={styles.totalRowValue}>{displayTotal}</Text>
-                    {estimatedDiscount > 0 ? (
+                    {/* Bug fix: this used to keep showing the pre-update
+                        total for the whole network round trip after a
+                        quantity change - updateEntryQuantity's optimistic
+                        patch only recomputes each entry's raw lineTotal,
+                        never billing.totalAmount (GST/discount/fees make
+                        that unsafe to recompute client-side), so
+                        displayTotal stayed stale until the server
+                        response landed. canPay already blocks the actual
+                        slide-to-pay action during this window (!mutating);
+                        now the number itself reflects that instead of
+                        showing a total the customer could act on by
+                        reading the amount and immediately tapping pay. */}
+                    {mutating ? (
+                      <ActivityIndicator size="small" color={COLORS.primaryDark} />
+                    ) : (
+                      <Text style={styles.totalRowValue}>{displayTotal}</Text>
+                    )}
+                    {!mutating && estimatedDiscount > 0 ? (
                       <Text style={styles.savingsBadge}>
                         You save ₹{estimatedDiscount.toLocaleString("en-IN")}
                       </Text>
