@@ -17,6 +17,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -169,6 +170,14 @@ export default function OtpLoginScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
+          {/* Login screen shows this same logo (login.tsx) - was missing
+              here entirely, which read as inconsistent branding between
+              the two screens of the same flow (BUG-06). */}
+          <Image
+            source={require("../../assets/logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.title}>
             {step === "phone" ? "Login with OTP" : "Enter OTP"}
           </Text>
@@ -297,6 +306,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   header: { alignItems: "center", marginBottom: 36 },
+  logo: { width: 96, height: 96, marginBottom: 12 },
   title: { fontSize: 26, fontWeight: "700", color: "#ffffff", marginBottom: 8 },
   subtitle: { fontSize: 14, color: "#d1faf8", textAlign: "center", lineHeight: 20 },
 
