@@ -27,10 +27,6 @@ function fmt(amount: number) {
   return `₹${amount.toFixed(2)}`;
 }
 
-function fmtWhole(amount: number) {
-  return `₹${Math.round(amount).toLocaleString("en-IN")}`;
-}
-
 // Same quick-pick reasons as the website's cancel modal and the admin
 // app's cancel sheet - kept identical everywhere so the flow feels like
 // one consistent product regardless of which app it's used from.
@@ -150,44 +146,20 @@ export function CancelOrderItemSection({ orderId, itemId, itemLabel, onCancelled
 
             {preview && (
               <>
-                <Text style={styles.subtitle}>This can&apos;t be undone.</Text>
+                <Text style={styles.subtitle}>
+                  This can&apos;t be undone. Cancelling a single item is always free - no cancellation charge.
+                </Text>
 
                 {preview.payment_type === "prepaid" ? (
-                  <>
-                    {preview.penalty_amount > 0 && (
-                      <View style={styles.penaltyBox}>
-                        <Text style={styles.penaltyQuestion}>
-                          A cancellation charge of{" "}
-                          <Text style={styles.penaltyAmount}>{fmtWhole(preview.penalty_amount)}</Text>{" "}
-                          will be deducted from your refund. Would you like to proceed?
-                        </Text>
-                      </View>
-                    )}
-                    <View style={styles.refundBox}>
-                      <Row label="Item Price" value={fmt(preview.item_price)} />
-                      <Row
-                        label="Cancellation Charges"
-                        value={`− ${fmt(preview.penalty_amount)}`}
-                        valueStyle={{ color: "#dc2626" }}
-                      />
-                      <View style={styles.divider} />
-                      <Row
-                        label="Refund Amount"
-                        value={fmt(preview.refund_amount)}
-                        labelStyle={{ fontWeight: "800" }}
-                        valueStyle={{ fontWeight: "800", color: "#059669" }}
-                      />
-                      <Text style={styles.refundNote}>
-                        Refund will be processed to your original payment method within 5–7 business days.
-                      </Text>
-                    </View>
-                  </>
-                ) : preview.penalty_amount > 0 ? (
-                  <View style={styles.penaltyBox}>
-                    <Text style={styles.penaltyQuestion}>
-                      A cancellation charge of{" "}
-                      <Text style={styles.penaltyAmount}>{fmtWhole(preview.penalty_amount)}</Text>{" "}
-                      will be applicable on your next order. Would you like to proceed?
+                  <View style={styles.refundBox}>
+                    <Row
+                      label="Refund Amount"
+                      value={fmt(preview.refund_amount)}
+                      labelStyle={{ fontWeight: "800" }}
+                      valueStyle={{ fontWeight: "800", color: "#059669" }}
+                    />
+                    <Text style={styles.refundNote}>
+                      Full item price, refunded to your original payment method within 5–7 business days.
                     </Text>
                   </View>
                 ) : null}
@@ -382,27 +354,7 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
   },
-  divider: { height: 1, backgroundColor: "#e5e7eb", marginVertical: 8 },
   refundNote: { fontSize: 11, color: "#6b7280", marginTop: 8, lineHeight: 16 },
-
-  penaltyBox: {
-    backgroundColor: "#fffbeb",
-    borderWidth: 1,
-    borderColor: "#fde68a",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-  },
-  penaltyQuestion: {
-    fontSize: 14,
-    color: "#78350f",
-    lineHeight: 21,
-    fontWeight: "600",
-  },
-  penaltyAmount: {
-    fontWeight: "800",
-    color: "#b45309",
-  },
 
   policyLink: {
     flexDirection: "row",
