@@ -665,6 +665,7 @@ function mapDetailsLineItems(raw: Record<string, unknown>): OrderDetailsLineItem
           : null,
       notes: nullableStr(row.notes),
       addons: mapLineItemAddons(row.addons),
+      is_cancelled: Boolean(row.is_cancelled),
     };
   });
 }

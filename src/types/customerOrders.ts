@@ -309,6 +309,10 @@ export interface OrderDetailsLineItem {
    * from the cart entry at checkout. */
   notes?: string | null;
   addons: OrderDetailsLineItemAddon[];
+  /** True once this item has been individually cancelled - see
+   * item_cancellation_service.py. The order stays active with its
+   * remaining items; only this one line is dropped. */
+  is_cancelled?: boolean;
 }
 
 export interface CustomerOrderDetailsPayload {

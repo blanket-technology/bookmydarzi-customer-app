@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, RADIUS, SHADOW, SPACING } from "../constants/theme";
 import ErrorState from "../src/components/common/ErrorState";
 import ScreenHeader from "../src/components/common/ScreenHeader";
+import { CancelOrderItemSection } from "../src/components/orders/CancelOrderItemSection";
 import { CancelOrderSection } from "../src/components/orders/CancelOrderSection";
 import OrderScreenSection from "../src/components/orders/OrderScreenSection";
 import OrderStatusModal, {
@@ -1272,15 +1273,49 @@ export default function OrderDetailsScreen() {
                   </View>
                 )}
                 <View style={styles.serviceHeaderText}>
-                  <Text style={styles.serviceTitle}>
+                  <Text
+                    style={[
+                      styles.serviceTitle,
+                      item.is_cancelled ? { textDecorationLine: "line-through", opacity: 0.5 } : null,
+                    ]}
+                  >
                     {detailsText(item.service_name)}
                   </Text>
-                  {item.category_name ? (
+                  {item.is_cancelled ? (
+                    <Text style={styles.cancelledItemBadge}>Cancelled</Text>
+                  ) : item.category_name ? (
                     <Text style={styles.serviceSubtitle}>
                       {detailsText(item.category_name)}
                     </Text>
                   ) : null}
                 </View>
+                {/* Per-item cancel - only on real multi-item orders
+                    (order_item_id is null for the single-item synthetic
+                    fallback above), only while the order itself is still
+                    customer-cancellable, never on an already-cancelled
+                    item, and never when this would be the LAST active item
+                    (that's a whole-order cancel instead - see
+                    item_cancellation_service.py's is_last_active_item guard,
+                    re-validated server-side regardless of this client check). */}
+                {arr.length > 1 &&
+                canCancelOrder &&
+                orderId !== null &&
+                item.order_item_id !== null &&
+                !item.is_cancelled &&
+                arr.filter((it) => !it.is_cancelled).length > 1 ? (
+                  <CancelOrderItemSection
+                    orderId={orderId}
+                    itemId={item.order_item_id}
+                    itemLabel={item.service_name}
+                    onCancelled={() => {
+                      useCustomerOrdersStore.getState().invalidateCache();
+                      load();
+                    }}
+                    onContactSupport={() => {
+                      router.push({ pathname: "/support-chat", params: { orderId: String(orderId) } } as never);
+                    }}
+                  />
+                ) : null}
               </View>
               {/* Only show "For" when it's a named family member, not the
                   default "Self"/"Me" (booking for yourself needs no label). */}
@@ -1998,6 +2033,11 @@ const styles = StyleSheet.create({
   serviceSubtitle: {
     fontSize: 13,
     color: "#6B7280",
+  },
+  cancelledItemBadge: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#dc2626",
   },
   designBriefBadgeRow: {
     flexDirection: "row",
