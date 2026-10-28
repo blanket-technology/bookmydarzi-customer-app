@@ -126,6 +126,37 @@ class WebSocketService {
       await this._open();
     }, this.reconnectDelay);
   }
+
+  /**
+   * Bug fix: iOS suspends the process (and its networking + JS timers,
+   * including this service's own heartbeat interval) far more aggressively
+   * than Android when the app is backgrounded. The socket frequently goes
+   * silent without ever firing onclose, so onclose's own reconnect path
+   * never runs - the app would resume to a zombie socket with no live
+   * handlers until force-quit and relaunched. Call this on every transition
+   * to foreground (AppState -> "active") to force a fresh, known-good
+   * connection whenever the existing one isn't actually OPEN.
+   */
+  ensureConnected(): void {
+    if (!this.shouldConnect) return;
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.ws) {
+      const dead = this.ws;
+      this.ws = null;
+      dead.onopen = null;
+      dead.onmessage = null;
+      dead.onerror = null;
+      dead.onclose = null;
+      try { dead.close(); } catch {}
+    }
+    this._stopHeartbeat();
+    this.reconnectDelay = 3000;
+    void this._open();
+  }
 }
 
 export const wsService = new WebSocketService();

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { AppState, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Stack, usePathname, useRouter, useSegments } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -372,6 +372,20 @@ function WebSocketSetup() {
       unsubs.forEach((u) => u());
       wsService.disconnect();
     };
+  }, [isAuthenticated]);
+
+  // Bug fix: iOS suspends the app (and this socket's networking/timers) far
+  // more aggressively than Android when backgrounded, often without ever
+  // firing the socket's own onclose - so live order/billing updates could
+  // silently stop arriving until the app was force-quit and relaunched.
+  // Forcing a connectivity check on every return to foreground closes that
+  // gap; ensureConnected() is a no-op if the socket is already healthy.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") wsService.ensureConnected();
+    });
+    return () => sub.remove();
   }, [isAuthenticated]);
 
   return null;
