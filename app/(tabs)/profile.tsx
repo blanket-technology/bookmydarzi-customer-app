@@ -484,9 +484,12 @@ export default function ProfileScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.cardTitle}>Refer & Earn</Text>
           </View>
-          <Text style={styles.emptyHint}>
-            Give ₹100, get ₹100. Share your code - when a friend completes their first order, you
-            both get ₹100 off.
+          <Text style={styles.referralHeadline}>
+            Give <Text style={styles.referralHeadlineAmount}>₹100</Text>, Get{" "}
+            <Text style={styles.referralHeadlineAmount}>₹100</Text>
+          </Text>
+          <Text style={styles.referralSubtext}>
+            Share your code - when a friend completes their first order, you both get ₹100 off.
           </Text>
           {referral ? (
             <>
@@ -798,6 +801,29 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     fontStyle: "italic",
     paddingVertical: SPACING.sm,
+  },
+  // Bug fix: this line used to reuse the generic italic/gray `emptyHint`
+  // style meant for empty-state placeholders ("No saved addresses yet"),
+  // which read as an apology rather than the promotional headline it
+  // actually is. A bold, non-italic headline with the two amounts called
+  // out, plus a separate smaller subtext line, reads as an intentional
+  // offer instead of leftover placeholder copy.
+  referralHeadline: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: COLORS.black,
+    marginTop: 2,
+  },
+  referralHeadlineAmount: {
+    color: COLORS.primaryDark,
+    fontWeight: "800",
+  },
+  referralSubtext: {
+    fontSize: 13,
+    color: COLORS.gray,
+    lineHeight: 18,
+    marginTop: 4,
+    paddingBottom: SPACING.sm,
   },
   listItem: {
     flexDirection: "row",

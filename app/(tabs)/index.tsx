@@ -503,6 +503,13 @@ const categoryItem = StyleSheet.create({
   circleImage: {
     width: "100%",
     height: "100%",
+    // Bug fix: relying solely on the parent `circle` view's overflow:hidden
+    // to clip this image left the edge jagged on iOS - a shadow-bearing
+    // ancestor (avatarShell) forces an extra compositing layer there, and
+    // iOS doesn't always clip a 100%-sized child Image cleanly through it.
+    // An explicit matching borderRadius on the image itself fixes the crop
+    // regardless of the ancestor's compositing.
+    borderRadius: CATEGORY_SIZE / 2,
   },
   label: {
     width: "100%",
@@ -1981,8 +1988,14 @@ const styles = StyleSheet.create({
   // sliver blend invisibly instead of showing as a mismatched teal edge.
   root: { flex: 1, backgroundColor: "#F7F3EE" },
   headerGradient: { paddingBottom: SPACING.md },
-  headerRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: SPACING.md },
-  locationBlock: { flex: 1, flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  headerRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: SPACING.sm },
+  // Bug fix: locationBlock had flex:1 with no flexShrink/maxWidth cap and
+  // headerActions (3 fixed 40px icon buttons) had no reserved width, so on
+  // a long address the two fought for space - the address text grew right
+  // up against the icon row instead of wrapping within its own lane.
+  // flexShrink ensures this block always yields space to headerActions'
+  // fixed-size row first.
+  locationBlock: { flex: 1, flexShrink: 1, flexDirection: "row", alignItems: "flex-start", gap: 8 },
   signInCard: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "rgba(255,255,255,0.96)", borderRadius: 18, paddingVertical: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.65)", ...SOFT_SHADOW },
   signInCardPressed: { opacity: 0.92, transform: [{ scale: 0.985 }] },
   signInIconWrap: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#E6F7F7", alignItems: "center", justifyContent: "center" },
@@ -1996,10 +2009,12 @@ const styles = StyleSheet.create({
   // layout actually gives it, overlapping headerActions' search icon
   // instead of wrapping/truncating via locationValue's numberOfLines={2}.
   // Mirrors the already-correct signInTextWrap above.
-  locationTextWrap: { flex: 1, minWidth: 0 },
+  locationTextWrap: { flex: 1, minWidth: 0, flexShrink: 1 },
   locationLabel: { fontSize: 11, fontWeight: "500", color: "rgba(255,255,255,0.75)", marginBottom: 2 },
-  locationValue: { fontSize: 14, fontWeight: "700", color: "#FFFFFF", lineHeight: 18, letterSpacing: -0.2 },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  locationValue: { fontSize: 13, fontWeight: "600", color: "#FFFFFF", lineHeight: 17, letterSpacing: -0.1 },
+  // Fixed-size row (3 x 40px buttons + 2 x 8px gaps = 136px) reserved up
+  // front via flexShrink: 0, so locationBlock never encroaches on it.
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 },
   cartBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
   cartBadge: { position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: "#FF4757", alignItems: "center", justifyContent: "center", paddingHorizontal: 3, borderWidth: 1.5, borderColor: HEADER_TEAL },
   cartBadgeText: { fontSize: 9, fontWeight: "800", color: "#FFFFFF", lineHeight: 11 },
