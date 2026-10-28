@@ -106,6 +106,18 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
   const platform = (Platform.OS === "ios" ? "ios" : "android") as "android" | "ios";
 
+  // Bug fix: this call used to always hit the backend even when the token
+  // hadn't actually changed since the last successful registration. On iOS,
+  // a reentrant native callback could call this function many times in a
+  // single second for the SAME token (see _layout.tsx's addPushTokenListener
+  // guard) - this check makes a repeat call for an unchanged token a no-op
+  // regardless of what triggered it, closing the loop at its root instead of
+  // relying only on the caller to prevent re-entry.
+  if (token === registeredPushToken) {
+    if (__DEV__) console.log("[Push] Token unchanged - skipping duplicate registration");
+    return token;
+  }
+
   try {
     await registerDeviceToken(token, platform);
     registeredPushToken = token;

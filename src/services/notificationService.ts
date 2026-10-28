@@ -82,6 +82,10 @@ export async function registerDeviceToken(
   const res = await request<any>(`${BASE}/device-tokens`, {
     method: "POST",
     body: { token: token.trim(), platform },
+    // Best-effort background work - fail fast instead of a 3x retry
+    // multiplier on top of any residual duplicate-call volume (see the
+    // iOS reentrant-listener fix in pushService.ts).
+    skipRetry: true,
   });
   const data = unwrap(res);
   if (!data) return null;

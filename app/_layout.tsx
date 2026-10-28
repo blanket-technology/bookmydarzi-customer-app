@@ -260,11 +260,26 @@ function PushNotificationSetup() {
   useEffect(() => {
     if (!isPushAvailable || !isAuthenticated) return;
     let sub: { remove: () => void } | undefined;
+    // Bug fix: on iOS, registerForPushNotifications() -> getExpoPushTokenAsync()
+    // -> getDevicePushTokenAsync() calls the native registerForRemoteNotifications(),
+    // whose didRegister callback both resolves that call's promise AND re-emits
+    // the very onDevicePushToken event this listener subscribes to - so the
+    // listener's own handler re-triggers itself, with no termination condition.
+    // This produced hundreds of duplicate device-token registrations per
+    // second in production, exhausting the backend's DB pool. `registering`
+    // makes a reentrant call while one is already in flight a no-op.
+    let registering = false;
     loadNotifications().then((Notifications) => {
       sub = Notifications.addPushTokenListener(() => {
-        registerForPushNotifications().then((token) => {
-          if (token) tokenRef.current = token;
-        });
+        if (registering) return;
+        registering = true;
+        registerForPushNotifications()
+          .then((token) => {
+            if (token) tokenRef.current = token;
+          })
+          .finally(() => {
+            registering = false;
+          });
       });
     });
     return () => sub?.remove();
