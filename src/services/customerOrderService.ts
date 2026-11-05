@@ -735,6 +735,20 @@ export async function fetchCustomerOrderDetails(
   return mapCustomerOrderDetailsPayload(orderId, res);
 }
 
+/** PATCH /orders/{id}/gstin - not under /customer/orders (BASE above); the
+ * order-level GSTIN edit lives on the main orders router, same as
+ * GET .../invoice. Only works pre-invoice - see Order.CustomerGSTIN's
+ * backend docstring. */
+export async function updateCustomerOrderGstin(
+  orderId: number,
+  gstin: string | null,
+): Promise<void> {
+  await request<unknown>(`/orders/${orderId}/gstin`, {
+    method: "PATCH",
+    body: { gstin },
+  });
+}
+
 export interface OrderRatingInfo {
   order_id: number;
   rating: number;

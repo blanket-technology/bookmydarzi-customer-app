@@ -46,7 +46,9 @@ import {
   fetchCustomerOrderDetails,
   fetchOrderRating,
   submitOrderRating,
+  updateCustomerOrderGstin,
 } from "../src/services/customerOrderService";
+import { isValidGstin, normalizeGstin } from "../src/utils/gstin";
 import { downloadAndShareInvoice } from "../src/services/invoiceService";
 import {
   PaymentAlreadyCompletedError,
@@ -709,6 +711,11 @@ export default function OrderDetailsScreen() {
     null,
   );
 
+  const [editingGstin, setEditingGstin] = useState(false);
+  const [gstinDraft, setGstinDraft] = useState("");
+  const [gstinSaving, setGstinSaving] = useState(false);
+  const [gstinSaveError, setGstinSaveError] = useState<string | null>(null);
+
   // Rating state
   const [ratingValue, setRatingValue] = useState(0);
   const [ratingComment, setRatingComment] = useState("");
@@ -909,25 +916,20 @@ export default function OrderDetailsScreen() {
   // Show a Pay/Retry button for an online order that isn't settled yet.
   const showOnlinePayBtn = (onlineFailed || onlinePending) && !!payload;
 
-  // Backend issues invoices only once the order is placed - not while it is
-  // pending payment, payment-failed, or cancelled (app/services/invoices/
-  // invoice_service.py's _NOT_INVOICEABLE, a deny-list). Every repair-loop
-  // status (order has genuinely been delivered and billed at least once,
-  // may just be mid-repair/in-transit) is allowed by that same backend
-  // check by default, so they must all be too.
+  // Bug fix: this used to be an allow-list of only "delivered" and the
+  // repair-loop statuses, but the backend's actual rule
+  // (app/services/invoices/invoice_service.py's _NOT_INVOICEABLE) is a
+  // DENY-list - every status is invoiceable except pending_payment,
+  // payment_failed, and cancelled. The allow-list wrongly hid the Download
+  // Invoice button for every normal in-progress order (order_placed,
+  // tailor_assigned, picked_up, in_progress, out_for_delivery, etc.) -
+  // mirror the backend's deny-list exactly instead of re-deriving the set
+  // of "good" statuses by hand.
   const invoiceAvailable =
     !!payload &&
-    (orderStatusKey === "delivered" ||
-      orderStatusKey === "inspectionwindow" ||
-      orderStatusKey === "inrepair" ||
-      orderStatusKey === "repairpickuppending" ||
-      orderStatusKey === "repairpickupscheduled" ||
-      orderStatusKey === "repairpickupintransit" ||
-      orderStatusKey === "attailorforrepair" ||
-      orderStatusKey === "repaircompleted" ||
-      orderStatusKey === "repairdeliverypending" ||
-      orderStatusKey === "repairdeliveryscheduled" ||
-      orderStatusKey === "repairdeliveryintransit");
+    orderStatusKey !== "pendingpayment" &&
+    orderStatusKey !== "paymentfailed" &&
+    orderStatusKey !== "cancelled";
 
   const handleDownloadInvoice = async () => {
     if (orderId === null || busy) return;
@@ -942,6 +944,28 @@ export default function OrderDetailsScreen() {
       );
     } finally {
       if (isMountedRef.current) setBusy(null);
+    }
+  };
+
+  const handleSaveGstin = async () => {
+    if (orderId === null) return;
+    const trimmed = gstinDraft.trim();
+    if (trimmed && !isValidGstin(trimmed)) {
+      setGstinSaveError("Enter a valid 15-character GSTIN, or clear the field to remove it.");
+      return;
+    }
+    setGstinSaving(true);
+    setGstinSaveError(null);
+    try {
+      await updateCustomerOrderGstin(orderId, trimmed ? normalizeGstin(trimmed) : null);
+      if (!isMountedRef.current) return;
+      setEditingGstin(false);
+      load();
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      setGstinSaveError(err instanceof Error ? err.message : "Couldn't save GSTIN.");
+    } finally {
+      if (isMountedRef.current) setGstinSaving(false);
     }
   };
 
@@ -1549,12 +1573,74 @@ export default function OrderDetailsScreen() {
                 />
               </>
             )}
-            {payload.pricing.customer_gstin ? (
-              <>
-                <RowDivider />
-                <BillRow label="GSTIN" value={payload.pricing.customer_gstin} />
-              </>
-            ) : null}
+            <RowDivider />
+            <View style={{ paddingVertical: 8 }}>
+              {editingGstin ? (
+                <View>
+                  <Text style={styles.gstinEditLabel}>GSTIN</Text>
+                  <TextInput
+                    style={styles.gstinEditInput}
+                    value={gstinDraft}
+                    onChangeText={(v) => setGstinDraft(v.toUpperCase().slice(0, 15))}
+                    placeholder="e.g. 09AABCT1234A1Z5"
+                    placeholderTextColor={COLORS.gray}
+                    maxLength={15}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                  />
+                  {gstinSaveError ? (
+                    <Text style={styles.gstinEditError}>{gstinSaveError}</Text>
+                  ) : null}
+                  <View style={styles.gstinEditActions}>
+                    <TouchableOpacity
+                      onPress={handleSaveGstin}
+                      disabled={gstinSaving}
+                      style={[styles.gstinSaveBtn, gstinSaving && { opacity: 0.6 }]}
+                    >
+                      <Text style={styles.gstinSaveBtnText}>
+                        {gstinSaving ? "Saving..." : "Save"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setEditingGstin(false);
+                        setGstinSaveError(null);
+                      }}
+                      style={styles.gstinCancelBtn}
+                    >
+                      <Text style={styles.gstinCancelBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.gstinRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.billLabel}>GSTIN</Text>
+                    <Text style={styles.gstinValue}>
+                      {payload.pricing.customer_gstin || "Not added"}
+                    </Text>
+                  </View>
+                  {payload.pricing.gstin_editable !== false ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setGstinDraft(payload.pricing.customer_gstin ?? "");
+                        setGstinSaveError(null);
+                        setEditingGstin(true);
+                      }}
+                    >
+                      <Text style={styles.gstinEditLink}>
+                        {payload.pricing.customer_gstin ? "Edit" : "Add"}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              )}
+              {payload.pricing.gstin_editable === false ? (
+                <Text style={styles.gstinLockedHint}>
+                  This order has been invoiced - contact support to correct the GSTIN.
+                </Text>
+              ) : null}
+            </View>
             {payload.pricing.service_fee != null &&
             Number(payload.pricing.service_fee) > 0 ? (
               <>
@@ -2189,6 +2275,29 @@ const styles = StyleSheet.create({
   billValueBold: { fontSize: 15, fontWeight: "800" },
   billDiscount: { color: "#16A34A" },
   naText: { fontSize: 13, color: "#6B7280" },
+  gstinRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  gstinValue: { fontSize: 14, fontWeight: "700", color: "#1F2937", marginTop: 2 },
+  gstinEditLink: { fontSize: 13, fontWeight: "700", color: COLORS.primary },
+  gstinEditLabel: { fontSize: 11, fontWeight: "700", color: "#9CA3AF", textTransform: "uppercase", marginBottom: 6 },
+  gstinEditInput: {
+    backgroundColor: "#F7F9F9",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#EAEEEE",
+    paddingHorizontal: 12,
+    height: 42,
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    color: "#1F2937",
+  },
+  gstinEditError: { marginTop: 6, fontSize: 12, fontWeight: "600", color: "#dc2626" },
+  gstinEditActions: { flexDirection: "row", gap: 8, marginTop: 10 },
+  gstinSaveBtn: { backgroundColor: COLORS.primary, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 18 },
+  gstinSaveBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  gstinCancelBtn: { borderWidth: 1, borderColor: "#D1D5DB", borderRadius: 10, paddingVertical: 9, paddingHorizontal: 18 },
+  gstinCancelBtnText: { color: "#374151", fontSize: 13, fontWeight: "700" },
+  gstinLockedHint: { fontSize: 11, color: "#9CA3AF", marginTop: 6, lineHeight: 15 },
   actionPrimary: {
     flexDirection: "row",
     alignItems: "center",
