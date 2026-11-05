@@ -226,6 +226,8 @@ export interface OrderDetailsPricingBlock {
   gst_amount: number | string | null;
   cgst_amount: number | string | null;
   sgst_amount: number | string | null;
+  customer_gstin?: string | null;
+  gstin_editable?: boolean;
   service_fee: number | string | null;
   /** Any cancellation penalty folded into final_amount (0/null if none). */
   penalty_amount?: number | string | null;

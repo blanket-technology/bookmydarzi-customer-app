@@ -37,6 +37,7 @@ export interface User {
   phone_number?: string;
   address?: string;
   profile_image?: string | null;
+  default_gstin?: string | null;
   date_joined?: string;
   is_active?: boolean;
   role?: UserRole;
@@ -387,6 +388,7 @@ export async function fetchProfileRequest(): Promise<User | null> {
     phone_number: mobileDigits || undefined,
     gender: raw?.Gender ?? raw?.gender ?? undefined,
     address: raw?.Address ?? raw?.address ?? undefined,
+    default_gstin: raw?.DefaultGSTIN ?? raw?.default_gstin ?? null,
     profile_image: normalizeProfileImageUrl(
       raw?.ProfileImageUrl ??
         raw?.ProfileImage ??

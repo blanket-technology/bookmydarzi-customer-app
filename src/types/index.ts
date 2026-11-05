@@ -172,6 +172,7 @@ export interface ProfileUpdatePayload {
   phone_number?: string;
   address?: string;
   profile_image?: string;
+  default_gstin?: string | null;
 }
 
 export interface SearchFilters {

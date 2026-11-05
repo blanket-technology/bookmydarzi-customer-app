@@ -1549,6 +1549,12 @@ export default function OrderDetailsScreen() {
                 />
               </>
             )}
+            {payload.pricing.customer_gstin ? (
+              <>
+                <RowDivider />
+                <BillRow label="GSTIN" value={payload.pricing.customer_gstin} />
+              </>
+            ) : null}
             {payload.pricing.service_fee != null &&
             Number(payload.pricing.service_fee) > 0 ? (
               <>

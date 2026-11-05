@@ -33,6 +33,7 @@ export async function updateProfile(
   if (payload.gender !== undefined) body.gender = payload.gender;
   if (payload.address !== undefined) body.address = payload.address;
   if (payload.profile_image !== undefined) body.profile_image = payload.profile_image;
+  if (payload.default_gstin !== undefined) body.default_gstin = payload.default_gstin;
 
   const res = await request<unknown>("/users/profile", { method: "PATCH", body });
   const raw = (res as { data?: unknown })?.data ?? res;

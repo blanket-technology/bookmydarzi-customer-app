@@ -272,6 +272,7 @@ export async function checkoutCart(
   if (payload.pickup_time_slot) checkoutBody.pickup_time_slot = payload.pickup_time_slot;
   if (payload.customization_notes) checkoutBody.customization_notes = payload.customization_notes;
   if (payload.image_references?.length) checkoutBody.image_references = payload.image_references;
+  if (payload.gstin) checkoutBody.gstin = payload.gstin;
 
   const res = await request<unknown>(`${BASE}/checkout`, {
     method: "POST",

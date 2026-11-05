@@ -54,6 +54,8 @@ import {
 import { estimateCouponDiscount } from "../../src/utils/couponDiscount";
 import { formatCurrency } from "../../src/utils/formatters";
 import { buildPickupTimeSlots } from "../../src/utils/pickupTimeSlots";
+import { isValidGstin, normalizeGstin } from "../../src/utils/gstin";
+import { useAuthStore } from "../../store/useAuthStore";
 
 // ─── Scheduled-pickup helpers ─────────────────────────────────────────────────
 
@@ -301,6 +303,13 @@ export default function CartScreen() {
   const [styleReferenceUploading, setStyleReferenceUploading] = useState(false);
   // Order-level free-text notes (Bug Report cycle 1, item 3.1).
   const [orderNotes, setOrderNotes] = useState<string>("");
+  const defaultGstin = useAuthStore((s) => s.user?.default_gstin);
+  const [gstin, setGstin] = useState<string>("");
+  const [gstinTouched, setGstinTouched] = useState(false);
+
+  useEffect(() => {
+    if (defaultGstin) setGstin(defaultGstin);
+  }, [defaultGstin]);
   const [checkingOut, setCheckingOut] = useState(false);
   const [codModalVisible, setCodModalVisible] = useState(false);
 
@@ -405,6 +414,7 @@ export default function CartScreen() {
         styleReferenceUri && /^https?:\/\//.test(styleReferenceUri)
           ? [styleReferenceUri]
           : undefined,
+      gstin: gstin.trim() && isValidGstin(gstin) ? normalizeGstin(gstin) : undefined,
     };
     if (pickupType === "scheduled" && scheduledDate && scheduledSlot) {
       const slot = pickupTimeSlots.find((s) => s.label === scheduledSlot);
@@ -419,7 +429,7 @@ export default function CartScreen() {
     } else {
       void executeCheckoutFromCart(router, undefined, paymentMethod, extras).finally(finish);
     }
-  }, [pickupType, scheduledDate, scheduledSlot, pickupTimeSlots, paymentMethod, router, orderNotes, styleReferenceUri]);
+  }, [pickupType, scheduledDate, scheduledSlot, pickupTimeSlots, paymentMethod, router, orderNotes, gstin, styleReferenceUri]);
 
   const handleConfirmSlide = useCallback(() => {
     if (styleReferenceUploading) {
@@ -718,6 +728,26 @@ export default function CartScreen() {
             <Text style={styles.notesCounter}>{orderNotes.length}/1000</Text>
           ) : null}
         </View>
+
+        {/* ── GSTIN ───────────────────────────────────────────────────── */}
+        <Text style={styles.sectionLabel}>GSTIN (optional)</Text>
+        <View style={styles.footerCard}>
+          <View style={styles.notesBox}>
+            <TextInput
+              style={styles.notesInput}
+              value={gstin}
+              onChangeText={(v) => setGstin(v.toUpperCase())}
+              onBlur={() => setGstinTouched(true)}
+              placeholder="e.g. 09AABCT1234A1Z5"
+              placeholderTextColor={COLORS.gray}
+              maxLength={15}
+              autoCapitalize="characters"
+            />
+          </View>
+          {gstinTouched && gstin.trim() && !isValidGstin(gstin) ? (
+            <Text style={styles.notesCounter}>Enter a valid 15-character GSTIN</Text>
+          ) : null}
+        </View>
       </Animated.View>
     ),
     [
@@ -737,6 +767,8 @@ export default function CartScreen() {
       scheduledSlot,
       pickupTimeSlots,
       orderNotes,
+      gstin,
+      gstinTouched,
       billing.totalAmount,
       styleReferenceUploading,
     ],

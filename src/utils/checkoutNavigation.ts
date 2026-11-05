@@ -36,7 +36,7 @@ export async function executeCheckoutFromCart(
   router: ImperativeRouter,
   scheduled?: { scheduledPickupAt: string; pickupTimeSlot: string },
   paymentMethod: PaymentMethodOption = "online",
-  extras?: { customizationNotes?: string; imageReferences?: string[] },
+  extras?: { customizationNotes?: string; imageReferences?: string[]; gstin?: string },
 ): Promise<void> {
   if (checkoutInFlight) return;
 
@@ -75,6 +75,7 @@ export async function executeCheckoutFromCart(
       } : {}),
       ...(extras?.customizationNotes ? { customization_notes: extras.customizationNotes } : {}),
       ...(extras?.imageReferences?.length ? { image_references: extras.imageReferences } : {}),
+      ...(extras?.gstin ? { gstin: extras.gstin } : {}),
     });
 
     useOrderStore.getState().invalidateCache();

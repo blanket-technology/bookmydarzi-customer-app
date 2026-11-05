@@ -143,6 +143,8 @@ export interface CartCheckoutPayload {
   customization_notes?: string;
   /** Reference style image URLs (maps to backend image_references). */
   image_references?: string[];
+  /** Customer's business GSTIN for this order's tax invoice. */
+  gstin?: string;
 }
 
 /** One line in `line_items` on the checkout response. */
