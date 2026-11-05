@@ -56,6 +56,8 @@ export interface DirectOrderPayload {
    * or, on the tailor's end, gives a tailor who reads slowly something to
    * listen to instead of text-only instructions. */
   voice_note_url?: string;
+  /** Customer's business GSTIN for this order's tax invoice. */
+  gstin?: string;
   /** Extras selected on the service detail screen - see AddonPicker. */
   addons?: SelectedAddon[];
   /** Multi-item Book Now (e.g. a primary alteration tier plus other tiers
@@ -174,6 +176,7 @@ export async function createDirectOrder(
         : {}),
       ...(payload.image_references?.length ? { image_references: payload.image_references } : {}),
       ...(payload.voice_note_url ? { voice_note_url: payload.voice_note_url } : {}),
+      ...(payload.gstin ? { gstin: payload.gstin } : {}),
       ...(payload.items?.length
         ? {
             items: payload.items.map((i) => ({

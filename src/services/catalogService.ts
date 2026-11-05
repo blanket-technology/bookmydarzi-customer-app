@@ -217,6 +217,27 @@ export async function fetchCancellationPolicy(): Promise<CancellationPolicyStage
   }
 }
 
+export interface CancellationPolicyTier {
+  group: string;
+  sort_order: number;
+  cancellation_allowed: boolean;
+  penalty_pct: number | null;
+  description: string;
+  stages: string[];
+}
+
+/** Collapses the per-stage policy above into 3-4 clear customer-facing
+ * tiers (Free to cancel / Cancellation fee applies / Contact support) -
+ * GET /cancellation-policy/summary. Use this for any pre-purchase or
+ * checkout display instead of the raw per-stage list. */
+export async function fetchCancellationPolicyTiers(): Promise<CancellationPolicyTier[]> {
+  try {
+    return await request<CancellationPolicyTier[]>(`/cancellation-policy/summary`, { skipAuth: true });
+  } catch {
+    return [];
+  }
+}
+
 /** GET /catalog/categories/{categoryId} (fallback when tree lookup is empty) */
 export async function fetchCatalogSubcategories(
   categoryId: number,

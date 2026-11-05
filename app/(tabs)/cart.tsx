@@ -56,6 +56,10 @@ import { formatCurrency } from "../../src/utils/formatters";
 import { buildPickupTimeSlots } from "../../src/utils/pickupTimeSlots";
 import { isValidGstin, normalizeGstin } from "../../src/utils/gstin";
 import { useAuthStore } from "../../store/useAuthStore";
+import {
+  fetchCancellationPolicyTiers,
+  type CancellationPolicyTier,
+} from "../../src/services/catalogService";
 
 // ─── Scheduled-pickup helpers ─────────────────────────────────────────────────
 
@@ -310,6 +314,12 @@ export default function CartScreen() {
   useEffect(() => {
     if (defaultGstin) setGstin(defaultGstin);
   }, [defaultGstin]);
+
+  const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyTier[]>([]);
+  const [policyExpanded, setPolicyExpanded] = useState(false);
+  useEffect(() => {
+    fetchCancellationPolicyTiers().then(setCancellationPolicy).catch(() => {});
+  }, []);
   const [checkingOut, setCheckingOut] = useState(false);
   const [codModalVisible, setCodModalVisible] = useState(false);
 
@@ -732,22 +742,75 @@ export default function CartScreen() {
         {/* ── GSTIN ───────────────────────────────────────────────────── */}
         <Text style={styles.sectionLabel}>GSTIN (optional)</Text>
         <View style={styles.footerCard}>
-          <View style={styles.notesBox}>
+          <View
+            style={[
+              styles.gstinInputBox,
+              gstinTouched && gstin.trim() && !isValidGstin(gstin) ? styles.gstinInputBoxError : null,
+            ]}
+          >
             <TextInput
-              style={styles.notesInput}
+              style={styles.gstinInput}
               value={gstin}
-              onChangeText={(v) => setGstin(v.toUpperCase())}
+              onChangeText={(v) => setGstin(v.toUpperCase().slice(0, 15))}
               onBlur={() => setGstinTouched(true)}
-              placeholder="e.g. 09AABCT1234A1Z5"
+              placeholder="Add GSTIN for a business invoice"
               placeholderTextColor={COLORS.gray}
               maxLength={15}
               autoCapitalize="characters"
+              autoCorrect={false}
             />
+            {gstin.length > 0 ? (
+              <Text style={styles.gstinCount}>{gstin.length}/15</Text>
+            ) : null}
           </View>
           {gstinTouched && gstin.trim() && !isValidGstin(gstin) ? (
-            <Text style={styles.notesCounter}>Enter a valid 15-character GSTIN</Text>
-          ) : null}
+            <Text style={styles.gstinError}>Enter a valid 15-character GSTIN</Text>
+          ) : (
+            <Text style={styles.gstinHint}>Used to print your GST number on this order&apos;s invoice.</Text>
+          )}
         </View>
+
+        {/* ── Cancellation & refund policy ───────────────────────────── */}
+        {cancellationPolicy.length > 0 ? (
+          <View style={styles.footerCard}>
+            <TouchableOpacity
+              style={styles.policyHeader}
+              onPress={() => setPolicyExpanded((v) => !v)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Cancellation and refund policy"
+            >
+              <Text style={styles.sectionLabel}>Cancellation & refund policy</Text>
+              <Ionicons
+                name={policyExpanded ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={COLORS.gray}
+              />
+            </TouchableOpacity>
+            {policyExpanded ? (
+              <View style={styles.policyList}>
+                {cancellationPolicy.map((tier) => {
+                  const tone = !tier.cancellation_allowed
+                    ? { icon: "headset-outline" as const, color: "#dc2626", bg: "#FEF2F2" }
+                    : tier.penalty_pct
+                      ? { icon: "alert-circle-outline" as const, color: "#b45309", bg: "#FFFBEB" }
+                      : { icon: "checkmark-circle-outline" as const, color: "#059669", bg: "#ECFDF5" };
+                  return (
+                    <View key={tier.group} style={styles.policyTier}>
+                      <View style={[styles.policyTierIcon, { backgroundColor: tone.bg }]}>
+                        <Ionicons name={tone.icon} size={16} color={tone.color} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.policyTierTitle, { color: tone.color }]}>{tier.group}</Text>
+                        <Text style={styles.policyTierDesc}>{tier.description}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
       </Animated.View>
     ),
     [
@@ -769,6 +832,8 @@ export default function CartScreen() {
       orderNotes,
       gstin,
       gstinTouched,
+      cancellationPolicy,
+      policyExpanded,
       billing.totalAmount,
       styleReferenceUploading,
     ],
@@ -1291,6 +1356,57 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.gray,
   },
+  gstinInputBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F7F9F9",
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: "#EAEEEE",
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  gstinInputBoxError: {
+    borderColor: "#dc2626",
+    backgroundColor: "#FEF2F2",
+  },
+  gstinInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    color: COLORS.black,
+    padding: 0,
+  },
+  gstinCount: {
+    fontSize: 11,
+    color: COLORS.gray,
+    marginLeft: 8,
+  },
+  gstinError: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#dc2626",
+  },
+  gstinHint: {
+    marginTop: 6,
+    fontSize: 11,
+    color: COLORS.gray,
+    lineHeight: 15,
+  },
+  policyHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  policyList: { marginTop: SPACING.sm, gap: SPACING.sm },
+  policyTier: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  policyTierIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  policyTierTitle: { fontSize: 13, fontWeight: "700" },
+  policyTierDesc: { fontSize: 12, color: COLORS.gray, marginTop: 2, lineHeight: 16 },
 
   centerState: {
     flex: 1,

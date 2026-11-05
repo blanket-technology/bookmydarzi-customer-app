@@ -37,8 +37,8 @@ import PickupDateCalendarModal from "../src/components/common/PickupDateCalendar
 import ScreenHeader from "../src/components/common/ScreenHeader";
 import PaymentMethodSelector from "../src/components/orders/PaymentMethodSelector";
 import {
-  fetchCancellationPolicy,
-  type CancellationPolicyStage,
+  fetchCancellationPolicyTiers,
+  type CancellationPolicyTier,
 } from "../src/services/catalogService";
 import {
   createDirectOrder,
@@ -61,6 +61,7 @@ import { estimateCouponDiscount } from "../src/utils/couponDiscount";
 import { normalizeProfileImageUrl } from "../src/utils/profileImage";
 import { safeRouterPush, safeRouterReplace } from "../src/utils/safeNavigation";
 import { getUserMobile } from "../src/utils/userPhone";
+import { isValidGstin, normalizeGstin } from "../src/utils/gstin";
 import { useAuthStore } from "../store/useAuthStore";
 
 function formatSelectedDate(iso: string): string {
@@ -173,6 +174,12 @@ export default function BuyNowReviewScreen() {
   const [styleReferenceUri, setStyleReferenceUri] = useState<string | null>(null);
   const [styleReferenceUploading, setStyleReferenceUploading] = useState(false);
   const [orderNotes, setOrderNotes] = useState<string>("");
+  const [gstin, setGstin] = useState<string>("");
+  const [gstinTouched, setGstinTouched] = useState(false);
+
+  useEffect(() => {
+    if (user?.default_gstin) setGstin(user.default_gstin);
+  }, [user?.default_gstin]);
   const [voiceNoteUrl, setVoiceNoteUrl] = useState<string | null>(null);
   const [serviceAreaModal, setServiceAreaModal] = useState<{
     visible: boolean;
@@ -239,10 +246,10 @@ export default function BuyNowReviewScreen() {
   // cancel dialog reads later via cancellation-preview, but surfaced here
   // so a customer can see the terms before paying. Fetched once on mount;
   // failure just leaves the list empty and the block doesn't render.
-  const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyStage[]>([]);
+  const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyTier[]>([]);
   const [policyExpanded, setPolicyExpanded] = useState(false);
   useEffect(() => {
-    fetchCancellationPolicy().then(setCancellationPolicy).catch(() => {});
+    fetchCancellationPolicyTiers().then(setCancellationPolicy).catch(() => {});
   }, []);
 
   // Default-select an address once the async fetch resolves - genuinely
@@ -386,6 +393,7 @@ export default function BuyNowReviewScreen() {
           ? { image_references: [styleReferenceUri] }
           : {}),
         ...(voiceNoteUrl ? { voice_note_url: voiceNoteUrl } : {}),
+        ...(gstin.trim() && isValidGstin(gstin) ? { gstin: normalizeGstin(gstin) } : {}),
         ...(extraItems.length > 0
           ? {
               // Backend ignores the top-level service_id/stitching_preferences/
@@ -514,7 +522,7 @@ export default function BuyNowReviewScreen() {
   }, [
     pendingService, selectedAddressId, billing, appliedOffer,
     pickupType, scheduledDate, scheduledSlot, pickupTimeSlots, paymentMethod,
-    orderNotes, styleReferenceUri, voiceNoteUrl,
+    orderNotes, styleReferenceUri, voiceNoteUrl, gstin,
     resetBookingFlow, user, router,
   ]);
 
@@ -755,25 +763,24 @@ export default function BuyNowReviewScreen() {
             </TouchableOpacity>
             {policyExpanded ? (
               <View style={s.policyList}>
-                {cancellationPolicy.map((stage) => (
-                  <View key={stage.Id} style={s.policyRow}>
-                    <Text style={s.policyStage}>
-                      {stage.DisplayStage}
-                      {stage.CancellationAllowed ? (
-                        stage.PenaltyPct ? (
-                          <Text style={s.policyPenalty}> — {stage.PenaltyPct}% cancellation charge</Text>
-                        ) : (
-                          <Text style={s.policyFree}> — free to cancel</Text>
-                        )
-                      ) : (
-                        <Text style={s.policyBlocked}> — cannot be cancelled</Text>
-                      )}
-                    </Text>
-                    {stage.PolicyDescription ? (
-                      <Text style={s.policyDesc}>{stage.PolicyDescription}</Text>
-                    ) : null}
-                  </View>
-                ))}
+                {cancellationPolicy.map((tier) => {
+                  const tone = !tier.cancellation_allowed
+                    ? { icon: "headset-outline" as const, color: "#dc2626", bg: "#FEF2F2" }
+                    : tier.penalty_pct
+                      ? { icon: "alert-circle-outline" as const, color: "#b45309", bg: "#FFFBEB" }
+                      : { icon: "checkmark-circle-outline" as const, color: "#059669", bg: "#ECFDF5" };
+                  return (
+                    <View key={tier.group} style={s.policyTier}>
+                      <View style={[s.policyTierIcon, { backgroundColor: tone.bg }]}>
+                        <Ionicons name={tone.icon} size={18} color={tone.color} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.policyTierTitle, { color: tone.color }]}>{tier.group}</Text>
+                        <Text style={s.policyTierDesc}>{tier.description}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             ) : null}
           </View>
@@ -869,6 +876,37 @@ export default function BuyNowReviewScreen() {
               onUploaded={setVoiceNoteUrl}
               onRemove={() => setVoiceNoteUrl(null)}
             />
+          </View>
+        </View>
+
+        {/* ── GSTIN (optional) ──────────────────────────────── */}
+        <View style={s.card}>
+          <Text style={s.sectionTitle}>GSTIN (optional)</Text>
+          <View style={{ paddingHorizontal: SPACING.md, paddingBottom: SPACING.md }}>
+            <View
+              style={[
+                s.gstinInputBox,
+                gstinTouched && gstin.trim() && !isValidGstin(gstin) ? s.gstinInputBoxError : null,
+              ]}
+            >
+              <TextInput
+                style={s.gstinInput}
+                value={gstin}
+                onChangeText={(v) => setGstin(v.toUpperCase().slice(0, 15))}
+                onBlur={() => setGstinTouched(true)}
+                placeholder="Add GSTIN for a business invoice"
+                placeholderTextColor={COLORS.gray}
+                maxLength={15}
+                autoCapitalize="characters"
+                autoCorrect={false}
+              />
+              {gstin.length > 0 ? <Text style={s.gstinCount}>{gstin.length}/15</Text> : null}
+            </View>
+            {gstinTouched && gstin.trim() && !isValidGstin(gstin) ? (
+              <Text style={s.gstinError}>Enter a valid 15-character GSTIN</Text>
+            ) : (
+              <Text style={s.gstinHint}>Used to print your GST number on this order&apos;s invoice.</Text>
+            )}
           </View>
         </View>
 
@@ -1088,13 +1126,56 @@ const s = StyleSheet.create({
   policyHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   policyChevron: { marginRight: SPACING.md },
   policyList: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md, gap: SPACING.sm },
-  policyRow: { gap: 2 },
-  policyStage: { fontSize: 13, fontWeight: "600", color: COLORS.black },
-  policyPenalty: { fontSize: 12, fontWeight: "400", color: COLORS.gray },
-  policyFree: { fontSize: 12, fontWeight: "400", color: COLORS.success },
-  policyBlocked: { fontSize: 12, fontWeight: "400", color: COLORS.error },
-  policyDesc: { fontSize: 12, color: COLORS.gray, marginTop: 1 },
+  policyTier: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  policyTierIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  policyTierTitle: { fontSize: 13.5, fontWeight: "700" },
+  policyTierDesc: { fontSize: 12.5, color: COLORS.gray, marginTop: 2, lineHeight: 17 },
   notesInput: { minHeight: 72, fontSize: 14, color: COLORS.black, padding: 0 },
+  gstinInputBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F7F9F9",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#EAEEEE",
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  gstinInputBoxError: {
+    borderColor: "#dc2626",
+    backgroundColor: "#FEF2F2",
+  },
+  gstinInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    color: COLORS.black,
+    padding: 0,
+  },
+  gstinCount: {
+    fontSize: 11,
+    color: COLORS.gray,
+    marginLeft: 8,
+  },
+  gstinError: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#dc2626",
+  },
+  gstinHint: {
+    marginTop: 6,
+    fontSize: 11,
+    color: COLORS.gray,
+    lineHeight: 15,
+  },
   paymentMethodWrap: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md },
   payMethodHeading: {
     fontSize: 12,
