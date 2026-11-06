@@ -359,6 +359,7 @@ export function findDirectServiceByName(
 export interface ServiceReview {
   rating: number;
   comment: string | null;
+  photo_urls?: string[] | null;
   created_at: string | null;
 }
 

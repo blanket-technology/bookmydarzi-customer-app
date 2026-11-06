@@ -4,6 +4,7 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -26,6 +27,7 @@ import ErrorState from "../src/components/common/ErrorState";
 import ScreenHeader from "../src/components/common/ScreenHeader";
 import { CancelOrderItemSection } from "../src/components/orders/CancelOrderItemSection";
 import { CancelOrderSection } from "../src/components/orders/CancelOrderSection";
+import { LiveTrackingMap } from "../src/components/orders/LiveTrackingMap";
 import OrderScreenSection from "../src/components/orders/OrderScreenSection";
 import OrderStatusModal, {
   type OrderCelebrationKind,
@@ -47,6 +49,7 @@ import {
   fetchOrderRating,
   submitOrderRating,
   updateCustomerOrderGstin,
+  uploadOrderRatingPhoto,
 } from "../src/services/customerOrderService";
 import { isValidGstin, normalizeGstin } from "../src/utils/gstin";
 import { downloadAndShareInvoice } from "../src/services/invoiceService";
@@ -691,6 +694,9 @@ const accordionStyles = StyleSheet.create({
   },
 });
 
+// Mirrors the backend's MAX_PHOTOS_PER_RATING (rating_photo_upload_service.py).
+const MAX_RATING_PHOTOS = 5;
+
 export default function OrderDetailsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -723,6 +729,12 @@ export default function OrderDetailsScreen() {
   const [alreadyRated, setAlreadyRated] = useState(false);
   const [existingRating, setExistingRating] = useState(0);
   const [ratingBusy, setRatingBusy] = useState(false);
+  // Uploaded review photo URLs (ImageKit, already hosted) - populated as
+  // each picked photo finishes uploading. MAX_RATING_PHOTOS mirrors the
+  // backend's MAX_PHOTOS_PER_RATING (rating_photo_upload_service.py).
+  const [ratingPhotoUrls, setRatingPhotoUrls] = useState<string[]>([]);
+  const [existingPhotoUrls, setExistingPhotoUrls] = useState<string[]>([]);
+  const [ratingPhotoUploading, setRatingPhotoUploading] = useState(false);
   // True while the submission form is shown for an order that already has a
   // rating - either mid-edit (tapped "Edit") or right after a first-time
   // submit before alreadyRated flips true. PATCH has no time limit (matches
@@ -807,6 +819,8 @@ export default function OrderDetailsScreen() {
             setExistingComment(ratingInfo.comment);
             setRatingValue(ratingInfo.rating);
             setRatingComment(ratingInfo.comment ?? "");
+            setExistingPhotoUrls(ratingInfo.photo_urls ?? []);
+            setRatingPhotoUrls(ratingInfo.photo_urls ?? []);
           }
         } catch {
           // non-critical
@@ -1069,11 +1083,13 @@ export default function OrderDetailsScreen() {
         ratingValue,
         ratingComment.trim() || undefined,
         alreadyRated, // PATCH when editing an existing rating, POST otherwise
+        ratingPhotoUrls,
       );
       if (!isMountedRef.current) return;
       setAlreadyRated(true);
       setExistingRating(ratingValue);
       setExistingComment(ratingComment.trim() || null);
+      setExistingPhotoUrls(ratingPhotoUrls);
       setEditingRating(false);
       Alert.alert("Thank you!", "Your rating has been submitted.");
     } catch (err) {
@@ -1090,11 +1106,52 @@ export default function OrderDetailsScreen() {
   const startEditRating = () => {
     setRatingValue(existingRating);
     setRatingComment(existingComment ?? "");
+    setRatingPhotoUrls(existingPhotoUrls);
     setEditingRating(true);
+  };
+
+  const handlePickRatingPhoto = async () => {
+    if (ratingPhotoUploading || orderId === null) return;
+    if (ratingPhotoUrls.length >= MAX_RATING_PHOTOS) {
+      Alert.alert("Limit reached", `You can add up to ${MAX_RATING_PHOTOS} photos.`);
+      return;
+    }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Allow BMD to access your photos to add a review photo.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: false,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]?.uri) return;
+
+    setRatingPhotoUploading(true);
+    try {
+      const uploaded = await uploadOrderRatingPhoto(orderId, result.assets[0].uri);
+      if (!isMountedRef.current) return;
+      setRatingPhotoUrls((prev) => [...prev, uploaded.url]);
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      Alert.alert(
+        "Upload failed",
+        err instanceof Error ? err.message : "Couldn't upload the photo. Please try again.",
+      );
+    } finally {
+      if (isMountedRef.current) setRatingPhotoUploading(false);
+    }
+  };
+
+  const handleRemoveRatingPhoto = (url: string) => {
+    setRatingPhotoUrls((prev) => prev.filter((u) => u !== url));
   };
 
   const isDelivered =
     (payload?.order.status ?? "").toLowerCase() === "delivered";
+
+  const orderStatusNormalized = normalizeOrderStatus(payload?.order.status);
 
   // pricing.base_amount already has any selected add-ons folded into it
   // (backend: unit_price = base + addons) - shown alone as one "Base
@@ -1169,55 +1226,84 @@ export default function OrderDetailsScreen() {
 
           {/* Who's coming to the door for pickup - doorstep trust/safety.
               Only present once the backend has an assigned employee AND the
-              order has reached a pickup-relevant status (never earlier). */}
+              order has reached a pickup-relevant status (never earlier).
+              The live map only actually renders once the leg is truly in
+              transit (pickup_pending, not just pickup_scheduled) - see
+              LiveTrackingMap's `enabled` prop and the backend's own
+              _TRACKABLE_STATUSES (live_tracking_service.py). */}
           {payload.order.pickup_partner ? (
-            <BridgePartnerCard
-              title="Your pickup partner"
-              subtitle="Coming to your doorstep for pickup"
-              partner={payload.order.pickup_partner}
-            />
+            <>
+              {orderId !== null ? (
+                <LiveTrackingMap orderId={orderId} enabled={orderStatusNormalized === "pickup_pending"} />
+              ) : null}
+              <BridgePartnerCard
+                title="Your pickup partner"
+                subtitle="Coming to your doorstep for pickup"
+                partner={payload.order.pickup_partner}
+              />
+            </>
           ) : null}
 
           {/* Delivery-leg equivalent - a different employee may deliver
               than picked up (delivery broadcast), so this is deliberately
               a separate card, not a reuse of the pickup partner's data. */}
           {payload.order.delivery_partner ? (
-            <BridgePartnerCard
-              title="Your delivery partner"
-              subtitle="Bringing your order to your doorstep"
-              partner={payload.order.delivery_partner}
-            />
+            <>
+              {orderId !== null ? (
+                <LiveTrackingMap orderId={orderId} enabled={orderStatusNormalized === "out_for_delivery"} />
+              ) : null}
+              <BridgePartnerCard
+                title="Your delivery partner"
+                subtitle="Bringing your order to your doorstep"
+                partner={payload.order.delivery_partner}
+              />
+            </>
           ) : null}
 
           {/* Return-leg equivalent - who's bringing the garment back after
               a cancellation past custody. Same doorstep trust/safety
               reasoning as pickup/delivery. */}
           {payload.order.return_partner ? (
-            <BridgePartnerCard
-              title="Your return partner"
-              subtitle="Bringing your garment back to your doorstep"
-              partner={payload.order.return_partner}
-            />
+            <>
+              {orderId !== null ? (
+                <LiveTrackingMap orderId={orderId} enabled={orderStatusNormalized === "return_in_transit"} />
+              ) : null}
+              <BridgePartnerCard
+                title="Your return partner"
+                subtitle="Bringing your garment back to your doorstep"
+                partner={payload.order.return_partner}
+              />
+            </>
           ) : null}
 
           {/* Repair-pickup-leg equivalent - collecting the garment after
               an issue is reported, to take it back to the tailor. */}
           {payload.order.repair_pickup_partner ? (
-            <BridgePartnerCard
-              title="Your repair pickup partner"
-              subtitle="Collecting your order for repair"
-              partner={payload.order.repair_pickup_partner}
-            />
+            <>
+              {orderId !== null ? (
+                <LiveTrackingMap orderId={orderId} enabled={orderStatusNormalized === "repair_pickup_in_transit"} />
+              ) : null}
+              <BridgePartnerCard
+                title="Your repair pickup partner"
+                subtitle="Collecting your order for repair"
+                partner={payload.order.repair_pickup_partner}
+              />
+            </>
           ) : null}
 
           {/* Repair-delivery-leg equivalent - bringing the repaired
               garment back. */}
           {payload.order.repair_delivery_partner ? (
-            <BridgePartnerCard
-              title="Your repair delivery partner"
-              subtitle="Bringing your repaired order to your doorstep"
-              partner={payload.order.repair_delivery_partner}
-            />
+            <>
+              {orderId !== null ? (
+                <LiveTrackingMap orderId={orderId} enabled={orderStatusNormalized === "repair_delivery_in_transit"} />
+              ) : null}
+              <BridgePartnerCard
+                title="Your repair delivery partner"
+                subtitle="Bringing your repaired order to your doorstep"
+                partner={payload.order.repair_delivery_partner}
+              />
+            </>
           ) : null}
 
           {/* Reference style images the customer attached at order time. */}
@@ -1807,6 +1893,22 @@ export default function OrderDetailsScreen() {
                       &ldquo;{existingComment}&rdquo;
                     </Text>
                   ) : null}
+                  {existingPhotoUrls.length > 0 ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={ratingStyles.photoRow}
+                    >
+                      {existingPhotoUrls.map((url) => (
+                        <Image
+                          key={url}
+                          source={{ uri: url }}
+                          style={ratingStyles.photoThumb}
+                          contentFit="cover"
+                        />
+                      ))}
+                    </ScrollView>
+                  ) : null}
                   <TouchableOpacity
                     onPress={startEditRating}
                     hitSlop={8}
@@ -1848,6 +1950,49 @@ export default function OrderDetailsScreen() {
                       maxLength={500}
                       numberOfLines={3}
                     />
+                  ) : null}
+                  {ratingValue > 0 ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={ratingStyles.photoRow}
+                    >
+                      {ratingPhotoUrls.map((url) => (
+                        <View key={url} style={ratingStyles.photoThumbWrap}>
+                          <Image
+                            source={{ uri: url }}
+                            style={ratingStyles.photoThumb}
+                            contentFit="cover"
+                          />
+                          <TouchableOpacity
+                            style={ratingStyles.photoRemoveBtn}
+                            onPress={() => handleRemoveRatingPhoto(url)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Remove photo"
+                          >
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                      {ratingPhotoUrls.length < MAX_RATING_PHOTOS ? (
+                        <TouchableOpacity
+                          style={ratingStyles.addPhotoBtn}
+                          onPress={handlePickRatingPhoto}
+                          disabled={ratingPhotoUploading}
+                          accessibilityRole="button"
+                          accessibilityLabel="Add a review photo"
+                        >
+                          {ratingPhotoUploading ? (
+                            <ActivityIndicator size="small" color={COLORS.primary} />
+                          ) : (
+                            <>
+                              <Ionicons name="camera-outline" size={22} color={COLORS.primary} />
+                              <Text style={ratingStyles.addPhotoText}>Add photo</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      ) : null}
+                    </ScrollView>
                   ) : null}
                   <TouchableOpacity
                     style={[
@@ -2452,5 +2597,44 @@ const ratingStyles = StyleSheet.create({
     color: COLORS.primaryDark,
     marginTop: 10,
     textDecorationLine: "underline",
+  },
+  photoRow: {
+    marginTop: 10,
+  },
+  photoThumbWrap: {
+    marginRight: 8,
+  },
+  photoThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: RADIUS.md,
+    backgroundColor: "#F3F4F6",
+  },
+  photoRemoveBtn: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#111827",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addPhotoBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addPhotoText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: COLORS.primary,
+    marginTop: 2,
   },
 });

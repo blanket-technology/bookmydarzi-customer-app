@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
     ActivityIndicator,
     Alert,
+    Modal,
     Platform,
     Pressable,
     ScrollView,
@@ -158,6 +159,7 @@ export default function ServiceDetailsScreen() {
     Record<number, number>
   >({});
   const [serviceRatings, setServiceRatings] = useState<ServiceRatings | null>(null);
+  const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
   const [billingEstimate, setBillingEstimate] = useState<BillingEstimate | null>(null);
   const [showBillingBreakdown, setShowBillingBreakdown] = useState(false);
   const [addons, setAddons] = useState<ServiceAddon[]>([]);
@@ -942,9 +944,31 @@ export default function ServiceDetailsScreen() {
                       <Text style={styles.reviewComment} numberOfLines={3}>
                         {review.comment}
                       </Text>
-                    ) : (
+                    ) : review.photo_urls && review.photo_urls.length > 0 ? null : (
                       <Text style={styles.reviewNoComment}>No comment</Text>
                     )}
+                    {review.photo_urls && review.photo_urls.length > 0 ? (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.reviewPhotoRow}
+                      >
+                        {review.photo_urls.map((url) => (
+                          <TouchableOpacity
+                            key={url}
+                            onPress={() => setZoomedPhoto(url)}
+                            accessibilityRole="imagebutton"
+                            accessibilityLabel="View review photo"
+                          >
+                            <Image
+                              source={{ uri: url }}
+                              style={styles.reviewPhotoThumb}
+                              contentFit="cover"
+                            />
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    ) : null}
                   </View>
                 ))}
               </View>
@@ -1402,6 +1426,26 @@ export default function ServiceDetailsScreen() {
           </View>
         </View>
       ) : null}
+
+      <Modal
+        visible={zoomedPhoto !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setZoomedPhoto(null)}
+      >
+        <Pressable
+          style={styles.zoomOverlay}
+          onPress={() => setZoomedPhoto(null)}
+        >
+          {zoomedPhoto ? (
+            <Image
+              source={{ uri: zoomedPhoto }}
+              style={styles.zoomImage}
+              contentFit="contain"
+            />
+          ) : null}
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -2077,4 +2121,19 @@ const styles = StyleSheet.create({
   reviewDate: { fontSize: 11, color: COLORS.gray },
   reviewComment: { fontSize: 14, color: "#374151", lineHeight: 20 },
   reviewNoComment: { fontSize: 13, color: COLORS.gray, fontStyle: "italic" },
+  reviewPhotoRow: { marginTop: 8 },
+  reviewPhotoThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: RADIUS.md,
+    marginRight: 8,
+    backgroundColor: "#F3F4F6",
+  },
+  zoomOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  zoomImage: { width: "100%", height: "80%" },
 });

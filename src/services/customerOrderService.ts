@@ -753,6 +753,7 @@ export interface OrderRatingInfo {
   order_id: number;
   rating: number;
   comment: string | null;
+  photo_urls?: string[] | null;
   already_rated: boolean;
   edited?: boolean;
   updated_at?: string | null;
@@ -771,10 +772,65 @@ export async function submitOrderRating(
   rating: number,
   comment?: string,
   isEdit = false,
+  photoUrls?: string[],
 ): Promise<OrderRatingInfo> {
   return request<OrderRatingInfo>(`${BASE}/${orderId}/rating`, {
     method: isEdit ? "PATCH" : "POST",
-    body: { rating, comment: comment || null },
+    body: { rating, comment: comment || null, photo_urls: photoUrls && photoUrls.length > 0 ? photoUrls : undefined },
   });
+}
+
+export interface RatingPhotoUploadResult {
+  url: string;
+  file_id?: string;
+}
+
+// Mirrors uploadOrderStyleReference in apiOrderService.ts - pick, upload
+// immediately, store the returned URL locally until the rating itself is
+// submitted/edited with photo_urls.
+export async function uploadOrderRatingPhoto(
+  orderId: number,
+  fileUri: string,
+): Promise<RatingPhotoUploadResult> {
+  const { toLocalFileUri } = await import("../utils/localFileUri");
+  const localUri = await toLocalFileUri(fileUri);
+  const filename = localUri.split("/").pop() ?? "review-photo.jpg";
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "jpg";
+  const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+
+  const form = new FormData();
+  form.append("file", { uri: localUri, name: filename, type: mime } as any);
+
+  return request<RatingPhotoUploadResult>(`${BASE}/${orderId}/rating/photo`, {
+    method: "POST",
+    body: form,
+  });
+}
+
+// GET /customer/orders/{id}/live-location - REST fallback for the map's
+// first render; PARTNER_LOCATION_UPDATE over the WS connection takes over
+// after that. partner_latitude is null (not present/0) whenever the order
+// isn't on a trackable leg right now - LiveTrackingMap renders nothing in
+// that case, same as a "trackable": false response.
+export interface LiveLocationSnapshot {
+  order_id: number;
+  order_code?: string;
+  status?: string;
+  partner_name?: string;
+  // Absent entirely on a {"order_id", "trackable": false} response - not
+  // trackable right now (not on an active leg, no employee assigned, or
+  // that employee has no location on file yet).
+  partner_latitude?: number;
+  partner_longitude?: number;
+  destination_latitude?: number;
+  destination_longitude?: number;
+  distance_km?: number;
+  eta_minutes?: number;
+  eta_label?: string;
+  trackable?: boolean;
+}
+
+export async function fetchOrderLiveLocation(orderId: number): Promise<LiveLocationSnapshot> {
+  return request<LiveLocationSnapshot>(`${BASE}/${orderId}/live-location`);
 }
 
