@@ -178,6 +178,20 @@ export function MapPinPicker({ visible, initialCoords, onConfirm, onClose }: Pro
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [locating, setLocating] = useState(false);
+  // Bug fix: if auto-locate GPS fails silently on open (common indoors, or
+  // before the permission prompt settles) and no initialCoords was passed,
+  // the pin used to sit at DEFAULT_REGION (Delhi/NCR) with zero visual
+  // indication anything was wrong - a customer anywhere else in India who
+  // didn't notice the map and just tapped Confirm got their real address
+  // text saved against Delhi-area coordinates, only discovered later at
+  // checkout as a confusing "outside our service area, nearest is Noida,
+  // 68km away" message that made no sense for their actual city. Tracks
+  // whether the pin is still sitting at that raw, never-confirmed-correct
+  // default - Confirm is blocked and a clear banner shown until the user
+  // either lets GPS succeed, taps "Use current location" successfully, or
+  // actually drags the map themselves (all of which are real signal the
+  // pin reflects where they actually are).
+  const [pinNeedsManualPlacement, setPinNeedsManualPlacement] = useState(!initialCoords);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -223,6 +237,7 @@ export function MapPinPicker({ visible, initialCoords, onConfirm, onClose }: Pro
       setIsDragging(false);
       const { latitude, longitude } = region;
       setCenterCoords({ latitude, longitude });
+      setPinNeedsManualPlacement(false);
       geocodeCenter(latitude, longitude);
     },
     [geocodeCenter],
@@ -285,8 +300,9 @@ export function MapPinPicker({ visible, initialCoords, onConfirm, onClose }: Pro
     }
     if (autoLocatedRef.current) return;
     autoLocatedRef.current = true;
+    setPinNeedsManualPlacement(!initialCoords);
     void handleMyLocation(true);
-  }, [visible, handleMyLocation]);
+  }, [visible, handleMyLocation, initialCoords]);
 
   const addressLine = addressPreview
     ? [addressPreview.line1, addressPreview.line2, addressPreview.city, addressPreview.state]
@@ -294,7 +310,7 @@ export function MapPinPicker({ visible, initialCoords, onConfirm, onClose }: Pro
         .join(", ")
     : null;
 
-  const confirmReady = !isGeocoding && !isDragging;
+  const confirmReady = !isGeocoding && !isDragging && !pinNeedsManualPlacement;
 
   return (
     <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={onClose}>
@@ -349,6 +365,16 @@ export function MapPinPicker({ visible, initialCoords, onConfirm, onClose }: Pro
         {/* ── Bottom sheet ── */}
         <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + SPACING.md }]}>
           <View style={styles.drag} />
+
+          {pinNeedsManualPlacement ? (
+            <View style={styles.locationWarning}>
+              <Ionicons name="warning-outline" size={16} color="#B45309" />
+              <Text style={styles.locationWarningText}>
+                We couldn&apos;t find your location automatically. Please drag the map so the pin sits on your
+                address, or tap the GPS button above.
+              </Text>
+            </View>
+          ) : null}
 
           <View style={styles.addressRow}>
             <View style={styles.addressIconWrap}>
@@ -480,6 +506,22 @@ const styles = StyleSheet.create({
     backgroundColor: "#E5E7EB",
     alignSelf: "center",
     marginBottom: 16,
+  },
+  locationWarning: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FEF3C7",
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 14,
+  },
+  locationWarningText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#92400E",
+    fontWeight: "600",
   },
   addressRow: {
     flexDirection: "row",

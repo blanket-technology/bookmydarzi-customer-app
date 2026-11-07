@@ -129,14 +129,14 @@ export function LiveTrackingMap({ orderId, enabled }: Props) {
           anchor={{ x: 0.5, y: 0.5 }}
         >
           <View style={styles.partnerPin}>
-            <Ionicons name="bicycle" size={16} color="#fff" />
+            <Ionicons name="bicycle" size={18} color="#fff" />
           </View>
         </Marker>
         <Marker
           coordinate={{ latitude: snapshot.destination_latitude, longitude: snapshot.destination_longitude }}
           anchor={{ x: 0.5, y: 1 }}
         >
-          <Ionicons name="location" size={30} color={COLORS.primaryDark} />
+          <View style={styles.destinationPin} />
         </Marker>
         <Polyline
           coordinates={[
@@ -144,14 +144,29 @@ export function LiveTrackingMap({ orderId, enabled }: Props) {
             { latitude: snapshot.destination_latitude, longitude: snapshot.destination_longitude },
           ]}
           strokeColor={COLORS.primary}
-          strokeWidth={2}
-          lineDashPattern={[6, 6]}
+          strokeWidth={3}
+          lineDashPattern={[1, 8]}
+          lineCap="round"
         />
       </MapView>
+
+      {/* Floating status pill overlapping the map's bottom edge - the
+          Zomato/Blinkit "arriving in X min" treatment, not a separate
+          strip stacked below the map. */}
       <View style={styles.etaPill}>
-        <Ionicons name="time-outline" size={14} color={COLORS.primaryDark} />
-        <Text style={styles.etaText}>{snapshot.eta_label}</Text>
-        <Text style={styles.distanceText}>· {snapshot.distance_km.toFixed(1)} km away</Text>
+        <View style={styles.etaIconWrap}>
+          <Ionicons name="bicycle" size={16} color="#fff" />
+        </View>
+        <View style={styles.etaTextWrap}>
+          <Text style={styles.etaText}>{snapshot.eta_label}</Text>
+          {snapshot.partner_name ? (
+            <Text style={styles.partnerNameText} numberOfLines={1}>
+              {snapshot.partner_name} · {snapshot.distance_km.toFixed(1)} km away
+            </Text>
+          ) : (
+            <Text style={styles.partnerNameText}>{snapshot.distance_km.toFixed(1)} km away</Text>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -162,27 +177,53 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     overflow: "hidden",
     marginBottom: 12,
+    position: "relative",
     ...SHADOW.card,
   },
-  map: { width: "100%", height: 180 },
+  map: { width: "100%", height: 220 },
   partnerPin: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: COLORS.primaryDark,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderColor: "#fff",
+    ...SHADOW.card,
+  },
+  destinationPin: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#171717",
+    borderWidth: 3,
+    borderColor: "#fff",
+    ...SHADOW.card,
   },
   etaPill: {
+    position: "absolute",
+    left: 10,
+    right: 10,
+    bottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    borderRadius: RADIUS.lg,
     backgroundColor: "#fff",
+    ...SHADOW.card,
   },
-  etaText: { fontSize: 13, fontWeight: "700", color: COLORS.primaryDark },
-  distanceText: { fontSize: 12, color: COLORS.gray },
+  etaIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  etaTextWrap: { flex: 1 },
+  etaText: { fontSize: 15, fontWeight: "800", color: "#171717" },
+  partnerNameText: { fontSize: 12, color: COLORS.gray, marginTop: 1 },
 });
