@@ -58,7 +58,9 @@ import { isValidGstin, normalizeGstin } from "../../src/utils/gstin";
 import { useAuthStore } from "../../store/useAuthStore";
 import {
   fetchCancellationPolicyTiers,
+  fetchDeliveryPriorityTiers,
   type CancellationPolicyTier,
+  type DeliveryPriorityTier,
 } from "../../src/services/catalogService";
 
 // ─── Scheduled-pickup helpers ─────────────────────────────────────────────────
@@ -256,6 +258,8 @@ export default function CartScreen() {
   const setCheckoutFlow = useCartStore((s) => s.setCheckoutFlow);
   const pickupType = useCartStore((s) => s.pickupType);
   const setPickupType = useCartStore((s) => s.setPickupType);
+  const deliveryPriority = useCartStore((s) => s.deliveryPriority);
+  const setDeliveryPriority = useCartStore((s) => s.setDeliveryPriority);
 
   const lastPaymentMethod = useCheckoutPreferencesStore((s) => s.lastPaymentMethod);
   const setLastPaymentMethod = useCheckoutPreferencesStore((s) => s.setLastPaymentMethod);
@@ -319,6 +323,11 @@ export default function CartScreen() {
   const [policyExpanded, setPolicyExpanded] = useState(false);
   useEffect(() => {
     fetchCancellationPolicyTiers().then(setCancellationPolicy).catch(() => {});
+  }, []);
+
+  const [deliveryTiers, setDeliveryTiers] = useState<DeliveryPriorityTier[]>([]);
+  useEffect(() => {
+    fetchDeliveryPriorityTiers().then(setDeliveryTiers).catch(() => {});
   }, []);
   const [checkingOut, setCheckingOut] = useState(false);
   const [codModalVisible, setCodModalVisible] = useState(false);
@@ -719,6 +728,39 @@ export default function CartScreen() {
           ) : null}
         </View>
 
+        {/* ── Delivery speed (Regular / Priority / Express) ─────────────── */}
+        {deliveryTiers.length > 0 ? (
+          <>
+            <Text style={styles.sectionLabel}>Delivery speed</Text>
+            <View style={styles.footerCard}>
+              <View style={styles.deliveryTierRow}>
+                {deliveryTiers.map((tier) => {
+                  const active = deliveryPriority === tier.value;
+                  const charge = Math.round(billing.itemTotal * tier.surcharge_rate);
+                  return (
+                    <TouchableOpacity
+                      key={tier.value}
+                      style={[styles.deliveryTierCard, active && styles.deliveryTierCardActive]}
+                      onPress={() =>
+                        setDeliveryPriority(tier.value as "regular" | "priority" | "express")
+                      }
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.deliveryTierLabel, active && styles.deliveryTierLabelActive]}>
+                        {tier.label}
+                      </Text>
+                      <Text style={styles.deliveryTierTimeline}>{tier.timeline}</Text>
+                      <Text style={styles.deliveryTierPrice}>
+                        {charge > 0 ? `+₹${charge.toLocaleString("en-IN")}` : "Free"}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </>
+        ) : null}
+
         {/* ── Notes ───────────────────────────────────────────────────── */}
         <Text style={styles.sectionLabel}>Notes (optional)</Text>
         <View style={styles.footerCard}>
@@ -826,6 +868,10 @@ export default function CartScreen() {
       handlePickStyleReference,
       pickupType,
       setPickupType,
+      deliveryTiers,
+      deliveryPriority,
+      setDeliveryPriority,
+      billing.itemTotal,
       scheduledDate,
       scheduledSlot,
       pickupTimeSlots,
@@ -865,9 +911,20 @@ export default function CartScreen() {
       ? +((billing.sgstAmount / taxableBase) * 100).toFixed(2)
       : 0;
 
+  // Client-side delivery-charge preview: GET /cart's billing has no concept
+  // of delivery_priority (resolved only at the moment of checkout - see
+  // checkout_service.py), so the live preview as the customer switches
+  // tiers is computed here from the cart's itemTotal and the public,
+  // non-sensitive flat surcharge rate. The backend independently recomputes
+  // and is the sole source of truth for the amount actually charged.
+  const selectedDeliveryTier = deliveryTiers.find((t) => t.value === deliveryPriority);
+  const deliveryChargePreview = selectedDeliveryTier
+    ? Math.round(billing.itemTotal * selectedDeliveryTier.surcharge_rate)
+    : 0;
+
   const displayTotal =
-    estimatedDiscount > 0
-      ? `₹${Math.max(billing.totalAmount - estimatedDiscount, 1).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
+    estimatedDiscount > 0 || deliveryChargePreview > 0
+      ? `₹${Math.max(billing.totalAmount - estimatedDiscount + deliveryChargePreview, 1).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
       : billing.totalAmountDisplay;
 
   const isEmpty = !loading && entries.length === 0;
@@ -1064,6 +1121,12 @@ export default function CartScreen() {
                     label="Convenience fee"
                     value={billing.platformFeeDisplay}
                   />
+                  {deliveryChargePreview > 0 ? (
+                    <BillRow
+                      label={`Delivery charge (${selectedDeliveryTier?.label ?? "Priority"})`}
+                      value={`₹${deliveryChargePreview.toLocaleString("en-IN")}`}
+                    />
+                  ) : null}
                   <BillRow
                     label={`CGST (${cgstPercent}%)`}
                     value={billing.cgstDisplay}
@@ -1605,6 +1668,44 @@ const styles = StyleSheet.create({
   pickupOptionTextActive: {
     color: COLORS.primaryDark,
     fontWeight: "700",
+  },
+
+  // Delivery speed tier cards
+  deliveryTierRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  deliveryTierCard: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    borderRadius: RADIUS.sm,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    gap: 2,
+  },
+  deliveryTierCardActive: {
+    borderColor: COLORS.primaryDark,
+    backgroundColor: "#F1F5F5",
+  },
+  deliveryTierLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  deliveryTierLabelActive: {
+    color: COLORS.primaryDark,
+  },
+  deliveryTierTimeline: {
+    fontSize: 11,
+    color: COLORS.gray,
+  },
+  deliveryTierPrice: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: COLORS.gray,
+    marginTop: 2,
   },
 
   // Scheduled pickup date/slot picker

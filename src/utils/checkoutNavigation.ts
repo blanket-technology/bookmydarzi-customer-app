@@ -68,6 +68,7 @@ export async function executeCheckoutFromCart(
       address_id: addressId,
       payment_method: paymentMethod,
       pickup_type: cart.pickupType ?? "instant",
+      delivery_priority: cart.deliveryPriority ?? "regular",
       ...(cart.appliedOfferId ? { offer_id: cart.appliedOfferId } : {}),
       ...(scheduled ? {
         scheduled_pickup_at: scheduled.scheduledPickupAt,

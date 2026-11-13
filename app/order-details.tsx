@@ -1659,6 +1659,19 @@ export default function OrderDetailsScreen() {
                 />
               </>
             )}
+            {Number(payload.pricing.delivery_charge) > 0 ? (
+              <>
+                <RowDivider />
+                <BillRow
+                  label={`Delivery charge${
+                    payload.pricing.delivery_priority
+                      ? ` (${String(payload.pricing.delivery_priority)[0].toUpperCase()}${String(payload.pricing.delivery_priority).slice(1)})`
+                      : ""
+                  }`}
+                  value={detailsMoney(payload.pricing.delivery_charge)}
+                />
+              </>
+            ) : null}
             <RowDivider />
             <View style={{ paddingVertical: 8 }}>
               {editingGstin ? (

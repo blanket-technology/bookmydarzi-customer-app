@@ -84,6 +84,10 @@ interface CartState {
   selectedAddressId: number | null;
   checkoutFlow: boolean;
   pickupType: "instant" | "scheduled";
+  /** 'regular' (0%), 'priority' (+5%), or 'express' (+10%) of the subtotal -
+   * see app/constants/delivery_priority.py. Sent on checkout; the backend
+   * always recomputes and validates the actual charge. */
+  deliveryPriority: "regular" | "priority" | "express";
   /** Service Details → Address booking path */
   bookingFlowActive: boolean;
   /** Timestamp (Date.now()) of the last time a pending-booking field was
@@ -144,6 +148,7 @@ interface CartState {
   setAddressId: (id: number) => void;
   setCheckoutFlow: (active: boolean) => void;
   setPickupType: (type: "instant" | "scheduled") => void;
+  setDeliveryPriority: (priority: "regular" | "priority" | "express") => void;
   setBookingFlowActive: (active: boolean) => void;
   resetBookingFlow: () => void;
 }
@@ -180,6 +185,7 @@ export const useCartStore = create<CartState>()(
       selectedAddressId: null,
       checkoutFlow: false,
       pickupType: "instant",
+      deliveryPriority: "regular",
       bookingFlowActive: false,
       pendingSavedAt: null,
       buyNowMode: false,
@@ -454,6 +460,7 @@ export const useCartStore = create<CartState>()(
       setAddressId: (id) => set({ selectedAddressId: id }),
       setCheckoutFlow: (active) => set({ checkoutFlow: active }),
       setPickupType: (type) => set({ pickupType: type }),
+      setDeliveryPriority: (priority) => set({ deliveryPriority: priority }),
       setBookingFlowActive: (active) => set({ bookingFlowActive: active }),
       resetBookingFlow: () =>
         set({
@@ -463,6 +470,7 @@ export const useCartStore = create<CartState>()(
           selectedAddressId: null,
           checkoutFlow: false,
           pickupType: "instant",
+          deliveryPriority: "regular",
           bookingFlowActive: false,
           buyNowMode: false,
           pendingSavedAt: null,
@@ -490,6 +498,7 @@ export const useCartStore = create<CartState>()(
         selectedAddressId: state.selectedAddressId,
         checkoutFlow: state.checkoutFlow,
         pickupType: state.pickupType,
+        deliveryPriority: state.deliveryPriority,
         bookingFlowActive: state.bookingFlowActive,
         buyNowMode: state.buyNowMode,
         pendingSavedAt: state.pendingSavedAt,

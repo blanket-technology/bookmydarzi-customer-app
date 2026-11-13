@@ -119,6 +119,8 @@ export interface OrderSummaryBillingBlock {
   sgst_amount: number | string | null;
   service_fee: number | string | null;
   discount: number | string | null;
+  delivery_priority?: string | null;
+  delivery_charge?: number | string | null;
   total_amount: number | string | null;
   advance_amount: number | null;
   remaining_amount: number | null;
@@ -231,6 +233,8 @@ export interface OrderDetailsPricingBlock {
   service_fee: number | string | null;
   /** Any cancellation penalty folded into final_amount (0/null if none). */
   penalty_amount?: number | string | null;
+  delivery_priority?: string | null;
+  delivery_charge?: number | string | null;
   final_amount: number | string | null;
   advance_amount: number | null;
   remaining_amount: number | null;

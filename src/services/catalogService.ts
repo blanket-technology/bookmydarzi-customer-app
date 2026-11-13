@@ -192,6 +192,34 @@ export async function fetchBillingEstimate(): Promise<BillingEstimate | null> {
   }
 }
 
+export interface DeliveryPriorityTier {
+  value: string;
+  label: string;
+  timeline: string;
+  surcharge_rate: number;
+  surcharge_percent: number;
+}
+
+/** Regular/Priority/Express delivery-speed tiers + current surcharge rates,
+ * public (GET /catalog/delivery-priority-tiers) - matches
+ * bookmydarzi-web-final's same endpoint exactly. Used for the cart/checkout
+ * delivery-speed selector's live price preview; the backend always
+ * independently recomputes and is the sole source of truth for the amount
+ * actually charged at checkout. Returns [] on failure, same non-fatal
+ * convention as fetchBillingEstimate above - the selector section simply
+ * doesn't render rather than blocking checkout. */
+export async function fetchDeliveryPriorityTiers(): Promise<DeliveryPriorityTier[]> {
+  try {
+    const res = await request<{ tiers: DeliveryPriorityTier[] }>(
+      `/catalog/delivery-priority-tiers`,
+      { skipAuth: true },
+    );
+    return Array.isArray(res?.tiers) ? res.tiers : [];
+  } catch {
+    return [];
+  }
+}
+
 export interface CancellationPolicyStage {
   Id: number;
   OrderStage: string;

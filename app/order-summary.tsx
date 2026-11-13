@@ -358,6 +358,19 @@ export default function OrderSummaryScreen() {
                 <BillRow label="GST (5%)" value={summaryMoney(payload.billing.gst_amount)} />
               </>
             ) : null}
+            {Number(payload.billing.delivery_charge) > 0 ? (
+              <>
+                <View style={styles.billDivider} />
+                <BillRow
+                  label={`Delivery charge${
+                    payload.billing.delivery_priority
+                      ? ` (${String(payload.billing.delivery_priority)[0].toUpperCase()}${String(payload.billing.delivery_priority).slice(1)})`
+                      : ""
+                  }`}
+                  value={summaryMoney(payload.billing.delivery_charge)}
+                />
+              </>
+            ) : null}
             {Number(payload.billing.discount) > 0 ? (
               <>
                 <View style={styles.billDivider} />

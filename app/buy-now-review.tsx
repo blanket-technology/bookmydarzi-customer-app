@@ -38,7 +38,9 @@ import ScreenHeader from "../src/components/common/ScreenHeader";
 import PaymentMethodSelector from "../src/components/orders/PaymentMethodSelector";
 import {
   fetchCancellationPolicyTiers,
+  fetchDeliveryPriorityTiers,
   type CancellationPolicyTier,
+  type DeliveryPriorityTier,
 } from "../src/services/catalogService";
 import {
   createDirectOrder,
@@ -127,6 +129,12 @@ export default function BuyNowReviewScreen() {
   const [billing, setBilling] = useState<BillingEstimate | null>(null);
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingError, setBillingError] = useState("");
+
+  const [deliveryTiers, setDeliveryTiers] = useState<DeliveryPriorityTier[]>([]);
+  const [deliveryPriority, setDeliveryPriority] = useState<"regular" | "priority" | "express">("regular");
+  useEffect(() => {
+    fetchDeliveryPriorityTiers().then(setDeliveryTiers).catch(() => {});
+  }, []);
 
   // Own local state, deliberately independent of useCartStore's applied-
   // offer fields - Book Now bypasses the cart entirely (direct_order_service.py
@@ -300,7 +308,7 @@ export default function BuyNowReviewScreen() {
     // flipped false by the cleanup function on unmount/re-run; every setter
     // below checks it first.
     let active = true;
-    getBillingEstimate(pendingService.bookableServiceId, pendingService.quantity ?? 1, addonIds, items)
+    getBillingEstimate(pendingService.bookableServiceId, pendingService.quantity ?? 1, addonIds, items, deliveryPriority)
       .then((result) => {
         if (active) setBilling(result);
       })
@@ -326,6 +334,7 @@ export default function BuyNowReviewScreen() {
     pendingService?.bookableServiceId,
     (pendingService?.addons ?? []).map((a) => a.addonId).join(","),
     (pendingService?.extraItems ?? []).map((e) => e.serviceId).join(","),
+    deliveryPriority,
   ]);
 
   const selectedAddress = addresses.find((a) => a.id === selectedAddressId);
@@ -382,6 +391,7 @@ export default function BuyNowReviewScreen() {
         address_id: selectedAddressId,
         pickup_type: pickupType,
         payment_method: paymentMethod,
+        delivery_priority: deliveryPriority,
         stitching_preferences: pendingService.stitchingPreferences,
         ...(pendingService.addons?.length ? { addons: pendingService.addons } : {}),
         ...(appliedOffer ? { offer_id: appliedOffer.offerId } : {}),
@@ -715,6 +725,12 @@ export default function BuyNowReviewScreen() {
               <BillingRow label={`CGST (${cgstPercent}%)`} value={cgstDisplay} />
               <BillingRow label={`SGST (${sgstPercent}%)`} value={sgstDisplay} />
               <BillingRow label="Platform fee" value={billing.platform_fee_display} />
+              {billing.delivery_charge > 0 ? (
+                <BillingRow
+                  label={`Delivery charge (${deliveryTiers.find((t) => t.value === deliveryPriority)?.label ?? "Priority"})`}
+                  value={billing.delivery_charge_display}
+                />
+              ) : null}
               {billing.penalty_amount > 0 ? (
                 <BillingRow
                   label="Cancellation charges"
@@ -794,6 +810,35 @@ export default function BuyNowReviewScreen() {
           appliedOffer={appliedOffer}
           onChange={setAppliedOffer}
         />
+
+        {/* ── Delivery speed (Regular / Priority / Express) ──── */}
+        {deliveryTiers.length > 0 ? (
+          <View style={s.card}>
+            <Text style={s.sectionTitle}>Delivery Speed</Text>
+            <View style={s.deliveryTierRow}>
+              {deliveryTiers.map((tier) => {
+                const active = deliveryPriority === tier.value;
+                const charge = billing ? Math.round(billing.item_total * tier.surcharge_rate) : 0;
+                return (
+                  <TouchableOpacity
+                    key={tier.value}
+                    style={[s.deliveryTierCard, active && s.deliveryTierCardActive]}
+                    onPress={() => setDeliveryPriority(tier.value as "regular" | "priority" | "express")}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[s.deliveryTierLabel, active && s.deliveryTierLabelActive]}>
+                      {tier.label}
+                    </Text>
+                    <Text style={s.deliveryTierTimeline}>{tier.timeline}</Text>
+                    <Text style={s.deliveryTierPrice}>
+                      {charge > 0 ? `+₹${charge.toLocaleString("en-IN")}` : "Free"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
         {/* ── Pickup type ───────────────────────────────────── */}
         <View style={s.card}>
@@ -1218,6 +1263,20 @@ const s = StyleSheet.create({
   pickupOptSel: { borderColor: COLORS.primaryDark, backgroundColor: COLORS.primaryLight },
   pickupOptText: { fontSize: 13, fontWeight: "600", color: COLORS.gray },
   pickupOptTextSel: { color: COLORS.primaryDark },
+  deliveryTierRow: {
+    flexDirection: "row", gap: SPACING.sm,
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+  },
+  deliveryTierCard: {
+    flex: 1, alignItems: "center", gap: 2,
+    paddingVertical: 10, paddingHorizontal: 8,
+    borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.grayBorder,
+  },
+  deliveryTierCardActive: { borderColor: COLORS.primaryDark, backgroundColor: COLORS.primaryLight },
+  deliveryTierLabel: { fontSize: 13, fontWeight: "700", color: COLORS.black },
+  deliveryTierLabelActive: { color: COLORS.primaryDark },
+  deliveryTierTimeline: { fontSize: 11, color: COLORS.gray },
+  deliveryTierPrice: { fontSize: 11.5, fontWeight: "700", color: COLORS.gray, marginTop: 2 },
   scheduleLabel: { fontSize: 13, fontWeight: "600", color: COLORS.black, marginBottom: 4 },
   addrCard: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,

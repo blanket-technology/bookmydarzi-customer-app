@@ -142,6 +142,8 @@ function mapCheckoutResult(raw: unknown): CartCheckoutResult {
     sgstAmount: num(r.sgst_amount),
     gstAmount: num(r.gst_amount),
     penaltyAmount: num(r.penalty_amount),
+    deliveryPriority: str(r.delivery_priority, "regular"),
+    deliveryCharge: num(r.delivery_charge),
     finalAmount: num(r.final_amount),
     totalAmountDisplay: str(r.total_amount_display, "₹0"),
     advanceAmount: num(r.advance_amount),
@@ -267,6 +269,7 @@ export async function checkoutCart(
     pickup_type: payload.pickup_type ?? "instant",
   };
 
+  if (payload.delivery_priority) checkoutBody.delivery_priority = payload.delivery_priority;
   if (payload.offer_id) checkoutBody.offer_id = payload.offer_id;
   if (payload.scheduled_pickup_at) checkoutBody.scheduled_pickup_at = payload.scheduled_pickup_at;
   if (payload.pickup_time_slot) checkoutBody.pickup_time_slot = payload.pickup_time_slot;

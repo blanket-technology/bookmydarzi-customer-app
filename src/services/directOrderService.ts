@@ -12,6 +12,9 @@ export interface BillingEstimate {
   gst_amount: number;
   /** Any pending cancellation penalty already folded into total_amount below. */
   penalty_amount: number;
+  delivery_priority: string;
+  delivery_charge: number;
+  delivery_charge_display: string;
   total_amount: number;
   advance_amount: number;
   remaining_amount: number;
@@ -47,6 +50,10 @@ export interface DirectOrderPayload {
   scheduled_pickup_at?: string;
   pickup_time_slot?: string;
   stitching_preferences?: StitchingPreferences;
+  /** 'regular' (0%), 'priority' (+5%), or 'express' (+10%) of the subtotal -
+   * see app/constants/delivery_priority.py. Backend always recomputes and
+   * validates the charge. */
+  delivery_priority?: "regular" | "priority" | "express";
   /** Order-level free-text notes (Bug Report cycle 1, item 3.1/4.1). */
   customization_notes?: string;
   /** Reference style image URLs. */
@@ -89,9 +96,11 @@ export async function getBillingEstimate(
   quantity = 1,
   addonIds: number[] = [],
   items?: DirectOrderItem[],
+  deliveryPriority?: "regular" | "priority" | "express",
 ): Promise<BillingEstimate> {
   const qs = new URLSearchParams({ service_id: String(serviceId), quantity: String(quantity) });
   if (addonIds.length > 0) qs.set("addon_ids", addonIds.join(","));
+  if (deliveryPriority) qs.set("delivery_priority", deliveryPriority);
   if (items?.length) {
     // Previously dropped each item's own addons entirely (only service_id/
     // quantity sent) - the billing estimate silently under-quoted any
@@ -121,6 +130,9 @@ export async function getBillingEstimate(
     sgst_amount: num(r.sgst_amount),
     gst_amount: num(r.gst_amount),
     penalty_amount: num(r.penalty_amount),
+    delivery_priority: str(r.delivery_priority, "regular"),
+    delivery_charge: num(r.delivery_charge),
+    delivery_charge_display: str(r.delivery_charge_display, "₹0"),
     total_amount: num(r.total_amount),
     advance_amount: num(r.advance_amount),
     remaining_amount: num(r.remaining_amount),
@@ -148,6 +160,8 @@ function mapToCheckoutResult(raw: unknown): CartCheckoutResult {
     sgstAmount: num(r.sgst_amount),
     gstAmount: num(r.gst_amount),
     penaltyAmount: num(r.penalty_amount),
+    deliveryPriority: str(r.delivery_priority, "regular"),
+    deliveryCharge: num(r.delivery_charge),
     finalAmount: num(r.final_amount),
     totalAmountDisplay: str(r.total_amount_display, "₹0"),
     advanceAmount: num(r.advance_amount),
@@ -168,6 +182,7 @@ export async function createDirectOrder(
       address_id: payload.address_id,
       pickup_type: payload.pickup_type ?? "instant",
       payment_method: payload.payment_method ?? "online",
+      delivery_priority: payload.delivery_priority ?? "regular",
       offer_id: payload.offer_id,
       scheduled_pickup_at: payload.scheduled_pickup_at,
       pickup_time_slot: payload.pickup_time_slot,

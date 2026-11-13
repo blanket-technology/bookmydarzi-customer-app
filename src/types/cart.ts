@@ -136,6 +136,10 @@ export interface CartCheckoutPayload {
   address_id: number;
   payment_method?: "online" | "cod";
   pickup_type?: "instant" | "scheduled";
+  /** 'regular' (0%), 'priority' (+5%), or 'express' (+10%) of the subtotal -
+   * see app/constants/delivery_priority.py. Backend always recomputes and
+   * validates the charge; this is never trusted as-is. */
+  delivery_priority?: "regular" | "priority" | "express";
   offer_id?: number;
   scheduled_pickup_at?: string;
   pickup_time_slot?: string;
@@ -174,6 +178,8 @@ export interface CartCheckoutResult {
   gstAmount: number;
   /** Any pending cancellation penalty already folded into finalAmount. */
   penaltyAmount: number;
+  deliveryPriority: string;
+  deliveryCharge: number;
   finalAmount: number;
   totalAmountDisplay: string;
   advanceAmount: number;
