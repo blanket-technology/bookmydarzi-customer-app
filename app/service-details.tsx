@@ -467,6 +467,25 @@ export default function ServiceDetailsScreen() {
     [selectedAddons],
   );
 
+  // Bug fix: "Add more work to this garment" checked tiers each add their
+  // own price (+ their own selected addons) to the same order - previously
+  // not counted here at all, so checking a tier hid the price display
+  // entirely (see the showBillingBreakdown render below) rather than
+  // updating the total to reflect the added item.
+  const extraTiersTotal = useMemo(
+    () =>
+      allLineTiers
+        .filter((t) => checkedTierIds.has(t.service_id))
+        .reduce((sum, t) => {
+          const tierAddonsTotal = (extraTierSelectedAddons[t.service_id] ?? []).reduce(
+            (s, a) => s + a.price,
+            0,
+          );
+          return sum + t.base_price + tierAddonsTotal;
+        }, 0),
+    [allLineTiers, checkedTierIds, extraTierSelectedAddons],
+  );
+
   // Mirrors bookmydarzi-web-final's identical liveTotal computation
   // (AlterationGroupPicker.tsx), which mirrors backend's compute_billing
   // (app/services/orders/billing_breakdown.py) - rounds subtotal, GST,
@@ -474,8 +493,11 @@ export default function ServiceDetailsScreen() {
   // not just the final total once, since BookMyDarzi never bills in
   // paise anywhere and backend rounds at every intermediate step too.
   const billingSubtotal = useMemo(
-    () => (selectedStitching ? Math.round(selectedStitching.base_price + addonsTotal) : 0),
-    [selectedStitching, addonsTotal],
+    () =>
+      selectedStitching
+        ? Math.round(selectedStitching.base_price + addonsTotal + extraTiersTotal)
+        : 0,
+    [selectedStitching, addonsTotal, extraTiersTotal],
   );
   const billingGst = useMemo(
     () => (billingEstimate ? Math.round(billingSubtotal * billingEstimate.gst_rate) : 0),
@@ -1352,7 +1374,7 @@ export default function ServiceDetailsScreen() {
               All {checkedTierIds.size + 1} items will be booked together in one order.
             </Text>
           ) : null}
-          {selectedStitching && checkedTierIds.size === 0 ? (
+          {selectedStitching ? (
             <TouchableOpacity
               onPress={() => setShowBillingBreakdown((v) => !v)}
               activeOpacity={0.7}
@@ -1372,10 +1394,12 @@ export default function ServiceDetailsScreen() {
               />
             </TouchableOpacity>
           ) : null}
-          {showBillingBreakdown && selectedStitching && checkedTierIds.size === 0 ? (
+          {showBillingBreakdown && selectedStitching ? (
             <View style={styles.billingBreakdownBox}>
               <View style={styles.billingBreakdownRow}>
-                <Text style={styles.billingBreakdownLabel}>Subtotal</Text>
+                <Text style={styles.billingBreakdownLabel}>
+                  {checkedTierIds.size > 0 ? "Subtotal (all items)" : "Subtotal"}
+                </Text>
                 <Text style={styles.billingBreakdownValue}>{formatMoney(billingSubtotal)}</Text>
               </View>
               <View style={styles.billingBreakdownRow}>
